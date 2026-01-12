@@ -251,27 +251,27 @@ function MobileScoreboard({
                     </SheetTitle>
                 </SheetHeader>
 
-                <div className="py-4 space-y-4">
+                <div className="p-4 space-y-5">
                     {/* Team scores */}
                     <div className="grid grid-cols-2 gap-3">
                         {teams.map((team, index) => (
                             <div
                                 key={team.teamId}
                                 className={cn(
-                                    "p-3 rounded-xl",
+                                    "p-4 rounded-xl",
                                     index === 0
                                         ? "bg-blue-500/20"
                                         : "bg-red-500/20"
                                 )}
                             >
-                                <div className="text-sm font-medium text-white mb-1">
+                                <div className="text-sm font-medium text-white/80 mb-1">
                                     {team.teamName}
                                 </div>
-                                <div className="text-2xl font-bold text-white">
+                                <div className="text-3xl font-bold text-white">
                                     {team.score}
                                 </div>
-                                {team.bags !== undefined && (
-                                    <div className="text-xs text-white/60">
+                                {team.bags !== undefined && team.bags > 0 && (
+                                    <div className="text-xs text-white/50 mt-1">
                                         Bags: {team.bags}
                                     </div>
                                 )}
@@ -281,24 +281,39 @@ function MobileScoreboard({
 
                     {/* Player bids */}
                     {playerBids && playerBids.length > 0 && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-1 text-sm text-white/60">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-1.5 text-sm text-white/60">
                                 <Award className="w-4 h-4" />
                                 <span>Bids & Tricks</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2.5">
                                 {playerBids.map((player) => (
                                     <div
                                         key={player.playerId}
-                                        className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2"
+                                        className="flex flex-col bg-slate-800/50 rounded-lg px-3 py-2.5"
                                     >
-                                        <span className="text-sm text-white/80 truncate">
+                                        <span className="text-sm font-medium text-white/90 truncate mb-1">
                                             {player.playerName}
                                         </span>
-                                        <span className="text-sm text-white/60">
-                                            {player.bid ?? "-"}/
-                                            {player.tricksWon}
-                                        </span>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-white/50">
+                                                Bid:{" "}
+                                                <span className="text-white/80 font-medium">
+                                                    {player.bid ?? "-"}
+                                                </span>
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    "font-medium",
+                                                    player.tricksWon >=
+                                                        (player.bid ?? 0)
+                                                        ? "text-emerald-400"
+                                                        : "text-white/60"
+                                                )}
+                                            >
+                                                Won: {player.tricksWon}
+                                            </span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

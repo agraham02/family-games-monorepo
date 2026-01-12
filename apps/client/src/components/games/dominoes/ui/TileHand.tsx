@@ -53,7 +53,13 @@ export default function TileHand({
             </div>
 
             {/* Tiles container with horizontal scroll on mobile */}
-            <div className="flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
+            {/* Dim tiles when not player's turn */}
+            <div
+                className={cn(
+                    "flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 transition-opacity duration-300",
+                    !isMyTurn && "opacity-60 pointer-events-none"
+                )}
+            >
                 {tiles.map((tile) => {
                     // Only check playability when hints are enabled
                     const playable =
@@ -61,7 +67,7 @@ export default function TileHand({
                     const isSelected = selectedTile?.id === tile.id;
 
                     return (
-                        <div key={tile.id} className="snap-start flex-shrink-0">
+                        <div key={tile.id} className="snap-start shrink-0">
                             <Tile
                                 tile={tile}
                                 isSelected={isSelected}

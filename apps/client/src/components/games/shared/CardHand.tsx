@@ -228,7 +228,7 @@ function CardInHand({
         >
             <div
                 className={cn(
-                    "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none",
+                    "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none duration-300",
                     isInteractive && !isDisabled && "cursor-pointer",
                     isSelected &&
                         "ring-2 ring-blue-500 ring-offset-2 ring-offset-transparent",
@@ -282,7 +282,7 @@ function CardInHand({
 
                 {/* Card Back */}
                 {showBack && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-linear-to-br from-blue-600 via-blue-700 to-blue-800 flex items-center justify-center">
                         <div
                             className="w-3/4 h-3/4 rounded border-2 border-blue-400/50"
                             style={{
@@ -475,7 +475,11 @@ function CardHand({
 
     return (
         <div
-            className={cn("flex items-center justify-center", className)}
+            className={cn(
+                "flex items-center justify-center duration-300",
+                isLocalPlayer && !interactive && "brightness-60",
+                className
+            )}
             style={{
                 // Set explicit dimensions so the container centers properly
                 width: isRotatedSideways ? totalHandHeight : totalHandWidth,
@@ -486,7 +490,12 @@ function CardHand({
             }}
         >
             <div
-                className={cn("flex", isHorizontal ? "flex-row" : "flex-col")}
+                className={cn(
+                    "flex",
+                    isHorizontal ? "flex-row" : "flex-col",
+                    // Disable pointer events when not interactive (not player's turn)
+                    isLocalPlayer && !interactive && "pointer-events-none"
+                )}
                 style={{
                     transform:
                         rotation !== 0 ? `rotate(${rotation}deg)` : undefined,

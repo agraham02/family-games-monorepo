@@ -296,9 +296,22 @@ function getState(state: SpadesState): Partial<SpadesState> {
     );
 
     // Include server-calculated remaining seconds for timer synchronization
-    const remainingSeconds = turnTimerService.getRemainingSeconds(state.id);
-    if (remainingSeconds !== undefined) {
-        publicState.remainingSeconds = remainingSeconds;
+    const turnTimeLimit = state.settings?.turnTimeLimit;
+    if (turnTimeLimit && turnTimeLimit > 0) {
+        // Check if timer service has an active timer
+        const remainingSeconds = turnTimerService.getRemainingSeconds(state.id);
+        if (remainingSeconds !== undefined) {
+            publicState.remainingSeconds = remainingSeconds;
+        } else if (
+            state.turnStartedAt &&
+            (state.phase === "bidding" || state.phase === "playing")
+        ) {
+            // Timer service doesn't have an active timer yet, but game state indicates
+            // a timer should be active. Calculate remaining seconds from turnStartedAt.
+            const startTime = new Date(state.turnStartedAt).getTime();
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            publicState.remainingSeconds = Math.max(0, turnTimeLimit - elapsed);
+        }
     }
 
     return publicState;

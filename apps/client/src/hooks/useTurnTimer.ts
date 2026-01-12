@@ -19,9 +19,7 @@ export function useTurnTimer(
     totalSeconds: number | undefined
 ): TurnTimerResult {
     // Track the last server value to detect when we need to resync
-    const lastServerValueRef = useRef<number | undefined>(
-        serverRemainingSeconds
-    );
+    const lastServerValueRef = useRef<number | undefined>(undefined);
 
     // Initialize with server value, fallback to totalSeconds
     const [remainingSeconds, setRemainingSeconds] = useState(() => {
@@ -36,25 +34,16 @@ export function useTurnTimer(
 
     // Resync when server provides a new value
     useEffect(() => {
-        // If server value changed significantly (more than 2 seconds difference),
-        // resync to correct any drift
-        if (
-            serverRemainingSeconds !== undefined &&
-            serverRemainingSeconds > 0
-        ) {
-            setRemainingSeconds((currentRemaining) => {
-                const diff = Math.abs(
-                    serverRemainingSeconds - currentRemaining
-                );
-                if (
-                    diff > 2 ||
-                    lastServerValueRef.current !== serverRemainingSeconds
-                ) {
-                    lastServerValueRef.current = serverRemainingSeconds;
-                    return serverRemainingSeconds;
-                }
-                return currentRemaining;
-            });
+        if (serverRemainingSeconds === undefined || serverRemainingSeconds <= 0) {
+            lastServerValueRef.current = undefined;
+            return;
+        }
+
+        // Always sync to server value when it changes
+        // The server is the source of truth
+        if (lastServerValueRef.current !== serverRemainingSeconds) {
+            lastServerValueRef.current = serverRemainingSeconds;
+            setRemainingSeconds(serverRemainingSeconds);
         }
     }, [serverRemainingSeconds]);
 

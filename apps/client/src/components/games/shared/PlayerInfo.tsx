@@ -135,6 +135,7 @@ function TurnIndicator({ isActive }: { isActive: boolean }) {
  * Uses Shadcn components and adapts layout based on seat position.
  */
 function PlayerInfo({
+    playerId,
     playerName,
     isCurrentTurn,
     isLocalPlayer = false,
@@ -180,6 +181,7 @@ function PlayerInfo({
                 {/* Only render TurnTimer when it should be active to prevent 0→100% animation */}
                 {isCurrentTurn && turnTimer && turnTimer.totalSeconds > 0 ? (
                     <TurnTimer
+                        key={`timer-${playerId}`}
                         totalSeconds={turnTimer.totalSeconds}
                         remainingSeconds={turnTimer.remainingSeconds}
                         isActive={true}

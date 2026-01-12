@@ -48,7 +48,7 @@ export default function HealthCheckGate({
                     </div>
                 )}
                 {serverUp && <main>{children}</main>}
-                <Toaster richColors />
+                <Toaster richColors position="top-right" />
             </TooltipProvider>
         </SessionProvider>
     );
