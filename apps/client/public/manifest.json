@@ -8,10 +8,16 @@
     "theme_color": "#0f172a",
     "icons": [
         {
-            "src": "/family-gameroom-icon.png",
-            "sizes": "795x795",
+            "src": "/android-chrome-192x192.png",
+            "sizes": "192x192",
             "type": "image/png",
-            "purpose": "any"
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/android-chrome-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
         }
     ]
 }

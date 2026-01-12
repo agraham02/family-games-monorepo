@@ -1,4 +1,5 @@
 import { CreateAndJoinRoomResponse, GameTypeMetadata } from "@shared/types";
+import type { CreateRoomRequest, JoinRoomRequest } from "@shared/validation";
 import { API_BASE } from ".";
 import { fetchWithRetry, FetchError } from "@/lib/fetchWithRetry";
 
@@ -80,13 +81,14 @@ export async function getRoomIdByCode(
 }
 
 export async function createRoom(
-    userName: string,
+    playerName: string,
     roomName: string
 ): Promise<CreateAndJoinRoomResponse> {
+    const requestBody: CreateRoomRequest = { playerName, roomName };
     const res = await fetchWithRetry(`${API_BASE}/rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userName, roomName }),
+        body: JSON.stringify(requestBody),
     });
     if (!res.ok) {
         const { message } = await extractErrorMessage(
@@ -99,14 +101,15 @@ export async function createRoom(
 }
 
 export async function joinRoom(
-    userName: string,
+    playerName: string,
     roomCode: string,
     userId?: string
 ): Promise<CreateAndJoinRoomResponse> {
+    const requestBody: JoinRoomRequest = { playerName, roomCode };
     const res = await fetchWithRetry(`${API_BASE}/rooms/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userName, roomCode, userId }),
+        body: JSON.stringify({ ...requestBody, userId }),
     });
     if (!res.ok) {
         const { message, code } = await extractErrorMessage(

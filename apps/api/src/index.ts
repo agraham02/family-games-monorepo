@@ -49,7 +49,7 @@ const IS_DEBUG_LOGGING = process.env.NODE_ENV === "development";
 
 dotenv.config({ debug: IS_DEBUG_LOGGING });
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 4000;
 const PORT = process.env.PORT || DEFAULT_PORT;
 
 gameManager.registerGameModule("spades", spadesModule);
