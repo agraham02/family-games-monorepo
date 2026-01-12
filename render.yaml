@@ -4,6 +4,7 @@ services:
       runtime: node
       region: virginia
       plan: free
+      branch: main
       rootDir: apps/api
       buildCommand: cd ../.. && pnpm install && pnpm build:shared && cd apps/api && pnpm build
       startCommand: pnpm start
