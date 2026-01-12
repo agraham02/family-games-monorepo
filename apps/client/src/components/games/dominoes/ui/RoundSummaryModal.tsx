@@ -4,7 +4,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/contexts/SessionContext";
-import { DominoesData } from "@/types";
+import { DominoesData } from "@shared/types";
 import { cn } from "@/lib/utils";
 import { Trophy, Crown } from "lucide-react";
 
@@ -117,10 +117,10 @@ export default function RoundSummaryModal({
                                                 playerId === roundWinner
                                                     ? "bg-green-100 dark:bg-green-900/30"
                                                     : tiedPlayerIds.includes(
-                                                          playerId
-                                                      )
-                                                    ? "bg-amber-100 dark:bg-amber-900/30"
-                                                    : "bg-white dark:bg-zinc-700"
+                                                            playerId
+                                                        )
+                                                      ? "bg-amber-100 dark:bg-amber-900/30"
+                                                      : "bg-white dark:bg-zinc-700"
                                             )}
                                         >
                                             <span className="text-sm truncate">

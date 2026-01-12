@@ -3,7 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { PlayingCard as PlayingCardType } from "@/types";
+import { PlayingCard as PlayingCardType } from "@shared/types";
 import { useGameTable } from "./GameTable";
 
 // Hash cache to avoid recalculating on every render

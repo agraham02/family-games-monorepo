@@ -3,7 +3,11 @@
 import React, { useCallback } from "react";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
-import { DominoesData, DominoesPlayerData, Tile as TileType } from "@/types";
+import {
+    DominoesData,
+    DominoesPlayerData,
+    Tile as TileType,
+} from "@shared/types";
 import DominoesGameTable from "./ui/DominoesGameTable";
 import RoundSummaryModal from "./ui/RoundSummaryModal";
 import {

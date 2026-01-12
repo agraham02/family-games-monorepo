@@ -2,7 +2,7 @@
 
 import React, { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { getInitials } from "@/lib/playerUtils";
+import { getInitials } from "@shared/utils";
 import { motion } from "motion/react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";

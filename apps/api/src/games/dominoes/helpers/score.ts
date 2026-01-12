@@ -1,6 +1,6 @@
 // src/games/dominoes/helpers/score.ts
 
-import { Tile } from "../types";
+import { Tile } from "@shared/types";
 
 /**
  * Calculate the pip count (sum of dots) on a tile

@@ -7,7 +7,7 @@ import type {
     GameSettingsSchema,
     SettingDefinition,
     BaseGameSettings,
-} from "@/types/lobby";
+} from "@shared/types";
 
 interface UseGameSettingsSchemaResult {
     definitions: SettingDefinition[];

@@ -1,4 +1,4 @@
-import { Room } from "../models/Room";
+import { Room } from "@shared/types";
 import { Server as SocketIOServer } from "socket.io";
 
 let io: SocketIOServer | null = null;

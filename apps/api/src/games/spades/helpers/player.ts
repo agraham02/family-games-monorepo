@@ -1,6 +1,4 @@
-import { CardPlay, Trick } from "..";
-import { Card, Suit } from "../types";
-import { SpadesSettings } from "../../../models/Settings";
+import { CardPlay, Trick, Card, Suit, SpadesSettings } from "@shared/types";
 import { cardBeats } from "./card";
 
 /*─────────────────────────  FOLLOW-SUIT RULE  ──────────────────────────*/

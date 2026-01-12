@@ -1,6 +1,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { Players } from "@/types";
+import { Players } from "@shared/types";
 
 interface Team {
     players: string[];

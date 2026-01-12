@@ -7,7 +7,7 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
-} from "@/types";
+} from "@shared/types";
 
 /**
  * Client-side optimistic reducers that mirror server logic

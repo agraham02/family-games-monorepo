@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import HealthCheckGate from "@/components/HealthCheckGate";
@@ -14,11 +14,14 @@ const geistMono = Geist_Mono({
     subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+    themeColor: "#0f172a",
+};
+
 export const metadata: Metadata = {
     title: "Family Game Room",
     description: "A place for family games and fun!",
     manifest: "/manifest.json",
-    themeColor: "#0f172a",
     appleWebApp: {
         capable: true,
         statusBarStyle: "black-translucent",

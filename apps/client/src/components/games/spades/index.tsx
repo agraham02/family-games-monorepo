@@ -9,7 +9,7 @@ import {
     GameSettingToggle,
     useGameSetting,
 } from "@/components/games/shared";
-import { SpadesData, SpadesPlayerData, PlayingCard } from "@/types";
+import { SpadesData, SpadesPlayerData, PlayingCard } from "@shared/types";
 import PlaceBidModal from "./ui/PlaceBidModal";
 import BlindBidModal from "./ui/BlindBidModal";
 import RoundSummaryModal from "./ui/RoundSummaryModal";

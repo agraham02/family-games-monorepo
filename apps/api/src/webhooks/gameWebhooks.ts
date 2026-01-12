@@ -1,4 +1,4 @@
-import { Room } from "../models/Room";
+import { Room } from "@shared/types";
 import { Socket, Server as SocketIOServer } from "socket.io";
 import { gameManager, GameState } from "../services/GameManager";
 

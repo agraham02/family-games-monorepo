@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useSession } from "@/contexts/SessionContext";
 import {
     PlusCircleIcon,
@@ -31,10 +31,10 @@ import {
     validatePlayerName,
     validateRoomName,
     validateRoomCode,
-    sanitizePlayerName,
-    sanitizeRoomName,
-    sanitizeRoomCode,
-} from "@/lib/validation";
+    parsePlayerName,
+    parseRoomName,
+    parseRoomCode,
+} from "@shared/validation";
 
 interface CreateRoomCardProps {
     name: string;
@@ -143,8 +143,8 @@ function CreateRoomCard({
                         disabled={!isFormValid || loading}
                         onClick={() =>
                             onCreate(
-                                sanitizePlayerName(name),
-                                sanitizeRoomName(roomName)
+                                parsePlayerName(name) ?? name.trim(),
+                                parseRoomName(roomName) ?? roomName.trim()
                             )
                         }
                     >
@@ -332,8 +332,9 @@ function JoinRoomCard({
                         disabled={!isFormValid || loading}
                         onClick={() =>
                             onJoin(
-                                sanitizePlayerName(name),
-                                sanitizeRoomCode(roomCode)
+                                parsePlayerName(name) ?? name.trim(),
+                                parseRoomCode(roomCode) ??
+                                    roomCode.trim().toUpperCase()
                             )
                         }
                     >

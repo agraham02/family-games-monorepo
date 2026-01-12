@@ -14,10 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useSession } from "@/contexts/SessionContext";
 import { toast } from "sonner";
-import { LobbyData } from "@/types";
+import { LobbyData } from "@shared/types";
 import LobbyDashboard from "@/components/lobby/LobbyDashboard";
 import GameInProgressBanner from "@/components/lobby/GameInProgressBanner";
 import { LobbySkeleton } from "@/components/skeletons";
@@ -31,7 +31,7 @@ import {
     AlertCircleIcon,
 } from "lucide-react";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
-import { validatePlayerName, sanitizePlayerName } from "@/lib/validation";
+import { validatePlayerName, parsePlayerName } from "@shared/validation";
 
 export default function LobbyPage() {
     const { connected } = useWebSocket();
@@ -159,7 +159,8 @@ export default function LobbyPage() {
         }
 
         setNameError(null);
-        const sanitizedName = sanitizePlayerName(pendingName);
+        const sanitizedName =
+            parsePlayerName(pendingName) ?? pendingName.trim();
         setUserName(sanitizedName);
         setShowModal(false);
     }

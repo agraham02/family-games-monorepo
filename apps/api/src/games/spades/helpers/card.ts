@@ -2,11 +2,9 @@
    Card helpers – no game-state, no I/O
    --------------------------------------------------------------------- */
 
-import { SpadesState } from "..";
-import { SpadesSettings } from "../../../models/Settings";
+import { SpadesState, SpadesSettings, Card, Rank, Suit } from "@shared/types";
 import { GamePlayers } from "../../../services/GameManager";
 import { shuffle } from "../../shared";
-import { Card, Rank, Suit } from "../types";
 
 /* ––––––––––––––––––––– CONSTANTS ––––––––––––––––––––– */
 export const SUITS: Suit[] = [
@@ -148,10 +146,12 @@ function getCardRankValue(card: Card, settings: SpadesSettings): number {
     const { jokersEnabled, deuceOfSpadesHigh } = settings;
 
     // Big Joker is always highest if jokers enabled
-    if (jokersEnabled && card.rank === Rank.BigJoker) return RANK_VALUE_BIG_JOKER;
+    if (jokersEnabled && card.rank === Rank.BigJoker)
+        return RANK_VALUE_BIG_JOKER;
 
     // Little Joker is second highest if jokers enabled
-    if (jokersEnabled && card.rank === Rank.LittleJoker) return RANK_VALUE_LITTLE_JOKER;
+    if (jokersEnabled && card.rank === Rank.LittleJoker)
+        return RANK_VALUE_LITTLE_JOKER;
 
     // Deuce of Spades gets special treatment if deuceOfSpadesHigh enabled
     if (

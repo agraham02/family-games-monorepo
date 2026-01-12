@@ -1,12 +1,9 @@
 // src/games/dominoes/helpers/board.ts
 
-import { Tile, BoardEnd } from "../types";
+import { Tile, BoardEnd, BoardState } from "@shared/types";
 
-export interface BoardState {
-    tiles: Tile[]; // Tiles placed on board in order
-    leftEnd: BoardEnd | null;
-    rightEnd: BoardEnd | null;
-}
+// Re-export BoardState for convenience
+export type { BoardState };
 
 /**
  * Initialize an empty board
@@ -45,8 +42,7 @@ export function canPlaceTile(
 export function canPlayTile(tile: Tile, board: BoardState): boolean {
     if (board.tiles.length === 0) return true;
     return (
-        canPlaceTile(tile, board, "left") ||
-        canPlaceTile(tile, board, "right")
+        canPlaceTile(tile, board, "left") || canPlaceTile(tile, board, "right")
     );
 }
 

@@ -6,7 +6,7 @@ export { NullableNumberSetting } from "./NullableNumberSetting";
 export { SelectSetting } from "./SelectSetting";
 export { SettingsCategory } from "./SettingsCategory";
 
-import type { SettingCategory } from "@/types/lobby";
+import type { SettingCategory } from "@shared/types";
 
 // Category display order
 export const CATEGORY_ORDER: SettingCategory[] = [

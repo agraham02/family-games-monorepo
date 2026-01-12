@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Tile as TileType, BoardState } from "@/types";
+import { Tile as TileType, BoardState } from "@shared/types";
 import Tile from "./Tile";
 
 interface TileHandProps {

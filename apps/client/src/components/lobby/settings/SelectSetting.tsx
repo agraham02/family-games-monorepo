@@ -15,7 +15,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { InfoIcon } from "lucide-react";
-import type { SettingDefinition } from "@/types/lobby";
+import type { SettingDefinition } from "@shared/types";
 
 interface SelectSettingProps {
     definition: SettingDefinition;

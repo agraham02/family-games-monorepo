@@ -5,8 +5,7 @@
  * Used when a player times out and the server needs to play on their behalf.
  */
 
-import { SpadesState, Trick } from "..";
-import { Card, Bid } from "../types";
+import { SpadesState, Trick, Card, Bid } from "@shared/types";
 import { canPlayCard } from "./player";
 
 /**

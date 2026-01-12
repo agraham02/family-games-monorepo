@@ -16,15 +16,15 @@ import {
     getCategoryOrder,
 } from "./settings";
 import type {
-    GameSettings,
+    PartialGameSettings,
     SettingDefinition,
     SettingCategory as SettingCategoryType,
-} from "@/types/lobby";
+} from "@shared/types";
 
 interface GameSettingsCardProps {
     gameType: string | null;
-    settings: GameSettings;
-    onSettingsChange: (settings: GameSettings) => void;
+    settings: PartialGameSettings;
+    onSettingsChange: (settings: PartialGameSettings) => void;
     isLeader: boolean;
 }
 
@@ -82,7 +82,8 @@ export default function GameSettingsCard({
         useGameSettingsSchema(gameType);
 
     // Local state for immediate UI updates
-    const [localSettings, setLocalSettings] = useState<GameSettings>(settings);
+    const [localSettings, setLocalSettings] =
+        useState<PartialGameSettings>(settings);
 
     // Sync local settings when external settings change
     useEffect(() => {
@@ -97,7 +98,7 @@ export default function GameSettingsCard({
 
     // Debounce only the backend call, not the UI update
     const debouncedSettingsChange = useDebouncedCallback(
-        (newSettings: GameSettings) => {
+        (newSettings: PartialGameSettings) => {
             onSettingsChange(newSettings);
         },
         500 // Wait 500ms after last change
@@ -215,7 +216,7 @@ export default function GameSettingsCard({
                                 definition={definition}
                                 value={
                                     mergedSettings[
-                                        definition.key as keyof GameSettings
+                                        definition.key as keyof PartialGameSettings
                                     ]
                                 }
                                 onChange={handleChange}

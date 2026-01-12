@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import TeamAssignmentEditor from "./TeamAssignmentEditor";
 import TeamAssignmentView from "./TeamAssignmentView";
-import { User } from "@/types";
+import { User } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { toast } from "sonner";

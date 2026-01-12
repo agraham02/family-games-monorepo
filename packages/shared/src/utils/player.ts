@@ -1,10 +1,15 @@
-// src/lib/playerUtils.ts
-// Shared player utility functions - DRY principle
+// packages/shared/src/utils/player.ts
+// Player-related utility functions
+
+// ============================================================================
+// Avatar Colors
+// ============================================================================
 
 /**
- * Consistent avatar color palette with gradients
+ * Consistent avatar color palette with gradients.
+ * Uses Tailwind CSS gradient classes.
  */
-const AVATAR_COLORS = [
+export const AVATAR_COLORS = [
     "bg-gradient-to-br from-rose-400 to-pink-600",
     "bg-gradient-to-br from-violet-400 to-purple-600",
     "bg-gradient-to-br from-blue-400 to-indigo-600",
@@ -17,6 +22,8 @@ const AVATAR_COLORS = [
 /**
  * Generate a consistent avatar color from a name or ID string.
  * Uses a simple hash function to ensure the same input always returns the same color.
+ * @param nameOrId The name or ID to hash
+ * @returns Tailwind CSS gradient class
  */
 export function getAvatarColor(nameOrId: string): string {
     const hash = nameOrId
@@ -25,9 +32,15 @@ export function getAvatarColor(nameOrId: string): string {
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
+// ============================================================================
+// Name Formatting
+// ============================================================================
+
 /**
  * Get initials from a player name (1-2 characters).
  * Handles single names, multi-word names, and edge cases.
+ * @param name The player name
+ * @returns Uppercase initials (1-2 characters)
  */
 export function getInitials(name: string): string {
     if (!name || name.trim() === "") return "?";
@@ -47,8 +60,20 @@ export function getInitials(name: string): string {
 
 /**
  * Truncate a player name to a maximum length with ellipsis.
+ * @param name The player name
+ * @param maxLength Maximum length (default: 12)
+ * @returns Truncated name with ellipsis if needed
  */
 export function truncateName(name: string, maxLength: number = 12): string {
     if (!name || name.length <= maxLength) return name;
     return name.slice(0, maxLength - 1).trim() + "…";
+}
+
+/**
+ * Format a player name for display (trimmed and normalized).
+ * @param name The raw player name
+ * @returns Formatted name
+ */
+export function formatPlayerName(name: string): string {
+    return name.trim().replace(/\s+/g, " ");
 }

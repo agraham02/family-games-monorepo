@@ -1,18 +1,16 @@
-import { Room } from "../models/Room";
-import { validateTeamsForGame } from "../utils/validateTeamsForGame";
-import { User } from "../models/User";
+import { Room, User, PartialGameSettings } from "@shared/types";
+import { validateTeamsForGame } from "@shared/validation";
 import { v4 as uuidv4 } from "uuid";
 import { emitRoomEvent } from "../webhooks/roomWebhooks";
 import { emitGameEvent } from "../webhooks/gameWebhooks";
 import { gameManager } from "./GameManager";
-import { PartialGameSettings } from "../models/Settings";
 import {
     notFound,
     forbidden,
     conflict,
     tooManyRequests,
     badRequest,
-} from "../utils/httpErrors";
+} from "@shared/utils";
 import { pauseTimer, resumeTimer as resumeTurnTimer } from "./GameTurnTimer";
 
 const rooms: Map<string, Room> = new Map();

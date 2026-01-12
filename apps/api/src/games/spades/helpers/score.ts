@@ -1,5 +1,4 @@
-import { SpadesState, Trick } from "../index";
-import { Bid } from "../types";
+import { SpadesState, Trick, Bid } from "@shared/types";
 
 interface TeamScoreBreakdown {
     previousScore: number;

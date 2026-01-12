@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { PlayingCard as PlayingCardType } from "@/types";
+import { PlayingCard as PlayingCardType } from "@shared/types";
 import { useGameTable } from "./GameTable";
 import { useEdgeRegion } from "./EdgeRegion";
 import { CardSize } from "./PlayingCard";

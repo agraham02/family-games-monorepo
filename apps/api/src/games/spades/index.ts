@@ -1,13 +1,16 @@
 // src/games/spades.ts
-import { Room } from "../../models/Room";
-import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import {
+    Room,
+    User,
     SpadesSettings,
     DEFAULT_SPADES_SETTINGS,
     SPADES_SETTINGS_DEFINITIONS,
-} from "../../models/Settings";
+    Bid,
+    Card,
+    Suit,
+} from "@shared/types";
+import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import { v4 as uuidv4 } from "uuid";
-import { Bid, Card, Suit } from "./types";
 import {
     buildDeck,
     currentPlayerId,
@@ -17,7 +20,6 @@ import {
 } from "./helpers/card";
 import { omitFields } from "../../utils/omitFields";
 import { canPlayCard, resolveTrick } from "./helpers/player";
-import { User } from "../../models/User";
 import { calculateSpadesScores } from "./helpers/score";
 import {
     handlePlayerReconnect,
@@ -54,9 +56,6 @@ const SPADES_METADATA = {
     settingsDefinitions: SPADES_SETTINGS_DEFINITIONS,
     defaultSettings: DEFAULT_SPADES_SETTINGS,
 };
-
-// Re-export SpadesSettings for backwards compatibility
-export type { SpadesSettings } from "../../models/Settings";
 
 interface Team {
     players: string[];

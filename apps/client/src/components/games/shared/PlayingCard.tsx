@@ -4,7 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { PlayingCard as PlayingCardType } from "@/types";
+import { PlayingCard as PlayingCardType } from "@shared/types";
 
 const SUIT_MAP = {
     Spades: "♠",
@@ -111,8 +111,8 @@ function PlayingCard({
                 showBack
                     ? "Hidden card"
                     : card
-                    ? `${card.rank} of ${card.suit}`
-                    : "Hidden card"
+                      ? `${card.rank} of ${card.suit}`
+                      : "Hidden card"
             }
             tabIndex={interactive && !disabled ? 0 : undefined}
         >

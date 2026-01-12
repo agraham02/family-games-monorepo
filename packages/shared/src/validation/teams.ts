@@ -1,22 +1,37 @@
+// packages/shared/src/validation/teams.ts
+// Team validation utilities for games requiring team-based play
+
+import { SPADES_TEAM_REQUIREMENTS } from "../types/games/spades";
+
+// ============================================================================
+// Team Requirements Registry
+// ============================================================================
+
+/**
+ * Team requirements for each game type.
+ * Games not listed here don't require teams.
+ */
+export const TEAM_REQUIREMENTS: Record<
+    string,
+    { numTeams: number; playersPerTeam: number }
+> = {
+    spades: SPADES_TEAM_REQUIREMENTS,
+    // Add more games as they're implemented:
+    // dominoes: { numTeams: 2, playersPerTeam: 2 }, // Only for team mode
+};
+
+// ============================================================================
+// Team Validation
+// ============================================================================
+
 /**
  * Validates teams for a given game type.
- * Throws an error if teams are invalid for the game.
  * @param gameType The selected game type (e.g., 'spades')
  * @param teams Array of teams (each team is an array of userIds)
  * @param users Array of userIds in the room
  * @param requireComplete If true, requires all slots filled (for starting game). Default false.
+ * @throws Error if teams are invalid for the game
  */
-
-import { spadesTeamRequirements } from "../games/spades";
-
-const TEAM_REQUIREMENTS: Record<
-    string,
-    { numTeams: number; playersPerTeam: number }
-> = {
-    spades: spadesTeamRequirements,
-    // dominoes: { numTeams: 0, playersPerTeam: 0 }, // Example for future games
-};
-
 export function validateTeamsForGame(
     gameType: string,
     teams: string[][],
@@ -73,4 +88,24 @@ export function validateTeamsForGame(
         }
     }
     // For games that don't require teams, optionally allow empty or single team
+}
+
+/**
+ * Check if a game type requires teams.
+ * @param gameType The game type to check
+ * @returns True if the game requires teams
+ */
+export function gameRequiresTeams(gameType: string): boolean {
+    return gameType in TEAM_REQUIREMENTS;
+}
+
+/**
+ * Get team requirements for a game type.
+ * @param gameType The game type
+ * @returns Team requirements or undefined if game doesn't require teams
+ */
+export function getTeamRequirements(
+    gameType: string
+): { numTeams: number; playersPerTeam: number } | undefined {
+    return TEAM_REQUIREMENTS[gameType];
 }

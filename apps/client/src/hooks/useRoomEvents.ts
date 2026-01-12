@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getSocket, emitJoinRoom } from "@/lib/socket";
 import { useSession } from "@/contexts/SessionContext";
-import { RoomEventPayload, LobbyData } from "@/types";
+import { RoomEventPayload, LobbyData } from "@shared/types";
 
 interface UseRoomEventsOptions {
     /** Called when room state is synced */

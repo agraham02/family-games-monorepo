@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EyeIcon, PlayCircleIcon, DoorOpenIcon } from "lucide-react";
-import { User } from "@/types";
+import { User } from "@shared/types";
 
 interface SpectatorBannerProps {
     disconnectedPlayers: User[];

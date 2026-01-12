@@ -8,7 +8,7 @@ import SpectatorBanner from "@/components/games/SpectatorBanner";
 import { getGameComponent } from "@/components/games/registry";
 import { GameSkeleton } from "@/components/skeletons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { GameData, GameEventPayload, PlayerData, User } from "@/types";
+import { GameData, GameEventPayload, PlayerData, User } from "@shared/types";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
@@ -122,7 +122,7 @@ export default function GamePage() {
 
     // Handle game-specific events
     const handleGameEvent = useCallback(
-        (payload: GameEventPayload) => {
+        (payload: GameEventPayload<GameData, PlayerData>) => {
             console.log("📨 Game event:", payload);
             switch (payload.event) {
                 case "sync":

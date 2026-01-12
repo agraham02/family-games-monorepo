@@ -3,7 +3,11 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { LayoutGroup } from "motion/react";
 import { toast } from "sonner";
-import { DominoesData, DominoesPlayerData, Tile as TileType } from "@/types";
+import {
+    DominoesData,
+    DominoesPlayerData,
+    Tile as TileType,
+} from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import TileHand from "./TileHand";

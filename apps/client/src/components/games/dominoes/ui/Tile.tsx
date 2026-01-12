@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Tile as TileType } from "@/types";
+import { Tile as TileType } from "@shared/types";
 
 interface TileProps {
     tile: TileType;

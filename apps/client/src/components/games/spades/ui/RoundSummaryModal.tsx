@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/contexts/SessionContext";
-import { SpadesData } from "@/types/games/spades";
+import { SpadesData } from "@shared/types";
 import { motion } from "motion/react";
 import { Trophy, Target, TrendingUp, Users } from "lucide-react";
 import React, { useEffect, useState } from "react";

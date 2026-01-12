@@ -1,12 +1,13 @@
-import { User } from "./User";
-import { RoomSettings, PartialGameSettings } from "./Settings";
+// packages/shared/src/types/room.ts
+// Room-related types shared between client and API
 
-// Re-export settings types for backwards compatibility
-export type {
-    RoomSettings,
-    PartialGameSettings as GameSettings,
-} from "./Settings";
+import { User } from "./user";
+import { RoomSettings, PartialGameSettings } from "./settings";
 
+/**
+ * Represents a room where users can gather to play games.
+ * Contains all state needed for lobby and game management.
+ */
 export interface Room {
     id: string;
     code: string;
@@ -27,3 +28,6 @@ export interface Room {
     spectators?: string[]; // Array of user IDs who are spectating
     kickedUserIds?: string[]; // Array of user IDs who have been kicked (cannot rejoin)
 }
+
+// Re-export settings types for backwards compatibility
+export type { RoomSettings, PartialGameSettings } from "./settings";

@@ -1,4 +1,4 @@
-// src/models/Settings.ts
+// packages/shared/src/types/settings.ts
 // Centralized settings interfaces for room-level and game-level settings
 
 // ============================================================================
@@ -134,6 +134,15 @@ export interface SettingDefinition {
     dependsOn?: SettingDependency;
     // Display formatting
     suffix?: string; // e.g., "points", "seconds"
+}
+
+// ============================================================================
+// Settings Schema (returned from API)
+// ============================================================================
+
+export interface GameSettingsSchema {
+    definitions: SettingDefinition[];
+    defaults: BaseGameSettings;
 }
 
 // ============================================================================

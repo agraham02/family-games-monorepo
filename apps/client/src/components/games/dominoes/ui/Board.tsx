@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { BoardState, Tile as TileType } from "@/types";
+import { BoardState, Tile as TileType } from "@shared/types";
 import Tile from "./Tile";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";

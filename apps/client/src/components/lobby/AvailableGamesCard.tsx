@@ -1,12 +1,12 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { GameTypeMetadata } from "@/types";
+import { GameTypeMetadata } from "@shared/types";
 import { useSession } from "@/contexts/SessionContext";
 import { toast } from "sonner";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import {
     Gamepad2Icon,
     SpadeIcon,

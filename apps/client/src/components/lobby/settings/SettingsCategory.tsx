@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SettingCategory as SettingCategoryType } from "@/types/lobby";
+import type { SettingCategory as SettingCategoryType } from "@shared/types";
 
 interface SettingsCategoryProps {
     category: SettingCategoryType;

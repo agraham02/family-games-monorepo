@@ -29,7 +29,7 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile as TileType,
-} from "@/types";
+} from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -214,8 +214,8 @@ function SpadesDebugPanel({
                                     cardCount={
                                         isLocal
                                             ? playerData.hand.length
-                                            : gameData.handsCounts[playerId] ??
-                                              0
+                                            : (gameData.handsCounts[playerId] ??
+                                              0)
                                     }
                                     isLocalPlayer={isLocal}
                                     interactive={

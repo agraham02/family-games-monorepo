@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { ConfirmDialog } from "../ui/confirm-dialog";
-import { User } from "@/types";
+import { User } from "@shared/types";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { toast } from "sonner";
-import { getAvatarColor, getInitials } from "@/lib/playerUtils";
+import { getAvatarColor, getInitials } from "@shared/utils";
 import {
     CrownIcon,
     CheckCircle2Icon,

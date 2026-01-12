@@ -1,6 +1,6 @@
 // src/games/dominoes/helpers/tile.ts
 
-import { Tile } from "../types";
+import { Tile } from "@shared/types";
 import { GamePlayers } from "../../../services/GameManager";
 import { shuffle } from "../../shared";
 

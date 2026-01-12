@@ -5,14 +5,14 @@ import { BooleanSetting } from "./BooleanSetting";
 import { NumberSetting } from "./NumberSetting";
 import { NullableNumberSetting } from "./NullableNumberSetting";
 import { SelectSetting } from "./SelectSetting";
-import type { SettingDefinition, GameSettings } from "@/types/lobby";
+import type { SettingDefinition, PartialGameSettings } from "@shared/types";
 
 interface SettingControlProps {
     definition: SettingDefinition;
     value: unknown;
     onChange: (key: string, value: unknown) => void;
     disabled: boolean;
-    allSettings: GameSettings;
+    allSettings: PartialGameSettings;
 }
 
 /**
@@ -29,7 +29,7 @@ export function SettingControl({
     // Check dependency
     if (definition.dependsOn) {
         const parentValue =
-            allSettings[definition.dependsOn.key as keyof GameSettings];
+            allSettings[definition.dependsOn.key as keyof PartialGameSettings];
         if (parentValue !== definition.dependsOn.value) {
             // Dependency not met - don't render this control
             return null;

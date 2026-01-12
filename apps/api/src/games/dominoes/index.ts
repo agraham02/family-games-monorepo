@@ -1,14 +1,16 @@
 // src/games/dominoes/index.ts
 
-import { Room } from "../../models/Room";
-import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import {
+    Room,
+    User,
     DominoesSettings,
     DEFAULT_DOMINOES_SETTINGS,
     DOMINOES_SETTINGS_DEFINITIONS,
-} from "../../models/Settings";
+    Tile,
+    DominoesPhase,
+} from "@shared/types";
+import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import { v4 as uuidv4 } from "uuid";
-import { Tile, DominoesPhase } from "./types";
 import {
     buildDominoSet,
     dealTilesToPlayers,
@@ -16,7 +18,6 @@ import {
     shuffleTiles,
 } from "./helpers/tile";
 import { omitFields } from "../../utils/omitFields";
-import { User } from "../../models/User";
 import {
     BoardState,
     canPlaceTile,
@@ -46,9 +47,6 @@ const DOMINOES_METADATA = {
     settingsDefinitions: DOMINOES_SETTINGS_DEFINITIONS,
     defaultSettings: DEFAULT_DOMINOES_SETTINGS,
 };
-
-// Re-export DominoesSettings for backwards compatibility
-export type { DominoesSettings } from "../../models/Settings";
 
 export interface DominoesState extends GameState {
     playOrder: string[];

@@ -13,7 +13,7 @@ import {
     SpadesData,
     SpadesPlayerData,
     PlayingCard as PlayingCardType,
-} from "@/types";
+} from "@shared/types";
 import {
     GameTable,
     TableCenter,

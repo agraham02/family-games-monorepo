@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import * as RoomService from "../services/RoomService";
 import { getIO, hasIO } from "../utils/socketIO";
-import { badRequest } from "../utils/httpErrors";
+import { badRequest } from "@shared/utils";
+import {
+    CreateRoomRequestSchema,
+    JoinRoomRequestSchema,
+    PlayerNameSchema,
+    RoomCodeSchema,
+    safeParseWithErrors,
+} from "@shared/validation";
 
 export async function createRoom(
     req: Request,
@@ -9,19 +16,20 @@ export async function createRoom(
     next: NextFunction
 ) {
     try {
-        const { roomName, userName } = req.body;
-        if (!userName) {
-            throw badRequest("userName is required.");
+        const result = safeParseWithErrors(CreateRoomRequestSchema, req.body);
+
+        if (!result.success) {
+            res.status(400).json({ errors: result.errors });
+            return;
         }
 
-        let tempRoomName;
-        if (!roomName) {
-            tempRoomName = `Room-${Math.floor(Math.random() * 10000)}`;
-        }
+        const { playerName, roomName } = result.data;
+        const finalRoomName =
+            roomName || `Room-${Math.floor(Math.random() * 10000)}`;
 
         const { room, user } = await RoomService.createRoom(
-            roomName || tempRoomName,
-            userName
+            finalRoomName,
+            playerName
         );
         res.status(201).json({
             roomId: room.id,
@@ -39,12 +47,21 @@ export async function joinRoom(
     next: NextFunction
 ) {
     try {
-        const { userName, roomCode, userId } = req.body;
-        if (!userName || !roomCode) {
-            throw badRequest("userName and roomCode are required.");
+        const result = safeParseWithErrors(JoinRoomRequestSchema, req.body);
+
+        if (!result.success) {
+            res.status(400).json({ errors: result.errors });
+            return;
         }
 
-        const { room, user } = RoomService.joinRoom(roomCode, userName, userId);
+        const { playerName, roomCode } = result.data;
+        const userId = req.body.userId as string | undefined;
+
+        const { room, user } = RoomService.joinRoom(
+            roomCode,
+            playerName,
+            userId
+        );
         res.status(200).json({
             roomId: room.id,
             userId: user.id,
@@ -65,19 +82,52 @@ export async function requestJoinRoom(
     next: NextFunction
 ) {
     try {
-        const { roomCode, requesterId, requesterName } = req.body;
+        const { roomCode: rawRoomCode, requesterId, requesterName } = req.body;
 
-        if (!roomCode || !requesterId || !requesterName) {
-            throw badRequest(
-                "roomCode, requesterId, and requesterName are required."
-            );
+        // Validate room code
+        const roomCodeResult = RoomCodeSchema.safeParse(rawRoomCode);
+        if (!roomCodeResult.success) {
+            res.status(400).json({
+                errors: [
+                    {
+                        field: "roomCode",
+                        message:
+                            roomCodeResult.error.issues[0]?.message ??
+                            "Invalid room code",
+                    },
+                ],
+            });
+            return;
         }
+
+        // Validate requester name
+        const nameResult = PlayerNameSchema.safeParse(requesterName);
+        if (!nameResult.success) {
+            res.status(400).json({
+                errors: [
+                    {
+                        field: "requesterName",
+                        message:
+                            nameResult.error.issues[0]?.message ??
+                            "Invalid name",
+                    },
+                ],
+            });
+            return;
+        }
+
+        if (!requesterId) {
+            throw badRequest("requesterId is required.");
+        }
+
+        const roomCode = roomCodeResult.data;
+        const validatedName = nameResult.data;
 
         // This will throw if rate-limited or room not found
         const { roomId } = RoomService.requestToJoinRoom(
             roomCode,
             requesterId,
-            requesterName
+            validatedName
         );
 
         // Emit join_request to the room so the leader receives it
@@ -85,7 +135,7 @@ export async function requestJoinRoom(
             const io = getIO();
             io.to(roomId).emit("join_request", {
                 requesterId,
-                requesterName,
+                requesterName: validatedName,
                 roomCode,
                 timestamp: new Date().toISOString(),
             });
@@ -106,12 +156,27 @@ export async function getRoomIdByCode(
     next: NextFunction
 ) {
     try {
-        const { roomCode } = req.params;
-        if (!roomCode) {
-            throw badRequest("roomCode is required.");
+        const rawRoomCode = req.params.roomCode;
+
+        // Validate room code
+        const roomCodeResult = RoomCodeSchema.safeParse(rawRoomCode);
+        if (!roomCodeResult.success) {
+            res.status(400).json({
+                errors: [
+                    {
+                        field: "roomCode",
+                        message:
+                            roomCodeResult.error.issues[0]?.message ??
+                            "Invalid room code",
+                    },
+                ],
+            });
+            return;
         }
 
+        const roomCode = roomCodeResult.data;
         const roomId = RoomService.getRoomIdByCode(roomCode);
+
         if (!roomId) {
             res.status(404).json({ error: "Room not found." });
             return;

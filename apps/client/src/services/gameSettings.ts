@@ -1,5 +1,5 @@
 // src/services/gameSettings.ts
-import type { GameSettingsSchema } from "@/types/lobby";
+import type { GameSettingsSchema } from "@shared/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 

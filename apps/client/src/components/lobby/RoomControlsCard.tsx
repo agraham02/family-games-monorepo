@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../ui/confirm-dialog";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { toast } from "sonner";
-import { RoomSettings, GameSettings } from "@/types/lobby";
+import { RoomSettings, PartialGameSettings } from "@shared/types";
 import {
     SettingsIcon,
     PlayIcon,
@@ -22,7 +22,7 @@ interface RoomControlsCardProps {
     selectedGame: string | null;
     isPartyLeader: boolean;
     roomSettings?: RoomSettings;
-    gameSettings?: GameSettings;
+    gameSettings?: PartialGameSettings;
 }
 
 export default function RoomControlsCard({

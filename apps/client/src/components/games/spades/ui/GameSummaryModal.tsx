@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/contexts/SessionContext";
-import { SpadesData } from "@/types/games/spades";
+import { SpadesData } from "@shared/types";
 import { motion, AnimatePresence } from "motion/react";
 import { Trophy, Crown, Users, Award, Home } from "lucide-react";
 import React from "react";
@@ -96,8 +96,8 @@ export default function GameSummaryModal({
                                                 isWinningTeam
                                                     ? "bg-gradient-to-br from-amber-500/30 to-yellow-600/20 border-amber-400/50 shadow-lg shadow-amber-500/20"
                                                     : index === 0
-                                                    ? "bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30"
-                                                    : "bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30"
+                                                      ? "bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30"
+                                                      : "bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30"
                                             }`}
                                         >
                                             <div className="flex items-center justify-between">
@@ -124,8 +124,8 @@ export default function GameSummaryModal({
                                                             isWinningTeam
                                                                 ? "text-amber-400"
                                                                 : index === 0
-                                                                ? "text-blue-400"
-                                                                : "text-red-400"
+                                                                  ? "text-blue-400"
+                                                                  : "text-red-400"
                                                         }`}
                                                     />
                                                     <div>

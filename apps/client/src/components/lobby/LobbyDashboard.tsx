@@ -4,8 +4,12 @@ import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useJoinRequests } from "@/hooks";
 import { toast } from "sonner";
-import { GameTypeMetadata, LobbyData, GameSettings } from "@/types";
-import { motion } from "framer-motion";
+import {
+    GameTypeMetadata,
+    LobbyData,
+    PartialGameSettings,
+} from "@shared/types";
+import { motion } from "motion/react";
 import {
     Card,
     CardDescription,
@@ -29,7 +33,7 @@ export default function LobbyDashboard({
     const [selectedGame, setSelectedGame] = useState<string | null>(
         lobbyData.selectedGameType
     );
-    const [gameSettings, setGameSettings] = useState<GameSettings>(
+    const [gameSettings, setGameSettings] = useState<PartialGameSettings>(
         lobbyData.gameSettings ?? {}
     );
     const selectedGameMetadata = availableGames.find(
@@ -97,7 +101,7 @@ export default function LobbyDashboard({
 
     // Handle game settings changes
     const handleGameSettingsChange = useCallback(
-        (newSettings: GameSettings) => {
+        (newSettings: PartialGameSettings) => {
             if (!socket || !connected || !isPartyLeader) return;
             setGameSettings(newSettings);
             socket.emit("update_game_settings", {

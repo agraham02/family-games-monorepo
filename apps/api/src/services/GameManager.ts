@@ -1,11 +1,11 @@
 // src/services/GameManager.ts
-import { Room } from "../models/Room";
-import { User } from "../models/User";
 import {
+    Room,
+    User,
     SettingDefinition,
     BaseGameSettings,
     PartialGameSettings,
-} from "../models/Settings";
+} from "@shared/types";
 
 export interface GameModule {
     init(room: Room, customSettings?: PartialGameSettings): GameState;

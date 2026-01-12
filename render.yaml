@@ -1,0 +1,13 @@
+services:
+    - type: web
+      name: family-games-api
+      runtime: node
+      region: virginia
+      plan: free
+      rootDir: apps/api
+      buildCommand: cd ../.. && pnpm install && pnpm build:shared && cd apps/api && pnpm build
+      startCommand: pnpm start
+      envVars:
+          - key: NODE_ENV
+            value: production
+      autoDeploy: true

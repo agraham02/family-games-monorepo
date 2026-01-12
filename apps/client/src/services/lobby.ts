@@ -1,4 +1,4 @@
-import { CreateAndJoinRoomResponse, GameTypeMetadata } from "@/types";
+import { CreateAndJoinRoomResponse, GameTypeMetadata } from "@shared/types";
 import { API_BASE } from ".";
 import { fetchWithRetry, FetchError } from "@/lib/fetchWithRetry";
 

@@ -11,7 +11,7 @@ import {
     SpadesPlayerData,
     GameData,
     PlayerData,
-} from "@/types";
+} from "@shared/types";
 import {
     generateSpadesMockData,
     generateDominoesMockData,
@@ -24,7 +24,7 @@ import {
  */
 export interface GameComponentProps<
     TGameData extends GameData = GameData,
-    TPlayerData extends PlayerData = PlayerData
+    TPlayerData extends PlayerData = PlayerData,
 > {
     gameData: TGameData;
     playerData: TPlayerData | null;

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import {
     PlayCircleIcon,
     EyeIcon,
@@ -11,7 +11,7 @@ import {
     AlertCircleIcon,
     XCircleIcon,
 } from "lucide-react";
-import { LobbyData } from "@/types";
+import { LobbyData } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { useRouter } from "next/navigation";

@@ -1,8 +1,8 @@
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { UserIcon } from "lucide-react";
-import { getAvatarColor, getInitials } from "@/lib/playerUtils";
-import { TEAM_COLORS, getTeamName } from "@/lib/teamColors";
+import { getAvatarColor, getInitials } from "@shared/utils";
+import { TEAM_COLORS, getTeamName } from "@shared/constants";
 
 type TeamAssignmentViewProps = {
     users: { id: string; name: string }[];

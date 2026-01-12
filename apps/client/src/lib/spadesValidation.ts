@@ -1,4 +1,4 @@
-import { PlayingCard, SpadesTrick } from "@/types";
+import { PlayingCard, SpadesTrick } from "@shared/types";
 
 /**
  * Check if a card follows the led suit rule.

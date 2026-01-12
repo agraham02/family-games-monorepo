@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
-import { GameData, PlayerData } from "@/types";
+import { GameData, PlayerData } from "@shared/types";
 import { v4 as uuidv4 } from "uuid";
 
 /**

@@ -8,7 +8,7 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
-} from "@/types";
+} from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared Utilities

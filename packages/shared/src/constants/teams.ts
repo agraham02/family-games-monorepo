@@ -1,6 +1,14 @@
-// src/lib/teamColors.ts
-// Shared team color definitions - DRY principle
+// packages/shared/src/constants/teams.ts
+// Team color and display constants
 
+// ============================================================================
+// Team Color Scheme
+// ============================================================================
+
+/**
+ * Team color scheme interface.
+ * All properties are Tailwind CSS classes.
+ */
 export interface TeamColorScheme {
     /** Background gradient for team container */
     bg: string;
@@ -52,19 +60,42 @@ export const TEAM_COLORS: TeamColorScheme[] = [
 /**
  * Get team color scheme by index (0-based).
  * Falls back to first color if index is out of bounds.
+ * @param teamIndex The team index (0-based)
+ * @returns Team color scheme
  */
 export function getTeamColor(teamIndex: number): TeamColorScheme {
     return TEAM_COLORS[teamIndex % TEAM_COLORS.length];
 }
 
+// ============================================================================
+// Team Names
+// ============================================================================
+
 /**
- * Team display names
+ * Default team display names.
  */
-export const TEAM_NAMES = ["Team 1", "Team 2", "Team 3", "Team 4"];
+export const TEAM_NAMES = ["Team 1", "Team 2", "Team 3", "Team 4"] as const;
 
 /**
  * Get team display name by index (0-based).
+ * Falls back to "Team N+1" for indices beyond predefined names.
+ * @param teamIndex The team index (0-based)
+ * @returns Team display name
  */
 export function getTeamName(teamIndex: number): string {
     return TEAM_NAMES[teamIndex] ?? `Team ${teamIndex + 1}`;
 }
+
+// ============================================================================
+// Team Utilities
+// ============================================================================
+
+/**
+ * Get the number of predefined team colors available.
+ */
+export const MAX_TEAM_COLORS = TEAM_COLORS.length;
+
+/**
+ * Get the number of predefined team names available.
+ */
+export const MAX_TEAM_NAMES = TEAM_NAMES.length;

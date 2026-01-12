@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { User } from "@/types";
+import { User } from "@shared/types";
 import { Loader2, UserX, Clock } from "lucide-react";
 
 interface GamePausedOverlayProps {
