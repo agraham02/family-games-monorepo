@@ -173,7 +173,7 @@ export default function TeamAssignmentEditor({
                         <div
                             key={teamIdx}
                             className={cn(
-                                "flex flex-col gap-2 p-3 rounded-xl border-2 min-h-[120px]",
+                                "flex flex-col gap-2 p-3 rounded-xl border-2 min-h-30",
                                 colors.bg,
                                 colors.border
                             )}
@@ -205,7 +205,7 @@ export default function TeamAssignmentEditor({
                                                 )
                                             }
                                             className={cn(
-                                                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all min-h-[36px]",
+                                                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all min-h-9",
                                                 isEmpty
                                                     ? "border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-500"
                                                     : "bg-white/80 dark:bg-zinc-900/50 border border-transparent",
@@ -230,7 +230,7 @@ export default function TeamAssignmentEditor({
                                                 <>
                                                     <Avatar
                                                         className={cn(
-                                                            "w-6 h-6 flex-shrink-0",
+                                                            "w-6 h-6 shrink-0",
                                                             getAvatarColor(
                                                                 player?.name ||
                                                                     ""
@@ -246,7 +246,7 @@ export default function TeamAssignmentEditor({
                                                     </Avatar>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-100 truncate flex-1 max-w-[80px]">
+                                                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-100 truncate flex-1 max-w-20">
                                                                 {truncateName(
                                                                     player?.name ||
                                                                         "Unknown",
@@ -263,7 +263,7 @@ export default function TeamAssignmentEditor({
                                                     <Button
                                                         size="icon"
                                                         variant="ghost"
-                                                        className="h-5 w-5 ml-auto flex-shrink-0 text-zinc-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30"
+                                                        className="h-5 w-5 ml-auto shrink-0 text-zinc-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30"
                                                         onClick={(e) =>
                                                             handleRemoveFromSlot(
                                                                 teamIdx,
@@ -301,7 +301,7 @@ export default function TeamAssignmentEditor({
                         {unassigned.length}
                     </Badge>
                 </div>
-                <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+                <div className="flex flex-wrap gap-1.5 min-h-8">
                     {unassigned.length === 0 ? (
                         <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             ✓ All players assigned!
@@ -335,7 +335,7 @@ export default function TeamAssignmentEditor({
                                                     {getInitials(u.name)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-100 truncate max-w-[60px]">
+                                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-100 truncate max-w-15">
                                                 {truncateName(u.name, 8)}
                                             </span>
                                         </button>

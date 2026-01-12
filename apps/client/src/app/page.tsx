@@ -67,7 +67,7 @@ function CreateRoomCard({
         >
             <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
                 <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
                         <PlusCircleIcon className="w-7 h-7 text-white" />
                     </div>
                     <CardTitle className="text-xl font-bold">
@@ -100,7 +100,7 @@ function CreateRoomCard({
                         />
                         {nameError && (
                             <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
                                 <span>{nameError}</span>
                             </div>
                         )}
@@ -130,7 +130,7 @@ function CreateRoomCard({
                         />
                         {roomNameError && (
                             <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
                                 <span>{roomNameError}</span>
                             </div>
                         )}
@@ -138,7 +138,7 @@ function CreateRoomCard({
                 </CardContent>
                 <CardFooter className="pt-2">
                     <Button
-                        className="w-full h-11 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300"
+                        className="w-full h-11 bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300"
                         type="button"
                         disabled={!isFormValid || loading}
                         onClick={() =>
@@ -210,7 +210,7 @@ function JoinRoomCard({
             >
                 <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl">
                     <CardHeader className="text-center pb-2">
-                        <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                        <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
                             <Loader2Icon className="w-7 h-7 text-white animate-spin" />
                         </div>
                         <CardTitle className="text-xl font-bold">
@@ -259,7 +259,7 @@ function JoinRoomCard({
         >
             <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
                 <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
+                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
                         <UsersIcon className="w-7 h-7 text-white" />
                     </div>
                     <CardTitle className="text-xl font-bold">
@@ -292,7 +292,7 @@ function JoinRoomCard({
                         />
                         {nameError && (
                             <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
                                 <span>{nameError}</span>
                             </div>
                         )}
@@ -319,7 +319,7 @@ function JoinRoomCard({
                         />
                         {roomCodeError && (
                             <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
                                 <span>{roomCodeError}</span>
                             </div>
                         )}
@@ -327,7 +327,7 @@ function JoinRoomCard({
                 </CardContent>
                 <CardFooter className="pt-2">
                     <Button
-                        className="w-full h-11 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
+                        className="w-full h-11 bg-linear-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
                         type="button"
                         disabled={!isFormValid || loading}
                         onClick={() =>
@@ -567,12 +567,12 @@ export default function Home() {
     }
 
     return (
-        <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 transition-colors">
+        <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-linear-to-b from-zinc-50 via-zinc-100 to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 transition-colors">
             {/* Animated background elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Gradient orbs */}
                 <motion.div
-                    className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-emerald-400/30 to-teal-500/20 rounded-full blur-3xl"
+                    className="absolute -top-40 -right-40 w-96 h-96 bg-linear-to-br from-emerald-400/30 to-teal-500/20 rounded-full blur-3xl"
                     animate={{
                         x: [0, 30, 0],
                         y: [0, -20, 0],
@@ -585,7 +585,7 @@ export default function Home() {
                     }}
                 />
                 <motion.div
-                    className="absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-tr from-violet-400/30 to-purple-500/20 rounded-full blur-3xl"
+                    className="absolute -bottom-40 -left-40 w-96 h-96 bg-linear-to-tr from-violet-400/30 to-purple-500/20 rounded-full blur-3xl"
                     animate={{
                         x: [0, -30, 0],
                         y: [0, 20, 0],
@@ -598,7 +598,7 @@ export default function Home() {
                     }}
                 />
                 <motion.div
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-amber-400/10 via-pink-400/10 to-violet-400/10 rounded-full blur-3xl"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-150 bg-linear-to-r from-amber-400/10 via-pink-400/10 to-violet-400/10 rounded-full blur-3xl"
                     animate={{
                         rotate: [0, 360],
                     }}
@@ -609,7 +609,7 @@ export default function Home() {
                     }}
                 />
                 {/* Grid pattern */}
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,black_40%,transparent_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-size-[4rem_4rem] mask-[radial-gradient(ellipse_80%_50%_at_50%_50%,black_40%,transparent_100%)]" />
             </div>
 
             {/* Content */}
@@ -630,12 +630,12 @@ export default function Home() {
                             type: "spring",
                             bounce: 0.5,
                         }}
-                        className="mx-auto mb-6 w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-pink-500 flex items-center justify-center shadow-2xl shadow-orange-500/30"
+                        className="mx-auto mb-6 w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-linear-to-br from-amber-400 via-orange-500 to-pink-500 flex items-center justify-center shadow-2xl shadow-orange-500/30"
                     >
                         <DicesIcon className="w-10 h-10 md:w-12 md:h-12 text-white" />
                     </motion.div>
 
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-zinc-900 via-zinc-700 to-zinc-900 dark:from-white dark:via-zinc-200 dark:to-white bg-clip-text text-transparent tracking-tight">
+                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-linear-to-r from-zinc-900 via-zinc-700 to-zinc-900 dark:from-white dark:via-zinc-200 dark:to-white bg-clip-text text-transparent tracking-tight">
                         Family Game Room
                     </h1>
 

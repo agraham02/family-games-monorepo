@@ -343,7 +343,7 @@ export default function GamePage() {
 
     return (
         <main
-            className={`w-full min-h-[100dvh] overflow-hidden bg-zinc-50 dark:bg-zinc-950 ${
+            className={`w-full min-h-dvh overflow-hidden bg-zinc-50 dark:bg-zinc-950 ${
                 isSpectator ? "pt-12" : ""
             }`}
         >

@@ -360,7 +360,7 @@ export default function GameMenu({
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-72 flex flex-col">
-                        <SheetHeader className="flex-shrink-0">
+                        <SheetHeader className="shrink-0">
                             <SheetTitle className="flex items-center gap-2">
                                 <Settings className="h-5 w-5" />
                                 Game Menu

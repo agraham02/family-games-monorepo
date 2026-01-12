@@ -109,7 +109,7 @@ export default function RoomControlsCard({
             <CardContent className="flex flex-col gap-4">
                 {/* Room Settings - Max Players */}
                 {isPartyLeader && (
-                    <div className="space-y-3 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="space-y-3 p-4 bg-linear-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                         <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                             <UsersIcon className="w-4 h-4" />
                             <span className="text-sm font-medium">
@@ -177,7 +177,7 @@ export default function RoomControlsCard({
                     <Button
                         onClick={handleStartGame}
                         disabled={!selectedGame}
-                        className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-base shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full h-12 bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-base shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <PlayIcon className="w-5 h-5" />
                         {selectedGame ? "Start Game" : "Select a Game First"}

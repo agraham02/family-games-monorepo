@@ -112,7 +112,7 @@ export default function AvailableGamesCard({
                                 className={cn(
                                     "w-full text-left p-4 rounded-xl border-2 transition-all duration-200 relative overflow-hidden",
                                     isSelected && !isComingSoon
-                                        ? `bg-gradient-to-r ${gradient} border-transparent text-white shadow-lg`
+                                        ? `bg-linear-to-r ${gradient} border-transparent text-white shadow-lg`
                                         : isComingSoon
                                           ? "bg-zinc-100/50 dark:bg-zinc-800/30 border-zinc-200/50 dark:border-zinc-700/50 opacity-60"
                                           : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
@@ -150,10 +150,10 @@ export default function AvailableGamesCard({
                                     {/* Game Icon */}
                                     <div
                                         className={cn(
-                                            "flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center",
+                                            "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center",
                                             isSelected
                                                 ? "bg-white/20"
-                                                : "bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-700 dark:to-zinc-800"
+                                                : "bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-zinc-700 dark:to-zinc-800"
                                         )}
                                     >
                                         <Icon

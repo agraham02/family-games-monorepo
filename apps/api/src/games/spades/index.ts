@@ -287,7 +287,10 @@ function reducer(state: SpadesState, action: GameAction): SpadesState {
 }
 
 function getState(state: SpadesState): Partial<SpadesState> {
-    const publicState = omitFields(state, ["hands"]);
+    const publicState = omitFields(state, ["hands"]) as Partial<SpadesState> & {
+        handsCounts?: Record<string, number>;
+        remainingSeconds?: number;
+    };
     publicState.handsCounts = Object.fromEntries(
         state.playOrder.map((id) => [id, state.hands[id].length || 0])
     );

@@ -42,14 +42,19 @@ export function useTurnTimer(
             serverRemainingSeconds !== undefined &&
             serverRemainingSeconds > 0
         ) {
-            const diff = Math.abs(serverRemainingSeconds - remainingSeconds);
-            if (
-                diff > 2 ||
-                lastServerValueRef.current !== serverRemainingSeconds
-            ) {
-                setRemainingSeconds(serverRemainingSeconds);
-            }
-            lastServerValueRef.current = serverRemainingSeconds;
+            setRemainingSeconds((currentRemaining) => {
+                const diff = Math.abs(
+                    serverRemainingSeconds - currentRemaining
+                );
+                if (
+                    diff > 2 ||
+                    lastServerValueRef.current !== serverRemainingSeconds
+                ) {
+                    lastServerValueRef.current = serverRemainingSeconds;
+                    return serverRemainingSeconds;
+                }
+                return currentRemaining;
+            });
         }
     }, [serverRemainingSeconds]);
 

@@ -4,14 +4,7 @@
 import { ComponentType } from "react";
 import Dominoes from "./dominoes";
 import Spades from "./spades";
-import {
-    DominoesData,
-    DominoesPlayerData,
-    SpadesData,
-    SpadesPlayerData,
-    GameData,
-    PlayerData,
-} from "@shared/types";
+import { GameData, PlayerData } from "@shared/types";
 import {
     generateSpadesMockData,
     generateDominoesMockData,
@@ -53,11 +46,12 @@ type MockDataGenerator<TOptions = Record<string, unknown>> = (
 
 /**
  * Registry entry for a game component
- * Uses ComponentType with explicit any for type erasure - this is intentional
- * since the registry stores heterogeneous game components that get rendered
- * dynamically based on game type. Type safety is maintained at the render site.
+ * Uses a generic component type that accepts GameComponentProps with any valid
+ * game data and player data types. The registry stores heterogeneous game
+ * components that get rendered dynamically based on game type.
  */
 interface GameRegistryEntry {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     component: ComponentType<GameComponentProps<any, any>>;
     displayName: string;
     /** Generate mock data for debugging */
@@ -72,9 +66,7 @@ interface GameRegistryEntry {
  */
 export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
     dominoes: {
-        component: Dominoes as ComponentType<
-            GameComponentProps<DominoesData, DominoesPlayerData>
-        >,
+        component: Dominoes,
         displayName: "Dominoes",
         generateMockData:
             generateDominoesMockData as MockDataGenerator<DominoesMockOptions>,
@@ -86,9 +78,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
         },
     },
     spades: {
-        component: Spades as ComponentType<
-            GameComponentProps<SpadesData, SpadesPlayerData>
-        >,
+        component: Spades,
         displayName: "Spades",
         generateMockData:
             generateSpadesMockData as MockDataGenerator<SpadesMockOptions>,
@@ -107,6 +97,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
  */
 export function getGameComponent(
     gameType: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): ComponentType<GameComponentProps<any, any>> | null {
     return GAME_REGISTRY[gameType]?.component ?? null;
 }
