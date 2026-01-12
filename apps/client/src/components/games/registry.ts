@@ -58,7 +58,6 @@ type MockDataGenerator<TOptions = Record<string, unknown>> = (
  * dynamically based on game type. Type safety is maintained at the render site.
  */
 interface GameRegistryEntry {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     component: ComponentType<GameComponentProps<any, any>>;
     displayName: string;
     /** Generate mock data for debugging */
@@ -108,7 +107,6 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
  */
 export function getGameComponent(
     gameType: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): ComponentType<GameComponentProps<any, any>> | null {
     return GAME_REGISTRY[gameType]?.component ?? null;
 }

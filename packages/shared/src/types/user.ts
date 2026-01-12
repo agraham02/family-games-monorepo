@@ -24,6 +24,10 @@ export interface GameTypeMetadata {
     numTeams?: number;
     playersPerTeam?: number;
     description?: string;
+    /** Whether this game is enabled for play. Defaults to true if not specified. */
+    enabled?: boolean;
+    /** Whether this game is marked as coming soon (shown but not selectable). */
+    comingSoon?: boolean;
 }
 
 /**

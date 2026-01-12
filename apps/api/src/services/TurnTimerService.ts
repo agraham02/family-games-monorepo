@@ -25,8 +25,9 @@ class TurnTimerService {
      * Grace period in milliseconds added to timeout to account for network latency.
      * The client timer will expire before the server timer, giving the player
      * a chance to submit their action before the server auto-acts.
+     * This grace period is hidden from the client - they see 0 when it expires.
      */
-    private readonly GRACE_PERIOD_MS = 2000; // 2 seconds
+    private readonly GRACE_PERIOD_MS = 1000; // 1 second
 
     /**
      * Start a turn timer for a game.
@@ -209,6 +210,39 @@ class TurnTimerService {
      */
     cleanupGame(gameId: string): void {
         this.cancelTurn(gameId);
+    }
+
+    /**
+     * Get the remaining seconds for the current turn timer.
+     * Returns the time visible to the client (excluding grace period).
+     *
+     * @param gameId - The game ID
+     * @returns Remaining seconds, or undefined if no timer is active
+     */
+    getRemainingSeconds(gameId: string): number | undefined {
+        const state = this.activeTimers.get(gameId);
+        if (!state) {
+            return undefined;
+        }
+
+        if (state.pausedAt !== null) {
+            // Timer is paused - calculate from remainingWhenPaused
+            // Subtract grace period to get client-visible time
+            const remaining = state.remainingWhenPaused ?? 0;
+            const clientVisible = Math.max(
+                0,
+                Math.floor((remaining - this.GRACE_PERIOD_MS) / 1000)
+            );
+            return clientVisible;
+        }
+
+        // Timer is running
+        const now = Date.now();
+        const elapsed = now - state.startedAt;
+        // Client-visible time is just the timeout without grace period
+        const clientTimeoutMs = state.timeoutSeconds * 1000;
+        const clientRemaining = Math.max(0, clientTimeoutMs - elapsed);
+        return Math.floor(clientRemaining / 1000);
     }
 }
 

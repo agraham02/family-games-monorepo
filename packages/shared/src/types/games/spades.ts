@@ -159,6 +159,8 @@ export interface SpadesState extends GameState {
 
     /** ISO timestamp when the current turn started (for turn timer) */
     turnStartedAt?: string;
+    /** Remaining seconds for the current turn (server-calculated for sync) */
+    remainingSeconds?: number;
 }
 
 // ============================================================================
@@ -214,6 +216,7 @@ export type SpadesData = BaseGameData & {
     roundScoreBreakdown: Record<number, unknown>;
     teamEligibleForBlind: Record<number, boolean>; // which teams are eligible for blind bids
     turnStartedAt?: string; // ISO timestamp for turn timer
+    remainingSeconds?: number; // Server-calculated remaining seconds for timer sync
 };
 
 /**

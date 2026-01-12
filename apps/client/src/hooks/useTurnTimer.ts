@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface TurnTimerResult {
     remainingSeconds: number;
@@ -6,34 +6,55 @@ interface TurnTimerResult {
 }
 
 /**
- * Hook to calculate remaining time for a turn timer.
- * Updates every second when active.
+ * Hook to manage turn timer countdown with server synchronization.
+ * Uses server-provided remainingSeconds as the authoritative starting value,
+ * then counts down locally for smooth animation.
  *
- * @param turnStartedAt - ISO timestamp when the turn started
+ * @param serverRemainingSeconds - Server-calculated remaining seconds (for sync)
  * @param totalSeconds - Total seconds allowed for the turn (0 or undefined means no limit)
  * @returns Object with remainingSeconds and isExpired
  */
 export function useTurnTimer(
-    turnStartedAt: string | undefined,
+    serverRemainingSeconds: number | undefined,
     totalSeconds: number | undefined
 ): TurnTimerResult {
-    const [remainingSeconds, setRemainingSeconds] = useState(totalSeconds ?? 0);
+    // Track the last server value to detect when we need to resync
+    const lastServerValueRef = useRef<number | undefined>(
+        serverRemainingSeconds
+    );
 
-    const calculateRemaining = useCallback(() => {
-        if (!turnStartedAt || !totalSeconds || totalSeconds <= 0) {
-            return totalSeconds ?? 0;
+    // Initialize with server value, fallback to totalSeconds
+    const [remainingSeconds, setRemainingSeconds] = useState(() => {
+        if (
+            serverRemainingSeconds !== undefined &&
+            serverRemainingSeconds > 0
+        ) {
+            return serverRemainingSeconds;
         }
+        return totalSeconds ?? 0;
+    });
 
-        const startTime = new Date(turnStartedAt).getTime();
-        const now = Date.now();
-        const elapsedSeconds = Math.floor((now - startTime) / 1000);
-        return Math.max(0, totalSeconds - elapsedSeconds);
-    }, [turnStartedAt, totalSeconds]);
-
+    // Resync when server provides a new value
     useEffect(() => {
-        // Calculate initial remaining time
-        setRemainingSeconds(calculateRemaining());
+        // If server value changed significantly (more than 2 seconds difference),
+        // resync to correct any drift
+        if (
+            serverRemainingSeconds !== undefined &&
+            serverRemainingSeconds > 0
+        ) {
+            const diff = Math.abs(serverRemainingSeconds - remainingSeconds);
+            if (
+                diff > 2 ||
+                lastServerValueRef.current !== serverRemainingSeconds
+            ) {
+                setRemainingSeconds(serverRemainingSeconds);
+            }
+            lastServerValueRef.current = serverRemainingSeconds;
+        }
+    }, [serverRemainingSeconds]);
 
+    // Local countdown interval
+    useEffect(() => {
         // Don't set up interval if no time limit
         if (!totalSeconds || totalSeconds <= 0) {
             return;
@@ -41,17 +62,18 @@ export function useTurnTimer(
 
         // Update every second
         const interval = setInterval(() => {
-            const remaining = calculateRemaining();
-            setRemainingSeconds(remaining);
-
-            // Clear interval if expired
-            if (remaining <= 0) {
-                clearInterval(interval);
-            }
+            setRemainingSeconds((prev) => {
+                const next = prev - 1;
+                if (next <= 0) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return next;
+            });
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [turnStartedAt, totalSeconds, calculateRemaining]);
+    }, [totalSeconds, serverRemainingSeconds]);
 
     return {
         remainingSeconds,

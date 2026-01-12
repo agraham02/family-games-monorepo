@@ -176,16 +176,41 @@ function PlayerInfo({
             <div className="relative">
                 {/* Only show pulse indicator if there's no timer */}
                 {!turnTimer && <TurnIndicator isActive={isCurrentTurn} />}
-                <TurnTimer
-                    totalSeconds={turnTimer?.totalSeconds ?? 0}
-                    remainingSeconds={turnTimer?.remainingSeconds ?? 0}
-                    isActive={
-                        isCurrentTurn &&
-                        !!turnTimer &&
-                        turnTimer.totalSeconds > 0
-                    }
-                    size={timerSize}
-                >
+
+                {/* Only render TurnTimer when it should be active to prevent 0→100% animation */}
+                {isCurrentTurn && turnTimer && turnTimer.totalSeconds > 0 ? (
+                    <TurnTimer
+                        totalSeconds={turnTimer.totalSeconds}
+                        remainingSeconds={turnTimer.remainingSeconds}
+                        isActive={true}
+                        size={timerSize}
+                    >
+                        <Avatar
+                            className={cn(
+                                avatarSize,
+                                "border-2 shadow-md transition-all duration-200",
+                                "border-amber-400"
+                            )}
+                            style={{
+                                borderColor: teamColor || undefined,
+                                boxShadow: isLocalPlayer
+                                    ? "0 0 0 2px #3b82f6, 0 0 8px 2px rgba(59, 130, 246, 0.5)"
+                                    : undefined,
+                            }}
+                        >
+                            <AvatarFallback
+                                className={cn(
+                                    "text-sm font-bold",
+                                    isLocalPlayer
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-slate-700 text-slate-200"
+                                )}
+                            >
+                                {initials}
+                            </AvatarFallback>
+                        </Avatar>
+                    </TurnTimer>
+                ) : (
                     <Avatar
                         className={cn(
                             avatarSize,
@@ -196,7 +221,6 @@ function PlayerInfo({
                         )}
                         style={{
                             borderColor: teamColor || undefined,
-                            // Use box-shadow for hero indicator instead of ring (doesn't add to bounding box)
                             boxShadow: isLocalPlayer
                                 ? "0 0 0 2px #3b82f6, 0 0 8px 2px rgba(59, 130, 246, 0.5)"
                                 : undefined,
@@ -213,7 +237,7 @@ function PlayerInfo({
                             {initials}
                         </AvatarFallback>
                     </Avatar>
-                </TurnTimer>
+                )}
 
                 {/* Disconnected indicator */}
                 {!connected && (

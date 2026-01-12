@@ -26,6 +26,7 @@ import {
     handlePlayerDisconnect,
     checkAllPlayersConnected,
 } from "../shared";
+import { turnTimerService } from "../../services/TurnTimerService";
 
 // Export auto-action helpers for TurnTimerService
 export {
@@ -290,6 +291,13 @@ function getState(state: SpadesState): Partial<SpadesState> {
     publicState.handsCounts = Object.fromEntries(
         state.playOrder.map((id) => [id, state.hands[id].length || 0])
     );
+
+    // Include server-calculated remaining seconds for timer synchronization
+    const remainingSeconds = turnTimerService.getRemainingSeconds(state.id);
+    if (remainingSeconds !== undefined) {
+        publicState.remainingSeconds = remainingSeconds;
+    }
+
     return publicState;
 }
 

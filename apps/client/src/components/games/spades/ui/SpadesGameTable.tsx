@@ -81,10 +81,10 @@ function SpadesGameTable({
 
     const playerCount = playerData.localOrdering.length;
 
-    // Turn timer - calculate remaining time for the current turn player
+    // Turn timer - use server-provided remainingSeconds for sync
     const turnTimeLimit = gameData.settings?.turnTimeLimit ?? 0;
     const { remainingSeconds } = useTurnTimer(
-        gameData.turnStartedAt,
+        gameData.remainingSeconds,
         turnTimeLimit
     );
 

@@ -14,6 +14,7 @@ import {
     UsersIcon,
     CheckCircle2Icon,
     LockIcon,
+    ClockIcon,
 } from "lucide-react";
 
 // Map game types to icons
@@ -22,6 +23,8 @@ function getGameIcon(gameType: string) {
         case "spades":
             return SpadeIcon;
         case "dominoes":
+            return DicesIcon;
+        case "lrc":
             return DicesIcon;
         default:
             return Gamepad2Icon;
@@ -36,6 +39,8 @@ function getGameGradient(gameType: string, isSelected: boolean) {
             return "from-indigo-500 to-purple-600";
         case "dominoes":
             return "from-amber-500 to-orange-600";
+        case "lrc":
+            return "from-green-500 to-emerald-600";
         default:
             return "from-blue-500 to-cyan-600";
     }
@@ -84,6 +89,8 @@ export default function AvailableGamesCard({
                 <AnimatePresence>
                     {availableGames.map((game) => {
                         const isSelected = selectedGame === game.type;
+                        const isComingSoon = game.comingSoon ?? false;
+                        const isDisabled = !isPartyLeader || isComingSoon;
                         const Icon = getGameIcon(game.type);
                         const gradient = getGameGradient(game.type, isSelected);
 
@@ -94,27 +101,42 @@ export default function AvailableGamesCard({
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                whileHover={
-                                    isPartyLeader ? { scale: 1.02 } : {}
-                                }
-                                whileTap={isPartyLeader ? { scale: 0.98 } : {}}
+                                whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                                whileTap={!isDisabled ? { scale: 0.98 } : {}}
                                 onClick={
-                                    isPartyLeader
+                                    !isDisabled
                                         ? () => handleSelectGame(game.type)
                                         : undefined
                                 }
-                                disabled={!isPartyLeader}
+                                disabled={isDisabled}
                                 className={cn(
                                     "w-full text-left p-4 rounded-xl border-2 transition-all duration-200 relative overflow-hidden",
-                                    isSelected
+                                    isSelected && !isComingSoon
                                         ? `bg-gradient-to-r ${gradient} border-transparent text-white shadow-lg`
-                                        : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
-                                    !isPartyLeader &&
-                                        "cursor-default opacity-80"
+                                        : isComingSoon
+                                          ? "bg-zinc-100/50 dark:bg-zinc-800/30 border-zinc-200/50 dark:border-zinc-700/50 opacity-60"
+                                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
+                                    isDisabled && "cursor-default"
                                 )}
                             >
+                                {/* Coming Soon badge */}
+                                {isComingSoon && (
+                                    <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="absolute top-3 right-3"
+                                    >
+                                        <Badge
+                                            variant="secondary"
+                                            className="text-xs gap-1 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-0"
+                                        >
+                                            <ClockIcon className="w-3 h-3" />
+                                            Coming Soon
+                                        </Badge>
+                                    </motion.div>
+                                )}
                                 {/* Selection indicator */}
-                                {isSelected && (
+                                {isSelected && !isComingSoon && (
                                     <motion.div
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}

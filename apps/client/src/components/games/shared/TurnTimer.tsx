@@ -1,7 +1,7 @@
 // src/components/games/shared/TurnTimer.tsx
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 interface TurnTimerProps {
@@ -23,12 +23,16 @@ interface TurnTimerProps {
  * Circular progress timer component for turn-based games.
  * Designed to wrap around player avatars.
  *
+ * IMPORTANT: Only mount this component when the timer should be active.
+ * This prevents the 0→100% animation bug that occurs when the component
+ * is mounted before timer values are ready.
+ *
  * Color transitions:
  * - Green (#22c55e) when >50% remaining
  * - Amber (#f59e0b) when 20-50% remaining
  * - Red (#ef4444) when <20% remaining
  *
- * Pulses when <10 seconds remaining.
+ * Pulses when <30% time remaining.
  */
 export function TurnTimer({
     totalSeconds,
@@ -61,7 +65,7 @@ export function TurnTimer({
         return "#fee2e2"; // red-100
     }, [percentage]);
 
-    // Should pulse when under half time left
+    // Should pulse when under 30% time left
     const shouldPulse =
         isActive &&
         remainingSeconds > 0 &&
@@ -73,16 +77,6 @@ export function TurnTimer({
     const circumference = 2 * Math.PI * radius;
     // Invert: start full (0 offset) and drain to empty (full circumference offset)
     const strokeDashoffset = circumference * ((100 - percentage) / 100);
-
-    // Skip transition on initial render to prevent animation from 0% to current value
-    const [hasInitialized, setHasInitialized] = useState(false);
-    useEffect(() => {
-        // Use requestAnimationFrame to ensure the initial render has painted
-        const frame = requestAnimationFrame(() => {
-            setHasInitialized(true);
-        });
-        return () => cancelAnimationFrame(frame);
-    }, []);
 
     if (!isActive) {
         // Just render children without timer ring when inactive
@@ -136,11 +130,7 @@ export function TurnTimer({
                     strokeLinecap="round"
                     strokeDasharray={circumference}
                     strokeDashoffset={strokeDashoffset}
-                    className={
-                        hasInitialized
-                            ? "transition-all duration-1000 ease-linear"
-                            : ""
-                    }
+                    className="transition-all duration-1000 ease-linear"
                 />
             </svg>
             {/* Content (avatar, etc.) */}
