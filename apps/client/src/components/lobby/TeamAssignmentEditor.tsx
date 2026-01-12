@@ -7,8 +7,9 @@ import { Badge } from "../ui/badge";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { ShuffleIcon, XIcon, UserIcon, PlusIcon } from "lucide-react";
-import { getAvatarColor, getInitials, truncateName } from "@shared/utils";
-import { TEAM_COLORS, getTeamName } from "@shared/constants";
+import { getInitials, truncateName } from "@shared/utils";
+import { getTeamName } from "@shared/constants";
+import { getAvatarColor, TEAM_COLORS } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 
 type TeamAssignmentEditorProps = {

@@ -10,7 +10,8 @@ import { User } from "@shared/types";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { toast } from "sonner";
-import { getAvatarColor, getInitials } from "@shared/utils";
+import { getInitials } from "@shared/utils";
+import { getAvatarColor } from "@/lib/colors";
 import {
     CrownIcon,
     CheckCircle2Icon,
