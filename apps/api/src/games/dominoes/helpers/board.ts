@@ -1,6 +1,6 @@
 // src/games/dominoes/helpers/board.ts
 
-import { Tile, BoardEnd, BoardState } from "@shared/types";
+import { Tile, BoardEnd, BoardState } from "@family-games/shared";
 
 // Re-export BoardState for convenience
 export type { BoardState };

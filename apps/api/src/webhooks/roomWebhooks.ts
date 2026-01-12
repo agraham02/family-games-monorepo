@@ -1,4 +1,4 @@
-import { Room } from "@shared/types";
+import { Room } from "@family-games/shared";
 import { Server as SocketIOServer } from "socket.io";
 
 let io: SocketIOServer | null = null;

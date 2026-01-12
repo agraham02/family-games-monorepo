@@ -1,4 +1,4 @@
-import { SpadesState, Trick, Bid } from "@shared/types";
+import { SpadesState, Trick, Bid } from "@family-games/shared";
 
 interface TeamScoreBreakdown {
     previousScore: number;

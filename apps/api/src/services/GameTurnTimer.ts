@@ -12,7 +12,7 @@
  */
 
 import { Server as SocketIOServer } from "socket.io";
-import { Room } from "@shared/types";
+import { Room } from "@family-games/shared";
 import { gameManager, GameAction, GameState } from "./GameManager";
 import { turnTimerService } from "./TurnTimerService";
 

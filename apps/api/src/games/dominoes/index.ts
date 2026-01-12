@@ -8,7 +8,7 @@ import {
     DOMINOES_SETTINGS_DEFINITIONS,
     Tile,
     DominoesPhase,
-} from "@shared/types";
+} from "@family-games/shared";
 import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import { v4 as uuidv4 } from "uuid";
 import {

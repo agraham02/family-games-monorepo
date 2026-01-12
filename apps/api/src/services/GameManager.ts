@@ -5,7 +5,7 @@ import {
     SettingDefinition,
     BaseGameSettings,
     PartialGameSettings,
-} from "@shared/types";
+} from "@family-games/shared";
 
 export interface GameModule {
     init(room: Room, customSettings?: PartialGameSettings): GameState;

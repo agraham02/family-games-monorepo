@@ -1,5 +1,5 @@
-import { Room, User, PartialGameSettings } from "@shared/types";
-import { validateTeamsForGame } from "@shared/validation";
+import { Room, User, PartialGameSettings } from "@family-games/shared";
+import { validateTeamsForGame } from "@family-games/shared";
 import { v4 as uuidv4 } from "uuid";
 import { emitRoomEvent } from "../webhooks/roomWebhooks";
 import { emitGameEvent } from "../webhooks/gameWebhooks";
@@ -10,7 +10,7 @@ import {
     conflict,
     tooManyRequests,
     badRequest,
-} from "@shared/utils";
+} from "@family-games/shared";
 import { pauseTimer, resumeTimer as resumeTurnTimer } from "./GameTurnTimer";
 
 const rooms: Map<string, Room> = new Map();

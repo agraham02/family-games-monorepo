@@ -1,4 +1,4 @@
-import { Room } from "@shared/types";
+import { Room } from "@family-games/shared";
 import { Socket, Server as SocketIOServer } from "socket.io";
 import { gameManager, GameState } from "../services/GameManager";
 

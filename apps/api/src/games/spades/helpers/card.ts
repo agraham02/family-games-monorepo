@@ -2,7 +2,7 @@
    Card helpers – no game-state, no I/O
    --------------------------------------------------------------------- */
 
-import { SpadesState, SpadesSettings, Card, Rank, Suit } from "@shared/types";
+import { SpadesState, SpadesSettings, Card, Rank, Suit } from "@family-games/shared";
 import { GamePlayers } from "../../../services/GameManager";
 import { shuffle } from "../../shared";
 

@@ -1,4 +1,4 @@
-import { CardPlay, Trick, Card, Suit, SpadesSettings } from "@shared/types";
+import { CardPlay, Trick, Card, Suit, SpadesSettings } from "@family-games/shared";
 import { cardBeats } from "./card";
 
 /*─────────────────────────  FOLLOW-SUIT RULE  ──────────────────────────*/

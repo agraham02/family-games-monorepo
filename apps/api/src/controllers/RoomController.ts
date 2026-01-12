@@ -1,14 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import * as RoomService from "../services/RoomService";
 import { getIO, hasIO } from "../utils/socketIO";
-import { badRequest } from "@shared/utils";
+import { badRequest } from "@family-games/shared";
 import {
     CreateRoomRequestSchema,
     JoinRoomRequestSchema,
     PlayerNameSchema,
     RoomCodeSchema,
     safeParseWithErrors,
-} from "@shared/validation";
+} from "@family-games/shared";
 
 export async function createRoom(
     req: Request,
