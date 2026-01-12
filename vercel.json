@@ -3,6 +3,5 @@
     "buildCommand": "pnpm build:shared && pnpm --filter client build",
     "installCommand": "pnpm install",
     "framework": "nextjs",
-    "outputDirectory": "apps/client/.next",
-    "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/client/ packages/shared/"
+    "outputDirectory": "apps/client/.next"
 }
