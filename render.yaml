@@ -5,9 +5,11 @@ services:
       region: virginia
       plan: free
       rootDir: apps/api
-      buildCommand: cd ../.. && pnpm install && pnpm build:shared && cd apps/api && pnpm build
-      startCommand: pnpm start
+      buildCommand: npm install -g pnpm && cd ../.. && pnpm install && pnpm build:shared && cd apps/api && pnpm build
+      startCommand: node dist/index.js
       envVars:
           - key: NODE_ENV
             value: production
+          - key: NPM_CONFIG_LEGACY_PEER_DEPS
+            value: "true"
       autoDeploy: true
