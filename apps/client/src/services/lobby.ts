@@ -57,7 +57,7 @@ export async function getRoomIdByCode(
 ): Promise<string | null> {
     try {
         const res = await fetchWithRetry(
-            `${API_BASE}/rooms/code/${roomCode.toUpperCase()}`,
+            `${API_BASE}/api/rooms/code/${roomCode.toUpperCase()}`,
             {
                 method: "GET",
             }
@@ -85,7 +85,7 @@ export async function createRoom(
     roomName: string
 ): Promise<CreateAndJoinRoomResponse> {
     const requestBody: CreateRoomRequest = { playerName, roomName };
-    const res = await fetchWithRetry(`${API_BASE}/rooms`, {
+    const res = await fetchWithRetry(`${API_BASE}/api/rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -106,7 +106,7 @@ export async function joinRoom(
     userId?: string
 ): Promise<CreateAndJoinRoomResponse> {
     const requestBody: JoinRoomRequest = { playerName, roomCode };
-    const res = await fetchWithRetry(`${API_BASE}/rooms/join`, {
+    const res = await fetchWithRetry(`${API_BASE}/api/rooms/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...requestBody, userId }),
@@ -130,7 +130,7 @@ export async function joinRoom(
 export async function getAvailableGames(): Promise<{
     games: GameTypeMetadata[];
 }> {
-    const res = await fetchWithRetry(`${API_BASE}/games`);
+    const res = await fetchWithRetry(`${API_BASE}/api/games`);
     if (!res.ok) {
         const { message } = await extractErrorMessage(
             res,

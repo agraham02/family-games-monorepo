@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { SessionProvider } from "@/contexts/SessionContext";
 import { DarkModeToggle } from "@/components/dark-mode-toggle";
+import { SoundToggle } from "@/components/sound-toggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import { API_BASE } from "@/services";
@@ -14,7 +15,7 @@ export default function HealthCheckGate({
     const [serverUp, setServerUp] = useState<boolean | null>(null);
 
     useEffect(() => {
-        fetch(`${API_BASE}/healthz`)
+        fetch(`${API_BASE}/api/healthz`)
             .then((res) => {
                 if (res.ok) {
                     setServerUp(true);
@@ -28,8 +29,9 @@ export default function HealthCheckGate({
     return (
         <SessionProvider>
             <TooltipProvider delayDuration={300}>
-                <div className="w-full flex justify-end p-4 fixed top-0 left-0 z-50 pointer-events-none">
-                    <div className="pointer-events-auto">
+                <div className="w-full flex justify-end gap-2 p-4 fixed top-0 left-0 z-50 pointer-events-none">
+                    <div className="pointer-events-auto flex gap-2">
+                        <SoundToggle />
                         <DarkModeToggle />
                     </div>
                 </div>

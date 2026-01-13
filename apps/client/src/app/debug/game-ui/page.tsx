@@ -42,6 +42,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 // Import game-specific UI components for display
 import Board from "@/components/games/dominoes/ui/Board";
@@ -121,6 +122,10 @@ interface SpadesDebugPanelProps {
     isDealing: boolean;
     dealingItems: DealingItem[];
     showDebugGrid: boolean;
+    // Timer testing props
+    timerEnabled: boolean;
+    timerDuration: number;
+    timerStartedAt: number | null;
 }
 
 function SpadesDebugPanel({
@@ -134,6 +139,9 @@ function SpadesDebugPanel({
     isDealing,
     dealingItems,
     showDebugGrid,
+    timerEnabled,
+    timerDuration,
+    timerStartedAt,
 }: SpadesDebugPanelProps) {
     const playerCount = playerData.localOrdering.length;
     const trickPlays =
@@ -208,6 +216,17 @@ function SpadesDebugPanel({
                                     bid={bid}
                                     tricksWon={tricksWon}
                                     teamColor={teamColor}
+                                    turnTimer={
+                                        timerEnabled &&
+                                        isCurrentTurn &&
+                                        timerStartedAt
+                                            ? {
+                                                  totalMs: timerDuration * 1000,
+                                                  startedAt: timerStartedAt,
+                                                  clockOffset: 0,
+                                              }
+                                            : undefined
+                                    }
                                 />
                                 <CardHand
                                     cards={isLocal ? playerData.hand : []}
@@ -498,6 +517,31 @@ export default function GameUIDebugPage() {
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [isDealing, setIsDealing] = useState(false);
     const [, setHasDealt] = useState(false);
+
+    // Timer state for testing
+    const [timerEnabled, setTimerEnabled] = useState(false);
+    const [timerDuration, setTimerDuration] = useState(10);
+    const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null);
+    // Force re-render every second for timer countdown
+    const [, setTimerTick] = useState(0);
+
+    // Start/restart timer when active player changes (and timer is enabled)
+    useEffect(() => {
+        if (timerEnabled) {
+            setTimerStartedAt(Date.now());
+        } else {
+            setTimerStartedAt(null);
+        }
+    }, [activePlayerIndex, timerEnabled]);
+
+    // Update timer display every second
+    useEffect(() => {
+        if (!timerEnabled || !timerStartedAt) return;
+        const interval = setInterval(() => {
+            setTimerTick((t) => t + 1);
+        }, 100); // 100ms for smooth visual
+        return () => clearInterval(interval);
+    }, [timerEnabled, timerStartedAt]);
 
     // Spades-specific state
     const [spadesGameData, setSpadesGameData] = useState<SpadesData | null>(
@@ -1045,6 +1089,41 @@ export default function GameUIDebugPage() {
                             className="w-4 h-4"
                         />
                     </div>
+
+                    {/* Turn Timer Controls */}
+                    <Card className="flex-1 min-w-[250px] bg-slate-700 border-slate-600">
+                        <CardHeader className="py-2 px-4">
+                            <CardTitle className="text-sm text-white flex items-center justify-between">
+                                <span>Turn Timer</span>
+                                <Switch
+                                    checked={timerEnabled}
+                                    onCheckedChange={setTimerEnabled}
+                                />
+                            </CardTitle>
+                        </CardHeader>
+                        {timerEnabled && (
+                            <CardContent className="py-2 px-4">
+                                <div className="flex items-center gap-4">
+                                    <Slider
+                                        value={[timerDuration]}
+                                        onValueChange={(value) =>
+                                            setTimerDuration(value[0])
+                                        }
+                                        min={5}
+                                        max={60}
+                                        step={5}
+                                        className="flex-1"
+                                    />
+                                    <Badge
+                                        variant="secondary"
+                                        className="w-12 justify-center"
+                                    >
+                                        {timerDuration}s
+                                    </Badge>
+                                </div>
+                            </CardContent>
+                        )}
+                    </Card>
                 </div>
             </div>
 
@@ -1064,6 +1143,9 @@ export default function GameUIDebugPage() {
                             isDealing={isDealing}
                             dealingItems={dealingItems}
                             showDebugGrid={showDebugGrid}
+                            timerEnabled={timerEnabled}
+                            timerDuration={timerDuration}
+                            timerStartedAt={timerStartedAt}
                         />
                     )}
                 {selectedGame === "dominoes" &&

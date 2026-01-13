@@ -289,28 +289,37 @@ function reducer(state: SpadesState, action: GameAction): SpadesState {
 function getState(state: SpadesState): Partial<SpadesState> {
     const publicState = omitFields(state, ["hands"]) as Partial<SpadesState> & {
         handsCounts?: Record<string, number>;
-        remainingSeconds?: number;
+        turnTimer?: { startedAt: number; duration: number; serverTime: number };
     };
     publicState.handsCounts = Object.fromEntries(
         state.playOrder.map((id) => [id, state.hands[id].length || 0])
     );
 
-    // Include server-calculated remaining seconds for timer synchronization
+    // Include turn timer info for client-side sync with latency compensation
     const turnTimeLimit = state.settings?.turnTimeLimit;
     if (turnTimeLimit && turnTimeLimit > 0) {
-        // Check if timer service has an active timer
-        const remainingSeconds = turnTimerService.getRemainingSeconds(state.id);
-        if (remainingSeconds !== undefined) {
-            publicState.remainingSeconds = remainingSeconds;
+        const timerState = turnTimerService.getTimerState(state.id);
+        const now = Date.now();
+
+        if (timerState && timerState.startedAt) {
+            // Timer service has an active timer - use its authoritative startedAt
+            publicState.turnTimer = {
+                startedAt: timerState.startedAt,
+                duration: turnTimeLimit * 1000,
+                serverTime: now,
+            };
         } else if (
             state.turnStartedAt &&
             (state.phase === "bidding" || state.phase === "playing")
         ) {
             // Timer service doesn't have an active timer yet, but game state indicates
-            // a timer should be active. Calculate remaining seconds from turnStartedAt.
+            // a timer should be active. Use turnStartedAt from game state.
             const startTime = new Date(state.turnStartedAt).getTime();
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            publicState.remainingSeconds = Math.max(0, turnTimeLimit - elapsed);
+            publicState.turnTimer = {
+                startedAt: startTime,
+                duration: turnTimeLimit * 1000,
+                serverTime: now,
+            };
         }
     }
 

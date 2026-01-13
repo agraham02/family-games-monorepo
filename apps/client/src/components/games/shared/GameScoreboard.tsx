@@ -74,7 +74,8 @@ function DesktopScoreboard({
     return (
         <div
             className={cn(
-                "fixed top-4 right-4 z-50 hidden md:block",
+                // Use top-16 to leave room for the sound/dark mode toggles in the header
+                "fixed top-16 right-4 z-40 hidden md:block",
                 className
             )}
         >
@@ -106,7 +107,7 @@ function DesktopScoreboard({
                     // Expanded: Full scoreboard
                     <motion.div
                         key="expanded"
-                        className="bg-slate-900/95 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl min-w-[260px] max-w-[300px]"
+                        className="bg-slate-900/95 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl min-w-[260px] max-w-[300px] max-h-[calc(100vh-5rem)] flex flex-col"
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -114,7 +115,7 @@ function DesktopScoreboard({
                     >
                         {/* Header */}
                         <div
-                            className="flex items-center justify-between p-3 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors rounded-t-xl"
+                            className="flex items-center justify-between p-3 border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors rounded-t-xl flex-shrink-0"
                             onClick={() => setIsExpanded(false)}
                         >
                             <div className="flex items-center gap-2">
@@ -136,83 +137,85 @@ function DesktopScoreboard({
                             </div>
                         </div>
 
-                        {/* Team scores */}
-                        <div className="p-3 space-y-2">
-                            {teams.map((team, index) => (
-                                <div
-                                    key={team.teamId}
-                                    className={cn(
-                                        "flex items-center justify-between p-2.5 rounded-lg",
-                                        index === 0
-                                            ? "bg-blue-500/20"
-                                            : "bg-red-500/20"
-                                    )}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium text-white">
-                                            {team.teamName}
-                                        </span>
-                                        <span className="text-xs text-white/60">
-                                            {team.players.join(" & ")}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <AnimatedScore
-                                            score={team.score}
-                                            className="text-xl font-bold text-white"
-                                        />
-                                        {team.bags !== undefined &&
-                                            team.bags > 0 && (
-                                                <span className="text-xs text-white/50">
-                                                    Bags: {team.bags}
-                                                </span>
-                                            )}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {winTarget && (
-                                <div className="flex items-center justify-center gap-1 text-xs text-white/40 pt-1">
-                                    <Target className="w-3 h-3" />
-                                    <span>Playing to {winTarget}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Player bids section */}
-                        {playerBids && playerBids.length > 0 && (
-                            <div className="border-t border-white/10 p-3 space-y-1.5">
-                                <div className="flex items-center gap-1 text-xs text-white/60 mb-2">
-                                    <Award className="w-3 h-3" />
-                                    <span>Bids & Tricks</span>
-                                </div>
-                                {playerBids.map((player) => (
+                        <div className="overflow-y-auto flex-1">
+                            {/* Team scores */}
+                            <div className="p-3 space-y-2">
+                                {teams.map((team, index) => (
                                     <div
-                                        key={player.playerId}
-                                        className="flex items-center justify-between text-sm"
+                                        key={team.teamId}
+                                        className={cn(
+                                            "flex items-center justify-between p-2.5 rounded-lg",
+                                            index === 0
+                                                ? "bg-blue-500/20"
+                                                : "bg-red-500/20"
+                                        )}
                                     >
-                                        <span className="text-white/80 truncate max-w-[120px]">
-                                            {player.playerName}
-                                        </span>
-                                        <div className="flex gap-3 text-xs">
-                                            <span className="text-white/50">
-                                                Bid: {player.bid ?? "-"}
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-white">
+                                                {team.teamName}
                                             </span>
-                                            <span
-                                                className={cn(
-                                                    player.tricksWon >=
-                                                        (player.bid ?? 0)
-                                                        ? "text-emerald-400"
-                                                        : "text-white/50"
+                                            <span className="text-xs text-white/60">
+                                                {team.players.join(" & ")}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <AnimatedScore
+                                                score={team.score}
+                                                className="text-xl font-bold text-white"
+                                            />
+                                            {team.bags !== undefined &&
+                                                team.bags > 0 && (
+                                                    <span className="text-xs text-white/50">
+                                                        Bags: {team.bags}
+                                                    </span>
                                                 )}
-                                            >
-                                                Won: {player.tricksWon}
-                                            </span>
                                         </div>
                                     </div>
                                 ))}
+
+                                {winTarget && (
+                                    <div className="flex items-center justify-center gap-1 text-xs text-white/40 pt-1">
+                                        <Target className="w-3 h-3" />
+                                        <span>Playing to {winTarget}</span>
+                                    </div>
+                                )}
                             </div>
-                        )}
+
+                            {/* Player bids section */}
+                            {playerBids && playerBids.length > 0 && (
+                                <div className="border-t border-white/10 p-3 space-y-1.5 pb-4">
+                                    <div className="flex items-center gap-1 text-xs text-white/60 mb-2">
+                                        <Award className="w-3 h-3" />
+                                        <span>Bids & Tricks</span>
+                                    </div>
+                                    {playerBids.map((player) => (
+                                        <div
+                                            key={player.playerId}
+                                            className="flex items-center justify-between text-sm"
+                                        >
+                                            <span className="text-white/80 truncate max-w-[120px]">
+                                                {player.playerName}
+                                            </span>
+                                            <div className="flex gap-3 text-xs">
+                                                <span className="text-white/50">
+                                                    Bid: {player.bid ?? "-"}
+                                                </span>
+                                                <span
+                                                    className={cn(
+                                                        player.tricksWon >=
+                                                            (player.bid ?? 0)
+                                                            ? "text-emerald-400"
+                                                            : "text-white/50"
+                                                    )}
+                                                >
+                                                    Won: {player.tricksWon}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -242,16 +245,17 @@ function MobileScoreboard({
             </SheetTrigger>
             <SheetContent
                 side="bottom"
-                className="bg-slate-900 border-white/10"
+                className="bg-slate-900 border-white/10 max-h-[80vh] flex flex-col p-0"
             >
-                <SheetHeader>
+                <SheetHeader className="flex-shrink-0 border-b border-white/10">
                     <SheetTitle className="flex items-center gap-2 text-white">
                         <Trophy className="w-5 h-5 text-amber-400" />
                         Round {round} - Scoreboard
                     </SheetTitle>
                 </SheetHeader>
 
-                <div className="p-4 space-y-5">
+                <div className="overflow-y-auto flex-1 p-4 space-y-5 pb-6">
+                    {/* Team scores */}
                     {/* Team scores */}
                     <div className="grid grid-cols-2 gap-3">
                         {teams.map((team, index) => (

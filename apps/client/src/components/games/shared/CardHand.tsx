@@ -241,24 +241,23 @@ function CardInHand({
             >
                 {/* Card Face */}
                 {!showBack && card && (
-                    <div className="absolute inset-0 flex flex-col p-1">
+                    <div className="absolute inset-0">
                         {/* Top-left corner */}
                         <div
                             className={cn(
-                                "text-xs font-bold leading-tight flex flex-col items-center",
+                                "absolute top-0.5 left-0.5",
+                                "text-[10px] font-bold leading-none flex flex-col items-center",
                                 SUIT_COLORS[card.suit]
                             )}
                         >
                             <span>{card.rank}</span>
-                            <span className="-mt-0.5">
-                                {SUIT_MAP[card.suit]}
-                            </span>
+                            <span>{SUIT_MAP[card.suit]}</span>
                         </div>
 
                         {/* Center suit */}
                         <div
                             className={cn(
-                                "flex-1 flex items-center justify-center text-2xl",
+                                "absolute inset-0 flex items-center justify-center text-xl",
                                 SUIT_COLORS[card.suit]
                             )}
                         >
@@ -268,14 +267,13 @@ function CardInHand({
                         {/* Bottom-right corner (rotated) */}
                         <div
                             className={cn(
-                                "text-xs font-bold leading-tight flex flex-col items-center rotate-180",
+                                "absolute bottom-0.5 right-0.5 rotate-180",
+                                "text-[10px] font-bold leading-none flex flex-col items-center",
                                 SUIT_COLORS[card.suit]
                             )}
                         >
                             <span>{card.rank}</span>
-                            <span className="-mt-0.5">
-                                {SUIT_MAP[card.suit]}
-                            </span>
+                            <span>{SUIT_MAP[card.suit]}</span>
                         </div>
                     </div>
                 )}

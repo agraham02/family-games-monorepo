@@ -172,6 +172,25 @@ export default function Spades({
         }
     }, [isMyTurn, isBiddingPhase, hasSeenCards, canShowBlindBid]);
 
+    // Close blind bid modal when it's no longer the player's turn or phase changes
+    // This handles the case when timer expires and auto-bid is placed
+    useEffect(() => {
+        if (blindBidModalOpen && (!isMyTurn || !isBiddingPhase)) {
+            setBlindBidModalOpen(false);
+            // Also mark as seen since the turn has passed
+            if (!isBiddingPhase) {
+                setHasSeenCards(false); // Reset for next round
+            }
+        }
+    }, [blindBidModalOpen, isMyTurn, isBiddingPhase]);
+
+    // Also close the regular bid modal when turn changes
+    useEffect(() => {
+        if (bidModalOpen && (!isMyTurn || !isBiddingPhase)) {
+            setBidModalOpen(false);
+        }
+    }, [bidModalOpen, isMyTurn, isBiddingPhase]);
+
     function handleBidChange(delta: number) {
         // Minimum bid is 1 (0 requires Nil bid)
         setBid((prev: number) => Math.max(1, Math.min(13, prev + delta)));

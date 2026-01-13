@@ -1,14 +1,17 @@
 // src/components/games/shared/TurnTimer.tsx
 "use client";
 
-import { useMemo } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface TurnTimerProps {
-    /** Total seconds for the turn */
-    totalSeconds: number;
-    /** Remaining seconds in the turn */
-    remainingSeconds: number;
+    /** Total time for the turn in milliseconds */
+    totalMs: number;
+    /** Server timestamp (ms) when the timer started */
+    startedAt: number;
+    /** Clock offset in ms (serverTime - clientTime) for sync */
+    clockOffset?: number;
     /** Whether the timer is currently active */
     isActive: boolean;
     /** Size of the timer (diameter) - default 48 */
@@ -19,13 +22,37 @@ interface TurnTimerProps {
     children?: React.ReactNode;
 }
 
+// Color thresholds
+const COLOR_GREEN = "#22c55e";
+const COLOR_AMBER = "#f59e0b";
+const COLOR_RED = "#ef4444";
+const BG_GREEN = "#dcfce7";
+const BG_AMBER = "#fef3c7";
+const BG_RED = "#fee2e2";
+
+function getColors(percentage: number) {
+    if (percentage > 50) return { stroke: COLOR_GREEN, bg: BG_GREEN };
+    if (percentage > 20) return { stroke: COLOR_AMBER, bg: BG_AMBER };
+    return { stroke: COLOR_RED, bg: BG_RED };
+}
+
 /**
- * Circular progress timer component for turn-based games.
+ * High-performance circular progress timer component for turn-based games.
  * Designed to wrap around player avatars.
  *
- * IMPORTANT: Only mount this component when the timer should be active.
- * This prevents the 0→100% animation bug that occurs when the component
- * is mounted before timer values are ready.
+ * PERFORMANCE OPTIMIZATION:
+ * This component uses direct DOM manipulation via refs and its own
+ * requestAnimationFrame loop to achieve 60fps animation without triggering
+ * React re-renders on every frame. Only color threshold changes trigger re-renders.
+ *
+ * Features:
+ * - Expanding ring animation when timer starts
+ * - Smooth 60fps countdown using direct DOM manipulation
+ * - Color transitions based on remaining time (only re-renders at thresholds)
+ * - Pulse animation when time is low
+ *
+ * IMPORTANT: Use a unique `key` prop (e.g., `key={startedAt}`) when mounting
+ * to ensure fresh animation state on each turn.
  *
  * Color transitions:
  * - Green (#22c55e) when >50% remaining
@@ -35,48 +62,119 @@ interface TurnTimerProps {
  * Pulses when <30% time remaining.
  */
 export function TurnTimer({
-    totalSeconds,
-    remainingSeconds,
+    totalMs,
+    startedAt,
+    clockOffset = 0,
     isActive,
     size = 48,
     className,
     children,
 }: TurnTimerProps) {
-    // Calculate percentage
-    const percentage = useMemo(() => {
-        if (totalSeconds <= 0) return 0;
-        return Math.max(
-            0,
-            Math.min(100, (remainingSeconds / totalSeconds) * 100)
-        );
-    }, [totalSeconds, remainingSeconds]);
+    // Refs for direct DOM manipulation (no re-renders on animation)
+    const progressCircleRef = useRef<SVGCircleElement>(null);
+    const bgCircleRef = useRef<SVGCircleElement>(null);
+    const rafIdRef = useRef<number | null>(null);
 
-    // Determine color based on percentage
-    const color = useMemo(() => {
-        if (percentage > 50) return "#22c55e"; // green-500
-        if (percentage > 20) return "#f59e0b"; // amber-500
-        return "#ef4444"; // red-500
-    }, [percentage]);
+    // Track if we should show the start animation
+    const [showStartAnimation, setShowStartAnimation] = useState(true);
 
-    // Background color (muted version)
-    const bgColor = useMemo(() => {
-        if (percentage > 50) return "#dcfce7"; // green-100
-        if (percentage > 20) return "#fef3c7"; // amber-100
-        return "#fee2e2"; // red-100
-    }, [percentage]);
+    // Color state - only updates when crossing thresholds (50%, 20%)
+    const [colorState, setColorState] = useState<"green" | "amber" | "red">(
+        "green"
+    );
 
-    // Should pulse when under 30% time left
-    const shouldPulse =
-        isActive &&
-        remainingSeconds > 0 &&
-        remainingSeconds <= totalSeconds * 0.3;
+    // Track if pulsing
+    const [shouldPulse, setShouldPulse] = useState(false);
 
-    // SVG calculations
+    // SVG calculations (constant for a given size)
     const strokeWidth = 3;
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    // Invert: start full (0 offset) and drain to empty (full circumference offset)
-    const strokeDashoffset = circumference * ((100 - percentage) / 100);
+
+    // Get colors based on state
+    const colors = getColors(
+        colorState === "green" ? 100 : colorState === "amber" ? 40 : 10
+    );
+
+    // Calculate remaining ms at a given point in time
+    const calculateRemainingMs = useCallback((): number => {
+        const adjustedNow = Date.now() + clockOffset;
+        const elapsed = adjustedNow - startedAt;
+        return Math.max(0, totalMs - elapsed);
+    }, [totalMs, startedAt, clockOffset]);
+
+    // Hide start animation after it plays
+    useEffect(() => {
+        if (isActive && showStartAnimation) {
+            const timeout = setTimeout(() => {
+                setShowStartAnimation(false);
+            }, 600);
+            return () => clearTimeout(timeout);
+        }
+    }, [isActive, showStartAnimation]);
+
+    // Main animation loop - runs independently of React render cycle
+    useEffect(() => {
+        if (!isActive) {
+            return;
+        }
+
+        // Track current color state to avoid unnecessary setState calls
+        let currentColorState: "green" | "amber" | "red" = "green";
+        let currentPulseState = false;
+
+        const tick = () => {
+            const remainingMs = calculateRemainingMs();
+            const percentage = totalMs > 0 ? (remainingMs / totalMs) * 100 : 0;
+
+            // Direct DOM update for strokeDashoffset (no React re-render)
+            if (progressCircleRef.current) {
+                const offset = circumference * ((100 - percentage) / 100);
+                progressCircleRef.current.style.strokeDashoffset =
+                    String(offset);
+
+                // Update stroke color directly
+                const { stroke, bg } = getColors(percentage);
+                progressCircleRef.current.style.stroke = stroke;
+                if (bgCircleRef.current) {
+                    bgCircleRef.current.style.stroke = bg;
+                }
+            }
+
+            // Check if color state changed (for the start animation border color)
+            const newColorState: "green" | "amber" | "red" =
+                percentage > 50 ? "green" : percentage > 20 ? "amber" : "red";
+
+            if (newColorState !== currentColorState) {
+                currentColorState = newColorState;
+                setColorState(newColorState);
+            }
+
+            // Check if pulse state changed
+            const newPulseState = remainingMs > 0 && percentage <= 30;
+            if (newPulseState !== currentPulseState) {
+                currentPulseState = newPulseState;
+                setShouldPulse(newPulseState);
+            }
+
+            // Continue animation if time remaining
+            if (remainingMs > 0) {
+                rafIdRef.current = requestAnimationFrame(tick);
+            } else {
+                rafIdRef.current = null;
+            }
+        };
+
+        // Start the animation loop
+        rafIdRef.current = requestAnimationFrame(tick);
+
+        return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+        };
+    }, [isActive, totalMs, circumference, calculateRemainingMs]);
 
     if (!isActive) {
         // Just render children without timer ring when inactive
@@ -93,6 +191,13 @@ export function TurnTimer({
         );
     }
 
+    // Calculate initial offset for first render
+    const initialRemainingMs = calculateRemainingMs();
+    const initialPercentage =
+        totalMs > 0 ? (initialRemainingMs / totalMs) * 100 : 0;
+    const initialOffset = circumference * ((100 - initialPercentage) / 100);
+    const initialColors = getColors(initialPercentage);
+
     return (
         <div
             className={cn(
@@ -102,6 +207,22 @@ export function TurnTimer({
             )}
             style={{ width: size, height: size }}
         >
+            {/* Start animation - expanding ring that fades out */}
+            <AnimatePresence>
+                {showStartAnimation && (
+                    <motion.div
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                            border: `2px solid ${colors.stroke}`,
+                        }}
+                        initial={{ scale: 0.8, opacity: 0.8 }}
+                        animate={{ scale: 1.4, opacity: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* SVG Timer Ring */}
             <svg
                 className="absolute inset-0 -rotate-90"
@@ -111,26 +232,29 @@ export function TurnTimer({
             >
                 {/* Background circle */}
                 <circle
+                    ref={bgCircleRef}
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke={bgColor}
+                    stroke={initialColors.bg}
                     strokeWidth={strokeWidth}
                     className="dark:opacity-30"
+                    style={{ willChange: "stroke" }}
                 />
-                {/* Progress circle */}
+                {/* Progress circle - animated via direct DOM manipulation */}
                 <circle
+                    ref={progressCircleRef}
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke={color}
+                    stroke={initialColors.stroke}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    className="transition-all duration-1000 ease-linear"
+                    strokeDashoffset={initialOffset}
+                    style={{ willChange: "stroke-dashoffset, stroke" }}
                 />
             </svg>
             {/* Content (avatar, etc.) */}

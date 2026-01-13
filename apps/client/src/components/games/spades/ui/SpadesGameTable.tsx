@@ -31,6 +31,8 @@ import { Badge } from "@/components/ui/badge";
 import { Zap, Ban } from "lucide-react";
 import { getUnplayableCardIndices } from "@/lib/spadesValidation";
 import { useTurnTimer } from "@/hooks";
+import { useWebSocket } from "@/contexts/WebSocketContext";
+import { playTimerStartSound, initializeAudioOnInteraction } from "@/lib/audio";
 
 interface SpadesGameTableProps {
     gameData: SpadesData;
@@ -69,6 +71,7 @@ function SpadesGameTable({
         null
     );
     const [isHeroHandSpread, setIsHeroHandSpread] = useState(false);
+    const { clockOffset } = useWebSocket();
 
     // Deal animation state
     const [isDealing, setIsDealing] = useState(false);
@@ -81,29 +84,64 @@ function SpadesGameTable({
 
     const playerCount = playerData.localOrdering.length;
 
-    // Turn timer - use server-provided remainingSeconds for sync
+    // Initialize audio on first user interaction
+    useEffect(() => {
+        initializeAudioOnInteraction();
+    }, []);
+
+    // Turn timer - use new turnTimer object with clock sync
     const turnTimeLimit = gameData.settings?.turnTimeLimit ?? 0;
-    const { remainingSeconds } = useTurnTimer(
-        gameData.remainingSeconds,
-        turnTimeLimit
+
+    // Track isMyTurn in a ref so the callback always has the latest value
+    const isMyTurnRef = useRef(isMyTurn);
+    useEffect(() => {
+        isMyTurnRef.current = isMyTurn;
+    }, [isMyTurn]);
+
+    // Only play audio cue when it's the local player's turn
+    const handleTimerStart = useCallback(() => {
+        // Use ref to get the latest value of isMyTurn
+        if (isMyTurnRef.current) {
+            console.log("🔊 Playing timer start sound (your turn)");
+            playTimerStartSound();
+        } else {
+            console.log("🔇 Timer started but not your turn");
+        }
+    }, []);
+
+    const { isActive: timerIsActive } = useTurnTimer(
+        gameData.turnTimer,
+        clockOffset,
+        handleTimerStart
     );
 
     // Memoize timer props to prevent unnecessary re-renders
     // Only create timer props object when timer is actually active
     // Don't show timer during trick-result phase or dealing
+    // TurnTimer handles its own animation via direct DOM manipulation
     const timerPropsCache = useMemo(() => {
         if (
             turnTimeLimit <= 0 ||
             isDealing ||
-            gameData.phase === "trick-result"
+            gameData.phase === "trick-result" ||
+            !timerIsActive ||
+            !gameData.turnTimer?.startedAt
         ) {
             return undefined;
         }
         return {
-            totalSeconds: turnTimeLimit,
-            remainingSeconds,
+            totalMs: turnTimeLimit * 1000,
+            startedAt: gameData.turnTimer.startedAt,
+            clockOffset,
         };
-    }, [turnTimeLimit, remainingSeconds, isDealing, gameData.phase]);
+    }, [
+        turnTimeLimit,
+        isDealing,
+        gameData.phase,
+        timerIsActive,
+        gameData.turnTimer?.startedAt,
+        clockOffset,
+    ]);
 
     // Memoize unplayable card indices for performance
     const unplayableIndices = useMemo(

@@ -49,6 +49,24 @@ export type BaseGameData = {
     // Add other shared fields here if needed
 };
 
+// ============================================================================
+// Turn Timer Types
+// ============================================================================
+
+/**
+ * Turn timer information sent from server to client.
+ * Contains all data needed for the client to calculate remaining time
+ * with latency compensation.
+ */
+export interface TurnTimerInfo {
+    /** Unix timestamp (ms) when the turn started on the server */
+    startedAt: number;
+    /** Total duration of the turn in milliseconds */
+    duration: number;
+    /** Current server time (ms) when this state was emitted */
+    serverTime: number;
+}
+
 /**
  * Base player-specific data (private state for each player).
  * Extended by game-specific player data types.

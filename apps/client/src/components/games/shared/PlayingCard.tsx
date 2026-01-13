@@ -41,12 +41,12 @@ const SIZE_DIMENSIONS: Record<CardSize, { width: number; height: number }> = {
     xl: { width: 110, height: 154 },
 };
 
-const TEXT_SIZES: Record<CardSize, { corner: string; center: string }> = {
-    xs: { corner: "text-[0.5rem]", center: "text-sm" },
-    sm: { corner: "text-[0.625rem]", center: "text-base" },
-    md: { corner: "text-xs", center: "text-xl" },
-    lg: { corner: "text-sm", center: "text-2xl" },
-    xl: { corner: "text-base", center: "text-3xl" },
+const TEXT_SIZES: Record<CardSize, { corner: string; center: string; cornerGap: string }> = {
+    xs: { corner: "text-[8px]", center: "text-lg", cornerGap: "gap-0" },
+    sm: { corner: "text-[10px]", center: "text-xl", cornerGap: "gap-0" },
+    md: { corner: "text-xs", center: "text-2xl", cornerGap: "gap-0.5" },
+    lg: { corner: "text-sm", center: "text-3xl", cornerGap: "gap-0.5" },
+    xl: { corner: "text-base", center: "text-4xl", cornerGap: "gap-1" },
 };
 
 interface PlayingCardProps {
@@ -118,16 +118,16 @@ function PlayingCard({
         >
             {/* Card Face */}
             {!showBack && card && (
-                <div className="absolute inset-0 flex flex-col p-1">
+                <div className="absolute inset-0">
                     {isJoker(card.rank) ? (
                         /* Joker card - special full-card design */
-                        <div className="flex-1 flex flex-col items-center justify-center gap-1">
+                        <div className="h-full flex flex-col items-center justify-center gap-1 p-1">
                             <div
                                 className={cn(
                                     "text-4xl font-bold",
                                     card.rank === "BJ"
-                                        ? "bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text text-transparent"
-                                        : "bg-gradient-to-br from-gray-300 via-slate-400 to-gray-500 bg-clip-text text-transparent"
+                                        ? "bg-linear-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text text-transparent"
+                                        : "bg-linear-to-br from-gray-300 via-slate-400 to-gray-500 bg-clip-text text-transparent"
                                 )}
                             >
                                 🃏
@@ -145,45 +145,45 @@ function PlayingCard({
                             </div>
                         </div>
                     ) : (
-                        /* Standard card layout */
+                        /* Standard card layout - corners positioned like real playing cards */
                         <>
                             {/* Top-left corner */}
                             <div
                                 className={cn(
+                                    "absolute top-0.5 left-0.5",
                                     textSize.corner,
-                                    "font-bold leading-tight flex flex-col items-center",
+                                    textSize.cornerGap,
+                                    "font-bold leading-none flex flex-col items-center",
                                     SUIT_COLORS[card.suit]
                                 )}
                             >
                                 <span>{card.rank}</span>
-                                <span className="-mt-0.5">
-                                    {SUIT_MAP[card.suit]}
-                                </span>
+                                <span>{SUIT_MAP[card.suit]}</span>
                             </div>
 
-                            {/* Center suit */}
+                            {/* Center suit - larger decorative suit symbol */}
                             <div
                                 className={cn(
+                                    "absolute inset-0 flex items-center justify-center",
                                     textSize.center,
-                                    "flex-1 flex items-center justify-center",
                                     SUIT_COLORS[card.suit]
                                 )}
                             >
                                 {SUIT_MAP[card.suit]}
                             </div>
 
-                            {/* Bottom-right corner (rotated) */}
+                            {/* Bottom-right corner (rotated 180°) */}
                             <div
                                 className={cn(
+                                    "absolute bottom-0.5 right-0.5 rotate-180",
                                     textSize.corner,
-                                    "font-bold leading-tight flex flex-col items-center rotate-180",
+                                    textSize.cornerGap,
+                                    "font-bold leading-none flex flex-col items-center",
                                     SUIT_COLORS[card.suit]
                                 )}
                             >
                                 <span>{card.rank}</span>
-                                <span className="-mt-0.5">
-                                    {SUIT_MAP[card.suit]}
-                                </span>
+                                <span>{SUIT_MAP[card.suit]}</span>
                             </div>
                         </>
                     )}

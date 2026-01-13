@@ -1,7 +1,7 @@
 // packages/shared/src/types/games/spades.ts
 // Spades game types shared between client and API
 
-import { BaseGameData, BasePlayerData, GameState } from "./base";
+import { BaseGameData, BasePlayerData, GameState, TurnTimerInfo } from "./base";
 import { SpadesSettings } from "../settings";
 
 // ============================================================================
@@ -215,8 +215,8 @@ export type SpadesData = BaseGameData & {
     roundTeamScores: Record<number, number>; // scores for each team for the round
     roundScoreBreakdown: Record<number, unknown>;
     teamEligibleForBlind: Record<number, boolean>; // which teams are eligible for blind bids
-    turnStartedAt?: string; // ISO timestamp for turn timer
-    remainingSeconds?: number; // Server-calculated remaining seconds for timer sync
+    /** Turn timer info for client-side sync with latency compensation */
+    turnTimer?: TurnTimerInfo;
 };
 
 /**

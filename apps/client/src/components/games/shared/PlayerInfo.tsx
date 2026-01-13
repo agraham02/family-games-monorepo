@@ -14,8 +14,12 @@ import { TurnTimer } from "./TurnTimer";
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface TurnTimerState {
-    totalSeconds: number;
-    remainingSeconds: number;
+    /** Total time for the turn in milliseconds */
+    totalMs: number;
+    /** Server timestamp (ms) when the timer started */
+    startedAt: number;
+    /** Clock offset in ms (serverTime - clientTime) for sync */
+    clockOffset?: number;
 }
 
 interface PlayerInfoProps {
@@ -175,15 +179,19 @@ function PlayerInfo({
         >
             {/* Avatar with turn indicator or timer */}
             <div className="relative">
-                {/* Only show pulse indicator if there's no timer */}
-                {!turnTimer && <TurnIndicator isActive={isCurrentTurn} />}
+                {/* Show pulse indicator when it's current turn but no active timer */}
+                {/* Timer takes precedence when active */}
+                {isCurrentTurn && !(turnTimer && turnTimer.totalMs > 0) && (
+                    <TurnIndicator isActive={true} />
+                )}
 
                 {/* Only render TurnTimer when it should be active to prevent 0→100% animation */}
-                {isCurrentTurn && turnTimer && turnTimer.totalSeconds > 0 ? (
+                {isCurrentTurn && turnTimer && turnTimer.totalMs > 0 ? (
                     <TurnTimer
-                        key={`timer-${playerId}`}
-                        totalSeconds={turnTimer.totalSeconds}
-                        remainingSeconds={turnTimer.remainingSeconds}
+                        key={`timer-${playerId}-${turnTimer.startedAt}`}
+                        totalMs={turnTimer.totalMs}
+                        startedAt={turnTimer.startedAt}
+                        clockOffset={turnTimer.clockOffset}
                         isActive={true}
                         size={timerSize}
                     >

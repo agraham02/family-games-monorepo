@@ -15,9 +15,9 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
-app.use(healthRoutes);
-app.use(roomRoutes);
-app.use(gameRoutes);
+app.use("/api", healthRoutes);
+app.use("/api", roomRoutes);
+app.use("/api", gameRoutes);
 
 app.use(errorHandler);
 

@@ -244,6 +244,26 @@ class TurnTimerService {
         const clientRemaining = Math.max(0, clientTimeoutMs - elapsed);
         return Math.floor(clientRemaining / 1000);
     }
+
+    /**
+     * Get the timer state for a game.
+     * Used by getState() to include timer info in game state sync.
+     *
+     * @param gameId - The game ID
+     * @returns Timer state object with startedAt, or undefined if no timer is active
+     */
+    getTimerState(
+        gameId: string
+    ): { startedAt: number; timeoutSeconds: number } | undefined {
+        const state = this.activeTimers.get(gameId);
+        if (!state) {
+            return undefined;
+        }
+        return {
+            startedAt: state.startedAt,
+            timeoutSeconds: state.timeoutSeconds,
+        };
+    }
 }
 
 // Singleton instance

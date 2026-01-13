@@ -117,16 +117,17 @@ function EdgeRegion({
 
     // Different padding based on position and layout mode
     // Compact mode uses minimal padding to maximize card space
+    // Bottom edge needs extra padding to prevent clipping at screen edge
     const paddingClasses = isCompact
         ? {
-              bottom: "pb-1 pt-1",
-              top: "pt-1 pb-1",
+              bottom: "pb-2 pt-1", // Extra bottom padding to prevent clipping
+              top: "pt-2 pb-1", // Extra top padding
               left: "pl-1 pr-1",
               right: "pr-1 pl-1",
           }
         : {
-              bottom: "pb-2 pt-4",
-              top: "pt-2 pb-4",
+              bottom: "pb-3 pt-4", // More padding for safe area
+              top: "pt-3 pb-4",
               left: "pl-2 pr-4",
               right: "pr-2 pl-4",
           };

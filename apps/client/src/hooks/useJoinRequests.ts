@@ -212,7 +212,7 @@ export async function sendJoinRequest(
     requesterName: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const response = await fetch(`${API_BASE}/rooms/request-join`, {
+        const response = await fetch(`${API_BASE}/api/rooms/request-join`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ roomCode, requesterId, requesterName }),

@@ -106,6 +106,16 @@ function startServer() {
             socketRateLimiter.remove(socket.id);
         });
 
+        // Clock synchronization for turn timer
+        // Client sends their timestamp, server responds with both timestamps
+        // Client can calculate: offset = serverTime - clientTime - (RTT / 2)
+        socket.on("clock_sync", ({ clientTime }: { clientTime: number }) => {
+            socket.emit("clock_sync_response", {
+                clientTime,
+                serverTime: Date.now(),
+            });
+        });
+
         socket.on("join_room", ({ roomId, userId }) => {
             try {
                 if (!roomId || !userId) {

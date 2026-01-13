@@ -1,76 +1,107 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { TurnTimerInfo } from "@shared/types";
 
 interface TurnTimerResult {
+    /** Remaining time in seconds (for display, updates once per second) */
     remainingSeconds: number;
+    /** Whether the timer has expired */
     isExpired: boolean;
+    /** Whether the timer is currently active */
+    isActive: boolean;
 }
 
 /**
- * Hook to manage turn timer countdown with server synchronization.
- * Uses server-provided remainingSeconds as the authoritative starting value,
- * then counts down locally for smooth animation.
+ * Hook to manage turn timer state with server synchronization.
  *
- * @param serverRemainingSeconds - Server-calculated remaining seconds (for sync)
- * @param totalSeconds - Total seconds allowed for the turn (0 or undefined means no limit)
- * @returns Object with remainingSeconds and isExpired
+ * This is a lightweight hook that provides timer state for UI logic.
+ * For the actual countdown animation, use the TurnTimer component which
+ * handles its own high-performance animation via direct DOM manipulation.
+ *
+ * This hook:
+ * - Fires onTimerStart callback when a new timer starts
+ * - Updates remainingSeconds once per second (for text display)
+ * - Provides isActive/isExpired state for UI logic
+ *
+ * @param turnTimer - Server-provided timer info (startedAt, duration, serverTime)
+ * @param clockOffset - Offset in ms between server and client clocks (from WebSocketContext)
+ * @param onTimerStart - Optional callback when timer starts (for audio/visual cues)
+ * @returns Object with remainingSeconds, isExpired, and isActive
  */
 export function useTurnTimer(
-    serverRemainingSeconds: number | undefined,
-    totalSeconds: number | undefined
+    turnTimer: TurnTimerInfo | undefined,
+    clockOffset: number,
+    onTimerStart?: () => void
 ): TurnTimerResult {
-    // Track the last server value to detect when we need to resync
-    const lastServerValueRef = useRef<number | undefined>(undefined);
+    const [remainingSeconds, setRemainingSeconds] = useState(0);
+    const lastTimerStartRef = useRef<number | null>(null);
+    const onTimerStartRef = useRef(onTimerStart);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Initialize with server value, fallback to totalSeconds
-    const [remainingSeconds, setRemainingSeconds] = useState(() => {
-        if (
-            serverRemainingSeconds !== undefined &&
-            serverRemainingSeconds > 0
-        ) {
-            return serverRemainingSeconds;
-        }
-        return totalSeconds ?? 0;
-    });
-
-    // Resync when server provides a new value
+    // Keep callback ref updated
     useEffect(() => {
-        if (serverRemainingSeconds === undefined || serverRemainingSeconds <= 0) {
-            lastServerValueRef.current = undefined;
+        onTimerStartRef.current = onTimerStart;
+    }, [onTimerStart]);
+
+    // Calculate remaining seconds with clock offset compensation
+    const calculateRemainingSeconds = useCallback((): number => {
+        if (!turnTimer) return 0;
+        const adjustedNow = Date.now() + clockOffset;
+        const elapsed = adjustedNow - turnTimer.startedAt;
+        return Math.max(0, Math.ceil((turnTimer.duration - elapsed) / 1000));
+    }, [turnTimer, clockOffset]);
+
+    useEffect(() => {
+        // If no timer info, clear state
+        if (!turnTimer) {
+            setRemainingSeconds(0);
+            lastTimerStartRef.current = null;
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
             return;
         }
 
-        // Always sync to server value when it changes
-        // The server is the source of truth
-        if (lastServerValueRef.current !== serverRemainingSeconds) {
-            lastServerValueRef.current = serverRemainingSeconds;
-            setRemainingSeconds(serverRemainingSeconds);
-        }
-    }, [serverRemainingSeconds]);
-
-    // Local countdown interval
-    useEffect(() => {
-        // Don't set up interval if no time limit
-        if (!totalSeconds || totalSeconds <= 0) {
-            return;
+        // Detect new timer start (different startedAt value)
+        if (lastTimerStartRef.current !== turnTimer.startedAt) {
+            console.log(
+                "⏱️ New timer detected:",
+                turnTimer.startedAt,
+                "previous:",
+                lastTimerStartRef.current
+            );
+            lastTimerStartRef.current = turnTimer.startedAt;
+            // Fire the onTimerStart callback for new timers
+            onTimerStartRef.current?.();
         }
 
-        // Update every second
-        const interval = setInterval(() => {
-            setRemainingSeconds((prev) => {
-                const next = prev - 1;
-                if (next <= 0) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return next;
-            });
+        // Set initial value
+        setRemainingSeconds(calculateRemainingSeconds());
+
+        // Update once per second for text display
+        intervalRef.current = setInterval(() => {
+            const remaining = calculateRemainingSeconds();
+            setRemainingSeconds(remaining);
+            if (remaining <= 0 && intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
         }, 1000);
 
-        return () => clearInterval(interval);
-    }, [totalSeconds, serverRemainingSeconds]);
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [turnTimer, calculateRemainingSeconds]);
+
+    const isActive = !!turnTimer && turnTimer.duration > 0;
+    const isExpired = isActive && remainingSeconds <= 0;
 
     return {
         remainingSeconds,
-        isExpired: remainingSeconds <= 0 && !!totalSeconds && totalSeconds > 0,
+        isExpired,
+        isActive,
     };
 }

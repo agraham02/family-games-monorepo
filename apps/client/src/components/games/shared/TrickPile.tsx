@@ -179,28 +179,27 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                         ease: "easeOut",
                                     }}
                                 >
-                                    {/* Card content */}
-                                    <div className="absolute inset-0 flex flex-col p-1">
-                                        {/* Top-left */}
+                                    {/* Card content - corner layout like real playing cards */}
+                                    <div className="absolute inset-0">
+                                        {/* Top-left corner */}
                                         <div
                                             className={cn(
+                                                "absolute top-0.5 left-0.5",
                                                 isCompact
                                                     ? "text-[8px]"
                                                     : "text-[10px] md:text-xs",
-                                                "font-bold flex flex-col items-center leading-tight",
+                                                "font-bold flex flex-col items-center leading-none",
                                                 SUIT_COLORS[play.card.suit]
                                             )}
                                         >
                                             <span>{play.card.rank}</span>
-                                            <span className="-mt-0.5">
-                                                {SUIT_MAP[play.card.suit]}
-                                            </span>
+                                            <span>{SUIT_MAP[play.card.suit]}</span>
                                         </div>
 
-                                        {/* Center */}
+                                        {/* Center suit */}
                                         <div
                                             className={cn(
-                                                "flex-1 flex items-center justify-center",
+                                                "absolute inset-0 flex items-center justify-center",
                                                 isCompact
                                                     ? "text-base"
                                                     : "text-xl md:text-2xl",
@@ -210,20 +209,19 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                             {SUIT_MAP[play.card.suit]}
                                         </div>
 
-                                        {/* Bottom-right (rotated) */}
+                                        {/* Bottom-right corner (rotated) */}
                                         <div
                                             className={cn(
+                                                "absolute bottom-0.5 right-0.5 rotate-180",
                                                 isCompact
                                                     ? "text-[8px]"
                                                     : "text-[10px] md:text-xs",
-                                                "font-bold flex flex-col items-center leading-tight rotate-180",
+                                                "font-bold flex flex-col items-center leading-none",
                                                 SUIT_COLORS[play.card.suit]
                                             )}
                                         >
                                             <span>{play.card.rank}</span>
-                                            <span className="-mt-0.5">
-                                                {SUIT_MAP[play.card.suit]}
-                                            </span>
+                                            <span>{SUIT_MAP[play.card.suit]}</span>
                                         </div>
                                     </div>
                                 </motion.div>

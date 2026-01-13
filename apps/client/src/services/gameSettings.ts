@@ -1,7 +1,7 @@
 // src/services/gameSettings.ts
 import type { GameSettingsSchema } from "@shared/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 /**
  * Fetch the settings schema (definitions and defaults) for a game type.
@@ -9,7 +9,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 export async function fetchGameSettingsSchema(
     gameType: string
 ): Promise<GameSettingsSchema> {
-    const response = await fetch(`${API_BASE_URL}/games/${gameType}/settings`);
+    const response = await fetch(
+        `${API_BASE_URL}/api/games/${gameType}/settings`
+    );
 
     if (!response.ok) {
         throw new Error(
