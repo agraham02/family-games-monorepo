@@ -4,12 +4,15 @@
 import { ComponentType } from "react";
 import Dominoes from "./dominoes";
 import Spades from "./spades";
+import LRC from "./lrc";
 import { GameData, PlayerData } from "@shared/types";
 import {
     generateSpadesMockData,
     generateDominoesMockData,
+    generateLRCMockData,
     SpadesMockOptions,
     DominoesMockOptions,
+    LRCMockOptions,
 } from "./mockData";
 
 /**
@@ -26,7 +29,7 @@ export interface GameComponentProps<
     /** Function to dispatch optimistic game actions - undefined for spectators */
     dispatchOptimisticAction?: (
         actionType: string,
-        actionPayload: unknown
+        actionPayload: unknown,
     ) => void;
     /** Whether the viewer is a spectator (read-only mode) */
     isSpectator?: boolean;
@@ -38,7 +41,7 @@ export interface GameComponentProps<
  * Mock data generator function type
  */
 type MockDataGenerator<TOptions = Record<string, unknown>> = (
-    options?: TOptions
+    options?: TOptions,
 ) => {
     gameData: GameData;
     playerData: PlayerData;
@@ -89,6 +92,20 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             includeCurrentTrick: true,
         },
     },
+    lrc: {
+        component: LRC,
+        displayName: "Left Right Center",
+        generateMockData:
+            generateLRCMockData as MockDataGenerator<LRCMockOptions>,
+        defaultMockOptions: {
+            playerCount: 5,
+            phase: "waiting-for-roll",
+            centerPot: 5,
+            startingChips: 3,
+            chipValue: 0.25,
+            wildMode: false,
+        },
+    },
 };
 
 /**
@@ -96,7 +113,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
  * Returns null if the game type is not registered.
  */
 export function getGameComponent(
-    gameType: string
+    gameType: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): ComponentType<GameComponentProps<any, any>> | null {
     return GAME_REGISTRY[gameType]?.component ?? null;
@@ -120,7 +137,7 @@ export function getRegisteredGameTypes(): string[] {
  * Get mock data generator for a game type.
  */
 export function getMockDataGenerator(
-    gameType: string
+    gameType: string,
 ): MockDataGenerator | null {
     return GAME_REGISTRY[gameType]?.generateMockData ?? null;
 }
@@ -136,7 +153,7 @@ export function getGameDisplayName(gameType: string): string {
  * Get default mock options for a game type.
  */
 export function getDefaultMockOptions(
-    gameType: string
+    gameType: string,
 ): Record<string, unknown> {
     return GAME_REGISTRY[gameType]?.defaultMockOptions ?? {};
 }

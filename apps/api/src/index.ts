@@ -31,6 +31,7 @@ import {
 import { GameAction, gameManager } from "./services/GameManager";
 import { spadesModule } from "./games/spades";
 import { dominoesModule } from "./games/dominoes";
+import { lrcModule } from "./games/lrc";
 import {
     emitGameEvent,
     emitPlayerGameEvent,
@@ -54,6 +55,7 @@ const PORT = process.env.PORT || DEFAULT_PORT;
 
 gameManager.registerGameModule("spades", spadesModule);
 gameManager.registerGameModule("dominoes", dominoesModule);
+gameManager.registerGameModule("lrc", lrcModule);
 
 function handleSocketError(socket: Socket, err: any) {
     console.error(err);
@@ -91,7 +93,7 @@ function startServer() {
             const { allowed } = socketRateLimiter.consume(socket.id);
             if (!allowed) {
                 console.warn(
-                    `Rate limit exceeded for socket ${socket.id} on event ${event}`
+                    `Rate limit exceeded for socket ${socket.id} on event ${event}`,
                 );
                 socket.emit("error", {
                     error: "Rate limit exceeded. Please slow down.",
@@ -120,7 +122,7 @@ function startServer() {
             try {
                 if (!roomId || !userId) {
                     throw new Error(
-                        `join_room missing roomId or userId for socket ${socket.id}`
+                        `join_room missing roomId or userId for socket ${socket.id}`,
                     );
                 }
                 const result = registerSocketUser(socket.id, roomId, userId);
@@ -128,11 +130,11 @@ function startServer() {
                 // If user already has an active connection, disconnect the old socket
                 if (result.alreadyConnected && result.oldSocketId) {
                     const oldSocket = io.sockets.sockets.get(
-                        result.oldSocketId
+                        result.oldSocketId,
                     );
                     if (oldSocket) {
                         console.log(
-                            `Force disconnecting old socket: ${result.oldSocketId}`
+                            `Force disconnecting old socket: ${result.oldSocketId}`,
                         );
                         oldSocket.disconnect(true);
                     }
@@ -155,7 +157,7 @@ function startServer() {
             try {
                 if (!roomId || !userId) {
                     throw new Error(
-                        `get_game_state missing roomId or userId for socket ${socket.id}`
+                        `get_game_state missing roomId or userId for socket ${socket.id}`,
                     );
                 }
 
@@ -210,7 +212,7 @@ function startServer() {
                 const { kickedSocketId } = kickUser(
                     roomId,
                     userId,
-                    targetUserId
+                    targetUserId,
                 );
 
                 // Force disconnect the kicked user's socket
@@ -218,7 +220,7 @@ function startServer() {
                     const kickedSocket = io.sockets.sockets.get(kickedSocketId);
                     if (kickedSocket) {
                         console.log(
-                            `Force disconnecting kicked user socket: ${kickedSocketId}`
+                            `Force disconnecting kicked user socket: ${kickedSocketId}`,
                         );
                         kickedSocket.disconnect(true);
                     }
@@ -261,7 +263,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on(
@@ -278,7 +280,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on(
@@ -292,7 +294,7 @@ function startServer() {
                     }
                     if (room.isPaused) {
                         throw new Error(
-                            "Game is paused. Waiting for players to rejoin."
+                            "Game is paused. Waiting for players to rejoin.",
                         );
                     }
                     const gameId = room.gameId ?? null;
@@ -308,7 +310,7 @@ function startServer() {
                         socket,
                         room,
                         "player_sync",
-                        action.userId
+                        action.userId,
                     );
 
                     // Send acknowledgement back to the client
@@ -332,7 +334,7 @@ function startServer() {
                     }
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on("close_room", ({ roomId, userId }) => {
@@ -389,7 +391,7 @@ function startServer() {
                     const { alreadyConnected } = registerSocketUser(
                         socket.id,
                         room.id,
-                        user.id
+                        user.id,
                     );
 
                     if (!alreadyConnected) {
@@ -408,7 +410,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on(
@@ -419,7 +421,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on(
@@ -437,7 +439,7 @@ function startServer() {
                     const result = claimPlayerSlot(
                         roomId,
                         userId,
-                        targetSlotUserId
+                        targetSlotUserId,
                     );
                     if (!result.success) {
                         socket.emit("error", { error: result.error });
@@ -445,7 +447,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on("get_available_slots", ({ roomId }: { roomId: string }) => {
@@ -473,7 +475,7 @@ function startServer() {
                     const { roomId } = requestToJoinRoom(
                         roomCode,
                         requesterId,
-                        requesterName
+                        requesterName,
                     );
 
                     // Get the leader's socket to send them the request
@@ -499,7 +501,7 @@ function startServer() {
                                 : "Failed to send request",
                     });
                 }
-            }
+            },
         );
 
         socket.on(
@@ -524,7 +526,7 @@ function startServer() {
                             roomId,
                             leaderId,
                             requesterId,
-                            requesterName
+                            requesterName,
                         );
 
                         // Emit to all clients that a new user has joined
@@ -549,7 +551,7 @@ function startServer() {
                 } catch (err) {
                     handleSocketError(socket, err);
                 }
-            }
+            },
         );
 
         socket.on("disconnect", () => {

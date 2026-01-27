@@ -243,3 +243,204 @@ export function playTickSound(volumeOverride?: number): void {
         console.debug("Failed to play tick sound:", e);
     }
 }
+
+// ============================================================================
+// LRC Game Sounds
+// ============================================================================
+
+/**
+ * Play dice rolling sound - a rattling noise simulation.
+ * Uses multiple oscillators with frequency sweeps to simulate dice shaking.
+ */
+export function playDiceRollSound(volumeOverride?: number): void {
+    const settings = getSoundSettings();
+
+    if (!settings.enabled) {
+        return;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx || ctx.state === "suspended") {
+        return;
+    }
+
+    try {
+        const volume = volumeOverride ?? settings.volume;
+        const now = ctx.currentTime;
+
+        // Create multiple short bursts to simulate dice rattling
+        for (let i = 0; i < 8; i++) {
+            const startTime = now + i * 0.08;
+
+            // White noise-like effect using multiple oscillators
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            // Random-ish frequency for each rattle
+            const baseFreq = 200 + Math.random() * 400;
+            osc.frequency.setValueAtTime(baseFreq, startTime);
+            osc.frequency.linearRampToValueAtTime(
+                baseFreq * 0.5,
+                startTime + 0.06,
+            );
+            osc.type = "triangle";
+
+            // Quick attack, quick decay
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(volume * 0.3, startTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.06);
+
+            osc.start(startTime);
+            osc.stop(startTime + 0.07);
+        }
+
+        // Final "landing" thud
+        const thud = ctx.createOscillator();
+        const thudGain = ctx.createGain();
+        thud.connect(thudGain);
+        thudGain.connect(ctx.destination);
+
+        const thudTime = now + 0.7;
+        thud.frequency.setValueAtTime(100, thudTime);
+        thud.frequency.exponentialRampToValueAtTime(50, thudTime + 0.1);
+        thud.type = "sine";
+
+        thudGain.gain.setValueAtTime(0, thudTime);
+        thudGain.gain.linearRampToValueAtTime(volume * 0.5, thudTime + 0.02);
+        thudGain.gain.exponentialRampToValueAtTime(0.001, thudTime + 0.15);
+
+        thud.start(thudTime);
+        thud.stop(thudTime + 0.15);
+    } catch (e) {
+        console.debug("Failed to play dice roll sound:", e);
+    }
+}
+
+/**
+ * Play chip passing sound - a short metallic clink.
+ * Simulates poker chips being passed.
+ */
+export function playChipPassSound(volumeOverride?: number): void {
+    const settings = getSoundSettings();
+
+    if (!settings.enabled) {
+        return;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx || ctx.state === "suspended") {
+        return;
+    }
+
+    try {
+        const volume = volumeOverride ?? settings.volume;
+        const now = ctx.currentTime;
+
+        // High-frequency metallic ping
+        const ping = ctx.createOscillator();
+        const pingGain = ctx.createGain();
+        ping.connect(pingGain);
+        pingGain.connect(ctx.destination);
+
+        ping.frequency.setValueAtTime(2500, now);
+        ping.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
+        ping.type = "sine";
+
+        pingGain.gain.setValueAtTime(0, now);
+        pingGain.gain.linearRampToValueAtTime(volume * 0.4, now + 0.005);
+        pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+        ping.start(now);
+        ping.stop(now + 0.1);
+
+        // Secondary lower harmonic
+        const harm = ctx.createOscillator();
+        const harmGain = ctx.createGain();
+        harm.connect(harmGain);
+        harmGain.connect(ctx.destination);
+
+        harm.frequency.setValueAtTime(1200, now + 0.01);
+        harm.type = "sine";
+
+        harmGain.gain.setValueAtTime(0, now + 0.01);
+        harmGain.gain.linearRampToValueAtTime(volume * 0.2, now + 0.02);
+        harmGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+        harm.start(now + 0.01);
+        harm.stop(now + 0.12);
+    } catch (e) {
+        console.debug("Failed to play chip pass sound:", e);
+    }
+}
+
+/**
+ * Play winner fanfare sound - an ascending triumphant chord.
+ * Celebrates the round winner.
+ */
+export function playWinnerFanfareSound(volumeOverride?: number): void {
+    const settings = getSoundSettings();
+
+    if (!settings.enabled) {
+        return;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx || ctx.state === "suspended") {
+        return;
+    }
+
+    try {
+        const volume = volumeOverride ?? settings.volume;
+        const now = ctx.currentTime;
+
+        // Major chord arpeggio: C4 -> E4 -> G4 -> C5
+        const notes = [261.63, 329.63, 392.0, 523.25];
+
+        notes.forEach((freq, i) => {
+            const startTime = now + i * 0.1;
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.frequency.setValueAtTime(freq, startTime);
+            osc.type = "sine";
+
+            // Gradual fade in, longer sustain
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(volume * 0.5, startTime + 0.05);
+            gain.gain.setValueAtTime(volume * 0.5, startTime + 0.2);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.5);
+
+            osc.start(startTime);
+            osc.stop(startTime + 0.5);
+        });
+
+        // Final sustained chord
+        const chordTime = now + 0.5;
+        const chordFreqs = [523.25, 659.25, 783.99]; // C5, E5, G5
+
+        chordFreqs.forEach((freq) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.frequency.setValueAtTime(freq, chordTime);
+            osc.type = "sine";
+
+            gain.gain.setValueAtTime(0, chordTime);
+            gain.gain.linearRampToValueAtTime(volume * 0.4, chordTime + 0.05);
+            gain.gain.setValueAtTime(volume * 0.4, chordTime + 0.3);
+            gain.gain.exponentialRampToValueAtTime(0.001, chordTime + 0.8);
+
+            osc.start(chordTime);
+            osc.stop(chordTime + 0.8);
+        });
+    } catch (e) {
+        console.debug("Failed to play winner fanfare sound:", e);
+    }
+}

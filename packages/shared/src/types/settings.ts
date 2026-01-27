@@ -48,8 +48,8 @@ export const DEFAULT_SPADES_SETTINGS: SpadesSettings = {
     blindNilEnabled: false,
     blindBidEnabled: true,
     bagsPenalty: -100,
-    jokersEnabled: false,
-    deuceOfSpadesHigh: false,
+    jokersEnabled: true,
+    deuceOfSpadesHigh: true,
 };
 
 // ============================================================================
@@ -72,12 +72,18 @@ export const DEFAULT_DOMINOES_SETTINGS: DominoesSettings = {
 };
 
 // ============================================================================
-// LRC Settings (placeholder for future)
+// LRC Settings
 // ============================================================================
 
 export interface LRCSettings extends BaseGameSettings {
-    startingChips: number; // Chips per player
-    chipValue: number; // Dollar value per chip
+    /** Number of chips each player starts with (1-10) */
+    startingChips: number;
+    /** Monetary value per chip in dollars (for display/tracking) */
+    chipValue: number;
+    /** Enable Wild variant - one die face steals from richest player */
+    wildMode: boolean;
+    /** Enable Last Chip Challenge - must roll all dots to win */
+    lastChipChallenge: boolean;
 }
 
 export const DEFAULT_LRC_SETTINGS: LRCSettings = {
@@ -86,6 +92,8 @@ export const DEFAULT_LRC_SETTINGS: LRCSettings = {
     turnTimeLimit: null,
     startingChips: 3,
     chipValue: 0.25,
+    wildMode: false,
+    lastChipChallenge: false,
 };
 
 // ============================================================================
@@ -212,7 +220,7 @@ export const SPADES_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         description:
             "Include Big Joker and Little Joker as the highest trumps. 2♣ and 2♦ are removed to maintain 52 cards.",
         type: "boolean",
-        default: false,
+        default: true,
         category: "advanced",
     },
     {
@@ -221,7 +229,7 @@ export const SPADES_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         description:
             "The 2♠ ranks as the highest spade, above the Ace of Spades.",
         type: "boolean",
-        default: false,
+        default: true,
         category: "advanced",
     },
     // General category
@@ -323,7 +331,7 @@ export const DOMINOES_SETTINGS_DEFINITIONS: SettingDefinition[] = [
 ];
 
 // ============================================================================
-// LRC Settings Definitions (placeholder)
+// LRC Settings Definitions
 // ============================================================================
 
 export const LRC_SETTINGS_DEFINITIONS: SettingDefinition[] = [
@@ -342,7 +350,8 @@ export const LRC_SETTINGS_DEFINITIONS: SettingDefinition[] = [
     {
         key: "chipValue",
         label: "Chip Value",
-        description: "Monetary value assigned to each chip for tracking.",
+        description:
+            "Monetary value assigned to each chip for fun tracking. Set to 0 to hide money display.",
         type: "number",
         default: 0.25,
         category: "rules",
@@ -350,5 +359,23 @@ export const LRC_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         max: 10,
         step: 0.25,
         suffix: "$",
+    },
+    {
+        key: "wildMode",
+        label: "Wild Mode",
+        description:
+            "One die face becomes Wild - steal a chip from any player. Roll 3 Wilds for instant win!",
+        type: "boolean",
+        default: false,
+        category: "rules",
+    },
+    {
+        key: "lastChipChallenge",
+        label: "Last Chip Challenge",
+        description:
+            "When down to your last chip and about to win, you must roll all dots to claim victory.",
+        type: "boolean",
+        default: false,
+        category: "rules",
     },
 ];

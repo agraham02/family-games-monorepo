@@ -8,6 +8,12 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    LRCData,
+    LRCPlayerData,
+    LRCPlayer,
+    LRCPhase,
+    DieRoll,
+    DieFace,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,3 +377,131 @@ export type MockDataGenerator<TGameData, TPlayerData> = (
     gameData: TGameData;
     playerData: TPlayerData;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LRC Mock Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LRCMockOptions {
+    playerCount?: number;
+    phase?: LRCPhase;
+    centerPot?: number;
+    currentPlayerIndex?: number;
+    startingChips?: number;
+    chipValue?: number;
+    wildMode?: boolean;
+    lastChipChallenge?: boolean;
+    showRollResult?: boolean;
+}
+
+/**
+ * Generate mock LRC game data for debugging.
+ */
+export function generateLRCMockData(options: LRCMockOptions = {}): {
+    gameData: LRCData;
+    playerData: LRCPlayerData;
+} {
+    const {
+        playerCount = 4,
+        phase = "waiting-for-roll",
+        centerPot = 5,
+        currentPlayerIndex = 0,
+        startingChips = 3,
+        chipValue = 0.25,
+        wildMode = false,
+        lastChipChallenge = false,
+        showRollResult = false,
+    } = options;
+
+    const localPlayerId = generatePlayerId(0);
+
+    // Generate LRC players
+    const lrcPlayers: LRCPlayer[] = [];
+    for (let i = 0; i < playerCount; i++) {
+        const id = generatePlayerId(i);
+        // Distribute chips somewhat randomly (some to center)
+        const chips =
+            i === 0
+                ? startingChips
+                : Math.max(0, startingChips - Math.floor(Math.random() * 2));
+        lrcPlayers.push({
+            id,
+            name: MOCK_PLAYER_NAMES[i] || `Player ${i + 1}`,
+            chips,
+            totalWinnings: 0,
+            isConnected: true,
+            seatIndex: i,
+        });
+    }
+
+    // Generate roll result if needed
+    let currentRoll: DieRoll[] | null = null;
+    if (showRollResult || phase === "showing-results") {
+        const faces: DieFace[] = ["L", "C", "R", "DOT", "DOT", "DOT"];
+        if (wildMode) {
+            faces[0] = "WILD";
+        }
+        const diceCount = Math.min(3, lrcPlayers[currentPlayerIndex].chips);
+        currentRoll = [];
+        for (let i = 0; i < diceCount; i++) {
+            const rawValue = Math.floor(Math.random() * 6) + 1;
+            const faceIndex = rawValue - 1;
+            currentRoll.push({
+                face: faces[faceIndex] || "DOT",
+                rawValue,
+            });
+        }
+    }
+
+    // Generate standard players map for base type compatibility
+    const players: Record<
+        string,
+        { id: string; name: string; isConnected: boolean }
+    > = {};
+    lrcPlayers.forEach((p) => {
+        players[p.id] = { id: p.id, name: p.name, isConnected: p.isConnected };
+    });
+
+    const gameData: LRCData = {
+        id: "mock-lrc-game",
+        roomId: "mock-room",
+        type: "lrc",
+        players,
+        leaderId: localPlayerId,
+        playOrder: lrcPlayers.map((p) => p.id),
+        currentTurnIndex: currentPlayerIndex,
+        lrcPlayers,
+        currentPlayerIndex,
+        centerPot,
+        phase,
+        currentRoll,
+        chipMovements: null,
+        pendingWildTargets: [],
+        wildTargets: [],
+        winnerId: null,
+        lastChipChallengeActive: false,
+        lastChipChallengeRoll: null,
+        lastChipChallengeSuccess: null,
+        roundNumber: 1,
+        roundWinners: [],
+        settings: {
+            winTarget: 100,
+            roundLimit: null,
+            turnTimeLimit: 30,
+            startingChips,
+            chipValue,
+            wildMode,
+            lastChipChallenge,
+        },
+    };
+
+    const playerData: LRCPlayerData = {
+        localOrdering: lrcPlayers.map((p) => p.id),
+        odusId: localPlayerId,
+        isMyTurn: currentPlayerIndex === 0,
+        myChips: lrcPlayers[0].chips,
+        netWinningsCents: 0,
+    };
+
+    return { gameData, playerData };
+}

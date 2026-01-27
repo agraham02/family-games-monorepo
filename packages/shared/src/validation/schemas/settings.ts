@@ -98,6 +98,8 @@ export type PartialDominoesSettingsInput = z.infer<
 export const LRCSettingsSchema = BaseGameSettingsSchema.extend({
     startingChips: z.number().int().min(1).max(10),
     chipValue: z.number().min(0).max(10),
+    wildMode: z.boolean(),
+    lastChipChallenge: z.boolean(),
 });
 
 export type LRCSettingsInput = z.infer<typeof LRCSettingsSchema>;

@@ -173,8 +173,8 @@ function GameTable({
                 ref={containerRef}
                 className={cn(
                     "relative w-full h-full overflow-hidden",
-                    `bg-gradient-to-br ${feltGradient}`,
-                    className
+                    `bg-linear-to-br ${feltGradient}`,
+                    className,
                 )}
                 onClick={onTableClick}
             >
