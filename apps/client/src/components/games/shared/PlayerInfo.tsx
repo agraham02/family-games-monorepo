@@ -270,7 +270,7 @@ function PlayerInfo({
                 {/* Name */}
                 <span
                     className={cn(
-                        "text-white font-medium truncate max-w-[100px] text-sm",
+                        "text-white font-medium truncate max-w-25 text-sm",
                         isCurrentTurn && "text-amber-300"
                     )}
                 >

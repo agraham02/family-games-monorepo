@@ -2,7 +2,38 @@
 // Dominoes game types shared between client and API
 
 import { BaseGameData, BasePlayerData, GameState } from "./base";
-import { DominoesSettings } from "../settings";
+import { DominoesGameMode, DominoesSettings } from "../settings";
+
+// ============================================================================
+// Team Types (for 2v2 partner mode)
+// ============================================================================
+
+/**
+ * Represents a team in partner dominoes.
+ */
+export interface DominoesTeam {
+    players: string[]; // Array of 2 player IDs
+    score: number;
+}
+
+/**
+ * Result from round scoring calculation.
+ */
+export interface DominoesRoundScoreResult {
+    /** Updated scores (playerScores for individual, teamScores for team mode) */
+    playerScores: Record<string, number>;
+    teamScores: Record<number, number>;
+    /** Pip counts for each player */
+    pipCounts: Record<string, number>;
+    /** Player who won the round (went out or lowest pips) */
+    roundWinner: string | null;
+    /** Team that won the round (team mode only) */
+    winningTeam: number | null;
+    /** Points scored this round */
+    roundPoints: number;
+    /** True if round ended in a tie (no points awarded) */
+    isTie: boolean;
+}
 
 // ============================================================================
 // Core Tile Types
@@ -75,14 +106,30 @@ export interface DominoesState extends GameState {
     round: number;
     consecutivePasses: number; // Track consecutive passes to detect blocked game
 
-    playerScores: Record<string, number>; // Individual scores
+    // Game mode (individual or team)
+    gameMode: DominoesGameMode;
+
+    // Team data (populated when gameMode === "team")
+    teams?: Record<number, DominoesTeam>;
+    teamScores?: Record<number, number>;
+
+    // Individual scores (always populated, used when gameMode === "individual")
+    playerScores: Record<string, number>;
+
+    // Round summary data
     roundPipCounts?: Record<string, number>; // Pip counts at end of round
-    roundWinner?: string | null; // Winner of the current round
+    roundWinner?: string | null; // Player who won the current round
+    winningTeam?: number | null; // Team that won (team mode only)
+    roundPoints?: number; // Points scored this round
     isRoundTie?: boolean; // True if round ended in a tie (blocked game, multiple lowest pip counts)
 
-    gameWinner?: string; // Overall game winner
+    gameWinner?: string; // Overall game winner (player ID)
+    winningTeamId?: number; // Overall game winning team (team mode)
     history: string[]; // Action history for debugging
     settings: DominoesSettings;
+
+    /** ISO timestamp when the current turn started (for turn timer) */
+    turnStartedAt?: string;
 }
 
 // ============================================================================
@@ -94,7 +141,9 @@ export interface DominoesState extends GameState {
  */
 export interface DominoesClientSettings {
     winTarget: number; // Score needed to win (default 100)
+    gameMode: DominoesGameMode; // Play mode (individual or team)
     drawFromBoneyard: boolean; // Allow drawing tiles instead of passing
+    turnTimeLimit: number | null; // Seconds per turn (null = unlimited)
 }
 
 /**
@@ -119,14 +168,33 @@ export type DominoesData = BaseGameData & {
     round: number;
     consecutivePasses: number;
 
-    // Scoring (individual, not team-based)
+    // Game mode
+    gameMode: DominoesGameMode;
+
+    // Team data (when gameMode === "team")
+    teams?: Record<number, DominoesTeam>;
+    teamScores?: Record<number, number>;
+
+    // Individual scores (always available)
     playerScores: Record<string, number>;
+
+    // Round summary data
     roundPipCounts?: Record<string, number>; // Pip counts at end of round
-    roundWinner?: string | null; // Winner of the current round (null if blocked tie)
+    roundWinner?: string | null; // Player who won the current round (null if blocked tie)
+    winningTeam?: number | null; // Team that won (team mode only)
+    roundPoints?: number; // Points scored this round
     isRoundTie?: boolean; // True if round ended in a tie (Caribbean rule)
 
     // End game
     gameWinner?: string;
+    winningTeamId?: number;
+
+    // Turn timer (same format as Spades: TurnTimerInfo)
+    turnTimer?: {
+        startedAt: number; // Unix timestamp (ms) when the turn started
+        duration: number; // Total duration in milliseconds
+        serverTime: number; // Current server time (ms) when emitted
+    };
 
     // Settings
     settings: DominoesClientSettings;

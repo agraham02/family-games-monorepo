@@ -2,18 +2,18 @@
 
 import React from "react";
 import { motion } from "motion/react";
-import { EdgePosition } from "./EdgeRegion";
+import { EdgePosition } from "@/components/games/shared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface DealingCardProps {
+interface DealingTileProps {
     /** Target player's edge position */
     targetPosition: EdgePosition;
     /** Delay before animation starts (for staggering) */
     delay?: number;
-    /** Callback when card finishes animating to player */
+    /** Callback when tile finishes animating to player */
     onComplete?: () => void;
     /** Container dimensions for calculating positions */
     containerDimensions: { width: number; height: number };
@@ -23,20 +23,21 @@ interface DealingCardProps {
 // Animation Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CARD_WIDTH = 56;
-const CARD_HEIGHT = 80;
+const TILE_WIDTH = 40;
+const TILE_HEIGHT = 80;
 
-// Calculate target offset from center based on edge position
+/**
+ * Calculate target offset from center based on edge position
+ */
 function getTargetOffset(
     position: EdgePosition,
     containerWidth: number,
-    containerHeight: number
+    containerHeight: number,
 ): { x: number; y: number; rotation: number } {
-    // Calculate distance to edge (from center)
     const halfWidth = containerWidth / 2;
     const halfHeight = containerHeight / 2;
 
-    // Leave some padding from the actual edge for the cards to land
+    // Leave padding from the actual edge
     const edgePaddingX = 100;
     const edgePaddingY = 80;
 
@@ -45,25 +46,25 @@ function getTargetOffset(
             return {
                 x: 0,
                 y: halfHeight - edgePaddingY,
-                rotation: Math.random() * 10 - 5, // slight random rotation
+                rotation: 0,
             };
         case "top":
             return {
                 x: 0,
                 y: -(halfHeight - edgePaddingY),
-                rotation: 180 + Math.random() * 10 - 5,
+                rotation: 180,
             };
         case "left":
             return {
                 x: -(halfWidth - edgePaddingX),
                 y: 0,
-                rotation: 90 + Math.random() * 10 - 5,
+                rotation: 90,
             };
         case "right":
             return {
                 x: halfWidth - edgePaddingX,
                 y: 0,
-                rotation: -90 + Math.random() * 10 - 5,
+                rotation: -90,
             };
         default:
             return { x: 0, y: 0, rotation: 0 };
@@ -71,35 +72,35 @@ function getTargetOffset(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DealingCard Component
+// DealingTile Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * DealingCard - A card that animates from the deck to a player's hand position.
+ * DealingTile - A domino tile that animates from the center to a player's hand position.
  *
- * Renders a card back that flies from center to the target edge position
- * with a fast, snappy animation similar to UNO console games.
+ * Renders a face-down tile (white with dotted back) that flies from center
+ * to the target edge position with a fast, snappy animation.
  */
-function DealingCard({
+function DealingTile({
     targetPosition,
     delay = 0,
     onComplete,
     containerDimensions,
-}: DealingCardProps) {
+}: DealingTileProps) {
     const target = getTargetOffset(
         targetPosition,
         containerDimensions.width,
-        containerDimensions.height
+        containerDimensions.height,
     );
 
     return (
         <motion.div
             className="fixed pointer-events-none"
             style={{
-                width: CARD_WIDTH,
-                height: CARD_HEIGHT,
-                left: `calc(50vw - ${CARD_WIDTH / 2}px)`,
-                top: `calc(50vh - ${CARD_HEIGHT / 2}px)`,
+                width: TILE_WIDTH,
+                height: TILE_HEIGHT,
+                left: `calc(50vw - ${TILE_WIDTH / 2}px)`,
+                top: `calc(50vh - ${TILE_HEIGHT / 2}px)`,
                 zIndex: 200,
                 willChange: "transform, opacity",
             }}
@@ -112,31 +113,47 @@ function DealingCard({
                 opacity: 0,
             }}
             transition={{
-                duration: 0.05,
+                duration: 0.06,
                 delay,
                 ease: "easeOut",
             }}
             onAnimationComplete={onComplete}
         >
-            {/* Card back visual */}
-            <div className="w-full h-full rounded-lg bg-linear-to-br from-blue-600 via-blue-700 to-blue-800 border border-blue-500/30 shadow-xl">
-                <div
-                    className="absolute inset-1.5 rounded border border-blue-400/30"
-                    style={{
-                        backgroundImage: `
-                            repeating-linear-gradient(
-                                45deg,
-                                transparent,
-                                transparent 2px,
-                                rgba(255,255,255,0.08) 2px,
-                                rgba(255,255,255,0.08) 4px
-                            )
-                        `,
-                    }}
-                />
+            {/* Tile back visual - white with center divider */}
+            <div className="w-full h-full rounded-lg bg-white border border-zinc-300 shadow-xl overflow-hidden">
+                {/* Top half with decorative pattern */}
+                <div className="h-[calc(50%-1px)] relative">
+                    <div
+                        className="absolute inset-0 opacity-30"
+                        style={{
+                            backgroundImage: `
+                                radial-gradient(circle at 50% 50%, rgba(0,0,0,0.1) 20%, transparent 20%),
+                                radial-gradient(circle at 25% 25%, rgba(0,0,0,0.05) 15%, transparent 15%),
+                                radial-gradient(circle at 75% 75%, rgba(0,0,0,0.05) 15%, transparent 15%)
+                            `,
+                            backgroundSize: "100% 100%",
+                        }}
+                    />
+                </div>
+                {/* Center divider */}
+                <div className="h-0.5 bg-zinc-400" />
+                {/* Bottom half with decorative pattern */}
+                <div className="h-[calc(50%-1px)] relative">
+                    <div
+                        className="absolute inset-0 opacity-30"
+                        style={{
+                            backgroundImage: `
+                                radial-gradient(circle at 50% 50%, rgba(0,0,0,0.1) 20%, transparent 20%),
+                                radial-gradient(circle at 25% 75%, rgba(0,0,0,0.05) 15%, transparent 15%),
+                                radial-gradient(circle at 75% 25%, rgba(0,0,0,0.05) 15%, transparent 15%)
+                            `,
+                            backgroundSize: "100% 100%",
+                        }}
+                    />
+                </div>
             </div>
         </motion.div>
     );
 }
 
-export default DealingCard;
+export default DealingTile;

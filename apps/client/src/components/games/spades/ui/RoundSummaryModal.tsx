@@ -58,8 +58,8 @@ export default function RoundSummaryModal({
                                     transition={{ delay: index * 0.1 }}
                                     className={`rounded-xl p-4 ${
                                         index === 0
-                                            ? "bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/30"
-                                            : "bg-gradient-to-br from-red-500/20 to-red-600/10 border border-red-500/30"
+                                            ? "bg-linear-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/30"
+                                            : "bg-linear-to-br from-red-500/20 to-red-600/10 border border-red-500/30"
                                     }`}
                                 >
                                     <div className="flex items-center justify-between mb-3">
@@ -109,7 +109,7 @@ export default function RoundSummaryModal({
                                                 key={pid}
                                                 className="flex items-center justify-between bg-white/5 rounded-lg px-2 sm:px-3 py-2"
                                             >
-                                                <span className="font-medium text-white/90 truncate max-w-[120px] sm:max-w-[100px] text-sm">
+                                                <span className="font-medium text-white/90 truncate max-w-30 sm:max-w-25 text-sm">
                                                     {gameData.players[pid]
                                                         ?.name || pid}
                                                 </span>
@@ -142,12 +142,12 @@ export default function RoundSummaryModal({
                                     </div>
                                 </motion.div>
                             );
-                        }
+                        },
                     )}
                 </div>
                 {isLeader && (
                     <Button
-                        className="mt-2 w-full h-10 sm:h-12 text-sm sm:text-base font-semibold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
+                        className="mt-2 w-full h-10 sm:h-12 text-sm sm:text-base font-semibold rounded-xl bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
                         onClick={() =>
                             sendGameAction("CONTINUE_AFTER_ROUND_SUMMARY", {})
                         }

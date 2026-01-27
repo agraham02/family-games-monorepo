@@ -30,7 +30,7 @@ function generatePlayerId(index: number): string {
 }
 
 function generatePlayers(
-    count: number
+    count: number,
 ): Record<string, { id: string; name: string; isConnected: boolean }> {
     const players: Record<
         string,
@@ -90,7 +90,7 @@ function generateDeck(): PlayingCard[] {
 function dealCards(deck: PlayingCard[], playerCount: number): PlayingCard[][] {
     const hands: PlayingCard[][] = Array.from(
         { length: playerCount },
-        () => []
+        () => [],
     );
     const cardsPerPlayer = Math.floor(deck.length / playerCount);
     let cardIndex = 0;
@@ -130,7 +130,7 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
     const deck = shuffle(generateDeck());
     const hands = dealCards(deck, playerCount);
     const playOrder = Array.from({ length: playerCount }, (_, i) =>
-        generatePlayerId(i)
+        generatePlayerId(i),
     );
     const players = generatePlayers(playerCount);
     const localPlayerId = generatePlayerId(0);
@@ -292,7 +292,7 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
     const allTiles = shuffle(generateDominoSet());
     const hands = dealTiles(allTiles, playerCount);
     const playOrder = Array.from({ length: playerCount }, (_, i) =>
-        generatePlayerId(i)
+        generatePlayerId(i),
     );
     const players = generatePlayers(playerCount);
     const localPlayerId = generatePlayerId(0);
@@ -312,7 +312,7 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
     // Generate board state
     const boardTiles = allTiles.slice(
         playerCount * 7,
-        playerCount * 7 + boardTileCount
+        playerCount * 7 + boardTileCount,
     );
     const board: DominoesData["board"] = {
         tiles: boardTiles,
@@ -343,10 +343,13 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         phase,
         round,
         consecutivePasses: 0,
+        gameMode: "individual",
         playerScores,
         settings: {
             winTarget: 100,
+            gameMode: "individual",
             drawFromBoneyard: false,
+            turnTimeLimit: null,
         },
     };
 
@@ -363,7 +366,7 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type MockDataGenerator<TGameData, TPlayerData> = (
-    options?: Record<string, unknown>
+    options?: Record<string, unknown>,
 ) => {
     gameData: TGameData;
     playerData: TPlayerData;

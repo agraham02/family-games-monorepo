@@ -94,10 +94,10 @@ export default function GameSummaryModal({
                                             }}
                                             className={`rounded-xl p-4 border ${
                                                 isWinningTeam
-                                                    ? "bg-gradient-to-br from-amber-500/30 to-yellow-600/20 border-amber-400/50 shadow-lg shadow-amber-500/20"
+                                                    ? "bg-linear-to-br from-amber-500/30 to-yellow-600/20 border-amber-400/50 shadow-lg shadow-amber-500/20"
                                                     : index === 0
-                                                      ? "bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30"
-                                                      : "bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30"
+                                                      ? "bg-linear-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30"
+                                                      : "bg-linear-to-br from-red-500/20 to-red-600/10 border-red-500/30"
                                             }`}
                                         >
                                             <div className="flex items-center justify-between">
@@ -136,14 +136,14 @@ export default function GameSummaryModal({
                                                             {team.players
                                                                 .map(
                                                                     (
-                                                                        playerId
+                                                                        playerId,
                                                                     ) =>
                                                                         gameData
                                                                             .players[
                                                                             playerId
                                                                         ]
                                                                             ?.name ||
-                                                                        playerId
+                                                                        playerId,
                                                                 )
                                                                 .join(" & ")}
                                                         </div>
@@ -238,7 +238,7 @@ export default function GameSummaryModal({
                                     <Button
                                         onClick={onReturnToLobby}
                                         size="lg"
-                                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
+                                        className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
                                     >
                                         <Home className="w-5 h-5 mr-2" />
                                         Return to Lobby

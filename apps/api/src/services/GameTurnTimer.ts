@@ -20,9 +20,15 @@ import { turnTimerService } from "./TurnTimerService";
 import {
     getAutoBid,
     getAutoPlayCard,
-    shouldTimerBeActive,
+    shouldTimerBeActive as spadesTimerActive,
 } from "../games/spades";
 import { SpadesState } from "../games/spades";
+
+import {
+    getAutoPlayTile,
+    shouldTimerBeActive as dominoesTimerActive,
+} from "../games/dominoes";
+import { DominoesState } from "../games/dominoes";
 
 let io: SocketIOServer | null = null;
 
@@ -49,7 +55,7 @@ interface TurnTimeoutPayload {
 function emitTurnTimeout(
     roomId: string,
     payload: TurnTimeoutPayload,
-    gameState: GameState
+    gameState: GameState,
 ): void {
     if (!io) {
         console.warn("Socket.IO not initialized for turn timer events");
@@ -76,14 +82,14 @@ function emitTurnTimeout(
 function handleSpadesTimeout(
     gameId: string,
     room: Room,
-    state: SpadesState
+    state: SpadesState,
 ): void {
     const currentPlayerId = state.playOrder[state.currentTurnIndex];
     const player = state.players[currentPlayerId];
     const playerName = player?.name || "Unknown";
 
     console.log(
-        `⏰ Handling Spades timeout for ${playerName} in ${state.phase} phase`
+        `⏰ Handling Spades timeout for ${playerName} in ${state.phase} phase`,
     );
 
     let action: GameAction | null = null;
@@ -108,7 +114,7 @@ function handleSpadesTimeout(
             };
             actionType = "auto-play";
             console.log(
-                `🤖 Auto-playing ${autoCard.rank} of ${autoCard.suit} for ${playerName}`
+                `🤖 Auto-playing ${autoCard.rank} of ${autoCard.suit} for ${playerName}`,
             );
         }
     }
@@ -127,7 +133,7 @@ function handleSpadesTimeout(
                     action: actionType,
                     gameId,
                 },
-                newState
+                newState,
             );
 
             // Check if we need to start a new timer for the next player
@@ -139,43 +145,153 @@ function handleSpadesTimeout(
 }
 
 /**
+ * Handle a timeout for a Dominoes game.
+ * Auto-plays the first legal tile or passes if no legal moves.
+ */
+function handleDominoesTimeout(
+    gameId: string,
+    room: Room,
+    state: DominoesState,
+): void {
+    const currentPlayerId = state.playOrder[state.currentTurnIndex];
+    const player = state.players[currentPlayerId];
+    const playerName = player?.name || "Unknown";
+
+    console.log(
+        `⏰ Handling Dominoes timeout for ${playerName} in ${state.phase} phase`,
+    );
+
+    let action: GameAction;
+    let actionType: "auto-play" | "auto-pass" = "auto-play";
+
+    const autoPlay = getAutoPlayTile(state, currentPlayerId);
+
+    if (autoPlay) {
+        // Has a legal move - auto-play it
+        action = {
+            type: "PLACE_TILE",
+            userId: currentPlayerId,
+            payload: { tile: autoPlay.tile, side: autoPlay.side },
+        };
+        console.log(
+            `🤖 Auto-playing tile [${autoPlay.tile.left}|${autoPlay.tile.right}] on ${autoPlay.side} for ${playerName}`,
+        );
+    } else {
+        // No legal moves - auto-pass
+        action = {
+            type: "PASS",
+            userId: currentPlayerId,
+            payload: {},
+        };
+        actionType = "auto-pass";
+        console.log(`🤖 Auto-passing for ${playerName}`);
+    }
+
+    try {
+        // Dispatch the auto-action
+        const newState = gameManager.dispatch(gameId, action);
+
+        // Emit timeout event to clients
+        emitTurnTimeout(
+            room.id,
+            {
+                playerId: currentPlayerId,
+                playerName,
+                action: actionType as "auto-bid" | "auto-play",
+                gameId,
+            },
+            newState,
+        );
+
+        // Check if we need to start a new timer for the next player
+        maybeStartTimer(gameId, room, newState);
+    } catch (err) {
+        console.error("Error dispatching Dominoes auto-action:", err);
+    }
+}
+
+/**
  * Maybe start a timer based on the current game state.
  * Only starts if the phase requires a timer (bidding or playing).
  */
 export function maybeStartTimer(
     gameId: string,
     room: Room,
-    state: GameState
+    state: GameState,
 ): void {
-    // Currently only Spades is supported
-    if (state.type !== "spades") {
-        return;
-    }
+    // ========================================================================
+    // SPADES
+    // ========================================================================
+    if (state.type === "spades") {
+        const spadesState = state as SpadesState;
+        const turnTimeLimit = spadesState.settings?.turnTimeLimit;
 
-    const spadesState = state as SpadesState;
-    const turnTimeLimit = spadesState.settings?.turnTimeLimit;
-
-    // Check if timer should be active
-    if (!turnTimeLimit || turnTimeLimit <= 0) {
-        return; // No time limit configured
-    }
-
-    if (!shouldTimerBeActive(spadesState)) {
-        // Phase doesn't require timer (trick-result, round-summary, finished)
-        turnTimerService.cancelTurn(gameId);
-        return;
-    }
-
-    const currentPlayerId = spadesState.playOrder[spadesState.currentTurnIndex];
-
-    // Start the timer
-    turnTimerService.startTurn(gameId, currentPlayerId, turnTimeLimit, () => {
-        // Timeout callback - get fresh state and handle timeout
-        const freshState = gameManager.getGame(gameId);
-        if (freshState && freshState.type === "spades") {
-            handleSpadesTimeout(gameId, room, freshState as SpadesState);
+        if (!turnTimeLimit || turnTimeLimit <= 0) {
+            return;
         }
-    });
+
+        if (!spadesTimerActive(spadesState)) {
+            turnTimerService.cancelTurn(gameId);
+            return;
+        }
+
+        const currentPlayerId =
+            spadesState.playOrder[spadesState.currentTurnIndex];
+
+        turnTimerService.startTurn(
+            gameId,
+            currentPlayerId,
+            turnTimeLimit,
+            () => {
+                const freshState = gameManager.getGame(gameId);
+                if (freshState && freshState.type === "spades") {
+                    handleSpadesTimeout(
+                        gameId,
+                        room,
+                        freshState as SpadesState,
+                    );
+                }
+            },
+        );
+        return;
+    }
+
+    // ========================================================================
+    // DOMINOES
+    // ========================================================================
+    if (state.type === "dominoes") {
+        const dominoesState = state as DominoesState;
+        const turnTimeLimit = dominoesState.settings?.turnTimeLimit;
+
+        if (!turnTimeLimit || turnTimeLimit <= 0) {
+            return;
+        }
+
+        if (!dominoesTimerActive(dominoesState)) {
+            turnTimerService.cancelTurn(gameId);
+            return;
+        }
+
+        const currentPlayerId =
+            dominoesState.playOrder[dominoesState.currentTurnIndex];
+
+        turnTimerService.startTurn(
+            gameId,
+            currentPlayerId,
+            turnTimeLimit,
+            () => {
+                const freshState = gameManager.getGame(gameId);
+                if (freshState && freshState.type === "dominoes") {
+                    handleDominoesTimeout(
+                        gameId,
+                        room,
+                        freshState as DominoesState,
+                    );
+                }
+            },
+        );
+        return;
+    }
 }
 
 /**
@@ -232,7 +348,7 @@ export function handleActionDispatched(
     gameId: string,
     room: Room,
     newState: GameState,
-    _action: GameAction
+    _action: GameAction,
 ): void {
     // Cancel any existing timer (action was received in time)
     cancelTimer(gameId);

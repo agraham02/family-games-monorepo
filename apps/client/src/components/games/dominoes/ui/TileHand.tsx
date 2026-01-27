@@ -13,6 +13,8 @@ interface TileHandProps {
     onTileSelect: (tile: TileType | null) => void;
     className?: string;
     showHints?: boolean;
+    /** Prefix for layoutId to enable shared animations with Board */
+    layoutIdPrefix?: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export default function TileHand({
     onTileSelect,
     className,
     showHints = false,
+    layoutIdPrefix,
 }: TileHandProps) {
     return (
         <div className={cn("w-full", className)}>
@@ -57,7 +60,7 @@ export default function TileHand({
             <div
                 className={cn(
                     "flex gap-2 overflow-x-auto pb-2 px-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 transition-opacity duration-300",
-                    !isMyTurn && "opacity-60 pointer-events-none"
+                    !isMyTurn && "opacity-60 pointer-events-none",
                 )}
             >
                 {tiles.map((tile) => {
@@ -73,11 +76,16 @@ export default function TileHand({
                                 isSelected={isSelected}
                                 isPlayable={playable}
                                 size="md"
+                                layoutId={
+                                    layoutIdPrefix
+                                        ? `${layoutIdPrefix}-tile-${tile.id}`
+                                        : undefined
+                                }
                                 onClick={
                                     isMyTurn
                                         ? () =>
                                               onTileSelect(
-                                                  isSelected ? null : tile
+                                                  isSelected ? null : tile,
                                               )
                                         : undefined
                                 }

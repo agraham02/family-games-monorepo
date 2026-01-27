@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { BoardState, Tile as TileType } from "@shared/types";
 import Tile from "./Tile";
@@ -14,8 +15,11 @@ interface BoardProps {
     canPlaceLeft: boolean;
     canPlaceRight: boolean;
     onPlaceTile: (side: "left" | "right") => void;
+    onCancelSelection?: () => void;
     lastPlayedSide?: "left" | "right" | null;
     className?: string;
+    /** Prefix for layoutId to enable shared animations with TileHand */
+    layoutIdPrefix?: string;
 }
 
 export default function Board({
@@ -25,8 +29,10 @@ export default function Board({
     canPlaceLeft,
     canPlaceRight,
     onPlaceTile,
+    onCancelSelection,
     lastPlayedSide,
     className,
+    layoutIdPrefix,
 }: BoardProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -86,6 +92,7 @@ export default function Board({
     }
 
     const isEmpty = board.tiles.length === 0;
+    const showGhostPreviews = selectedTile && isMyTurn && !isEmpty;
 
     return (
         <div className={cn("relative w-full", className)}>
@@ -100,9 +107,9 @@ export default function Board({
             </div>
 
             {/* Board container */}
-            <div className="relative bg-green-800 dark:bg-green-900 rounded-xl p-4 min-h-[140px] shadow-inner">
+            <div className="relative bg-green-800 dark:bg-green-900 rounded-xl p-4 min-h-35 shadow-inner">
                 {/* Left scroll arrow */}
-                {showLeftArrow && (
+                {showLeftArrow && !showGhostPreviews && (
                     <Button
                         variant="ghost"
                         size="icon"
@@ -114,7 +121,7 @@ export default function Board({
                 )}
 
                 {/* Right scroll arrow */}
-                {showRightArrow && (
+                {showRightArrow && !showGhostPreviews && (
                     <Button
                         variant="ghost"
                         size="icon"
@@ -125,27 +132,65 @@ export default function Board({
                     </Button>
                 )}
 
-                {/* Place left button (when tile selected) */}
-                {selectedTile && isMyTurn && canPlaceLeft && (
-                    <Button
-                        className="absolute left-2 top-1/2 -translate-y-1/2 z-30 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold shadow-lg animate-pulse"
-                        size="sm"
-                        onClick={() => onPlaceTile("left")}
-                    >
-                        Place Here
-                    </Button>
-                )}
+                {/* Ghost tile preview - LEFT */}
+                <AnimatePresence>
+                    {showGhostPreviews && canPlaceLeft && (
+                        <motion.button
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            onClick={() => onPlaceTile("left")}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
+                        >
+                            <div className="relative">
+                                {/* Ghost tile with reduced opacity */}
+                                <div className="opacity-50 group-hover:opacity-80 transition-opacity">
+                                    <Tile
+                                        tile={selectedTile}
+                                        isHorizontal={true}
+                                        size="sm"
+                                    />
+                                </div>
+                                {/* Pulsing ring */}
+                                <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400 animate-pulse" />
+                                {/* Label */}
+                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-yellow-300 whitespace-nowrap">
+                                    Place Left
+                                </span>
+                            </div>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
 
-                {/* Place right button (when tile selected) */}
-                {selectedTile && isMyTurn && canPlaceRight && (
-                    <Button
-                        className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold shadow-lg animate-pulse"
-                        size="sm"
-                        onClick={() => onPlaceTile("right")}
-                    >
-                        Place Here
-                    </Button>
-                )}
+                {/* Ghost tile preview - RIGHT */}
+                <AnimatePresence>
+                    {showGhostPreviews && canPlaceRight && (
+                        <motion.button
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            onClick={() => onPlaceTile("right")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
+                        >
+                            <div className="relative">
+                                {/* Ghost tile with reduced opacity */}
+                                <div className="opacity-50 group-hover:opacity-80 transition-opacity">
+                                    <Tile
+                                        tile={selectedTile}
+                                        isHorizontal={true}
+                                        size="sm"
+                                    />
+                                </div>
+                                {/* Pulsing ring */}
+                                <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400 animate-pulse" />
+                                {/* Label */}
+                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-yellow-300 whitespace-nowrap">
+                                    Place Right
+                                </span>
+                            </div>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
 
                 {/* Scrollable tiles container */}
                 <div
@@ -166,6 +211,11 @@ export default function Board({
                                         tile={tile}
                                         isHorizontal={true}
                                         size="sm"
+                                        layoutId={
+                                            layoutIdPrefix
+                                                ? `${layoutIdPrefix}-tile-${tile.id}`
+                                                : undefined
+                                        }
                                     />
                                 </div>
                             ))

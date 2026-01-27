@@ -10,6 +10,7 @@ import {
 } from "@shared/types";
 import DominoesGameTable from "./ui/DominoesGameTable";
 import RoundSummaryModal from "./ui/RoundSummaryModal";
+import GameSummaryModal from "./ui/GameSummaryModal";
 import {
     GameMenu,
     GameSettingToggle,
@@ -49,7 +50,7 @@ export default function Dominoes({
                 socket.emit("game_action", { roomId, action });
             }
         },
-        [dispatchOptimisticAction, socket, connected, userId, roomId]
+        [dispatchOptimisticAction, socket, connected, userId, roomId],
     );
 
     // Derived state
@@ -63,13 +64,19 @@ export default function Dominoes({
         (tile: TileType, side: "left" | "right") => {
             sendGameAction("PLACE_TILE", { tile, side });
         },
-        [sendGameAction]
+        [sendGameAction],
     );
 
     // Handle pass
     const handlePass = useCallback(() => {
         sendGameAction("PASS", {});
     }, [sendGameAction]);
+
+    // Handle return to lobby after game ends
+    const handleReturnToLobby = useCallback(() => {
+        if (!socket || !connected) return;
+        socket.emit("return_to_lobby", { roomId });
+    }, [socket, connected, roomId]);
 
     return (
         <div className="h-screen w-full overflow-hidden">
@@ -96,6 +103,12 @@ export default function Dominoes({
             <RoundSummaryModal
                 gameData={gameData}
                 sendGameAction={sendGameAction}
+            />
+
+            {/* Game Summary Modal (game finished) */}
+            <GameSummaryModal
+                gameData={gameData}
+                onReturnToLobby={handleReturnToLobby}
             />
         </div>
     );

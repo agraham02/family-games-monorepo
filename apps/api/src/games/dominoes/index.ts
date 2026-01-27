@@ -8,6 +8,8 @@ import {
     DOMINOES_SETTINGS_DEFINITIONS,
     Tile,
     DominoesPhase,
+    DominoesTeam,
+    DominoesGameMode,
 } from "@family-games/shared";
 import { GameModule, GameState, GameAction } from "../../services/GameManager";
 import { v4 as uuidv4 } from "uuid";
@@ -21,6 +23,7 @@ import { omitFields } from "../../utils/omitFields";
 import {
     BoardState,
     canPlaceTile,
+    canPlayTile,
     hasLegalMove,
     initializeBoard,
     placeTileOnBoard,
@@ -32,20 +35,37 @@ import {
     checkAllPlayersConnected,
 } from "../shared";
 
+// Export auto-action helpers for TurnTimerService
+export { getAutoPlayTile, shouldTimerBeActive } from "./helpers/autoAction";
+
 const DOMINOES_NAME = "dominoes";
 const DOMINOES_DISPLAY_NAME = "Dominoes";
 const DOMINOES_TOTAL_PLAYERS = 4;
+
+/**
+ * Get team requirements based on game settings.
+ * Returns null for individual mode, team config for team mode.
+ */
+function getTeamRequirements(
+    settings: DominoesSettings,
+): { numTeams: number; playersPerTeam: number } | null {
+    if (settings.gameMode === "team") {
+        return { numTeams: 2, playersPerTeam: 2 };
+    }
+    return null;
+}
 
 const DOMINOES_METADATA = {
     type: DOMINOES_NAME,
     displayName: DOMINOES_DISPLAY_NAME,
     description:
         "Classic Caribbean-style dominoes. Be the first to play all your tiles or have the lowest pip count when blocked!",
-    requiresTeams: false, // Individual play
+    requiresTeams: false, // Dynamic - depends on gameMode setting
     minPlayers: DOMINOES_TOTAL_PLAYERS,
     maxPlayers: DOMINOES_TOTAL_PLAYERS,
     settingsDefinitions: DOMINOES_SETTINGS_DEFINITIONS,
     defaultSettings: DEFAULT_DOMINOES_SETTINGS,
+    getTeamRequirements, // Dynamic team requirements based on settings
 };
 
 export interface DominoesState extends GameState {
@@ -61,30 +81,94 @@ export interface DominoesState extends GameState {
     round: number;
     consecutivePasses: number; // Track consecutive passes to detect blocked game
 
-    playerScores: Record<string, number>; // Individual scores
-    roundPipCounts?: Record<string, number>; // Pip counts at end of round
-    roundWinner?: string | null; // Winner of the current round
-    isRoundTie?: boolean; // True if round ended in a tie (blocked game, multiple lowest pip counts)
+    // Game mode (individual or team)
+    gameMode: DominoesGameMode;
 
-    gameWinner?: string; // Overall game winner
+    // Team data (populated when gameMode === "team")
+    teams?: Record<number, DominoesTeam>;
+    teamScores?: Record<number, number>;
+
+    // Individual scores (always populated)
+    playerScores: Record<string, number>;
+
+    // Round summary data
+    roundPipCounts?: Record<string, number>; // Pip counts at end of round
+    roundWinner?: string | null; // Player who won the current round
+    winningTeam?: number | null; // Team that won (team mode only)
+    roundPoints?: number; // Points scored this round
+    isRoundTie?: boolean; // True if round ended in a tie (blocked game)
+
+    gameWinner?: string; // Overall game winner (player ID)
+    winningTeamId?: number; // Overall game winning team (team mode)
     history: string[]; // Action history for debugging
     settings: DominoesSettings;
+
+    /** ISO timestamp when the current turn started (for turn timer) */
+    turnStartedAt?: string;
 }
 
 function init(
     room: Room,
-    customSettings?: Partial<DominoesSettings>
+    customSettings?: Partial<DominoesSettings>,
 ): DominoesState {
     // Turn players into an object map for easier access
     const players: Record<string, User> = Object.fromEntries(
-        room.users.map((user) => [user.id, user])
+        room.users.map((user) => [user.id, user]),
     );
 
-    const playOrder = room.users.map((user) => user.id);
     const settings: DominoesSettings = {
         ...DEFAULT_DOMINOES_SETTINGS,
         ...customSettings,
     };
+
+    const gameMode = settings.gameMode;
+
+    // ========================================================================
+    // TEAM MODE SETUP
+    // ========================================================================
+    let playOrder: string[];
+    let teams: Record<number, DominoesTeam> | undefined;
+    let teamScores: Record<number, number> | undefined;
+
+    if (gameMode === "team") {
+        // Validate teams are set up in the room
+        if (!room.teams || room.teams.length !== 2) {
+            throw new Error("Team mode requires 2 teams of 2 players each");
+        }
+
+        // Validate each team has exactly 2 players
+        for (const team of room.teams) {
+            if (team.length !== 2) {
+                throw new Error("Each team must have exactly 2 players");
+            }
+        }
+
+        // Build teams object
+        teams = {};
+        teamScores = {};
+        room.teams.forEach((teamPlayers, index) => {
+            teams![index] = {
+                players: teamPlayers,
+                score: 0,
+            };
+            teamScores![index] = 0;
+        });
+
+        // Create alternating play order: Team0_P0, Team1_P0, Team0_P1, Team1_P1
+        // This ensures partners sit across from each other and teams alternate
+        playOrder = [];
+        const playersPerTeam = 2;
+        const numTeams = 2;
+        for (let i = 0; i < playersPerTeam; i++) {
+            for (let j = 0; j < numTeams; j++) {
+                const playerId = room.teams[j][i];
+                if (playerId) playOrder.push(playerId);
+            }
+        }
+    } else {
+        // Individual mode - use room order
+        playOrder = room.users.map((user) => user.id);
+    }
 
     // Generate and shuffle dominoes
     const dominoSet = buildDominoSet();
@@ -124,9 +208,15 @@ function init(
         round: 1,
         consecutivePasses: 0,
 
+        gameMode,
+        teams,
+        teamScores,
         playerScores,
         settings,
         history: [],
+
+        // Initialize turn timer
+        turnStartedAt: new Date().toISOString(),
     };
 }
 
@@ -139,7 +229,7 @@ function reducer(state: DominoesState, action: GameAction): DominoesState {
                 state,
                 action.userId,
                 action.payload.tile,
-                action.payload.side
+                action.payload.side,
             );
         case "PASS":
             return handlePass(state, action.userId);
@@ -150,17 +240,40 @@ function reducer(state: DominoesState, action: GameAction): DominoesState {
     }
 }
 
-function getState(state: DominoesState): Partial<DominoesState> {
-    const publicState = omitFields(state, ["hands"]);
+function getState(state: DominoesState): Partial<DominoesState> & {
+    turnTimer?: { startedAt: number; duration: number; serverTime: number };
+} {
+    const publicState = omitFields(state, [
+        "hands",
+    ]) as Partial<DominoesState> & {
+        turnTimer?: { startedAt: number; duration: number; serverTime: number };
+    };
     publicState.handsCounts = Object.fromEntries(
-        state.playOrder.map((id) => [id, state.hands[id].length || 0])
+        state.playOrder.map((id) => [id, state.hands[id].length || 0]),
     );
+
+    // Add turn timer info if active (same format as Spades for consistency)
+    const turnTimeLimit = state.settings?.turnTimeLimit;
+    if (
+        turnTimeLimit &&
+        turnTimeLimit > 0 &&
+        state.turnStartedAt &&
+        state.phase === "playing"
+    ) {
+        const startTime = new Date(state.turnStartedAt).getTime();
+        publicState.turnTimer = {
+            startedAt: startTime,
+            duration: turnTimeLimit * 1000,
+            serverTime: Date.now(),
+        };
+    }
+
     return publicState;
 }
 
 function getPlayerState(
     state: DominoesState,
-    playerId: string
+    playerId: string,
 ): Partial<DominoesState> & { hand?: Tile[]; localOrdering?: string[] } {
     // Create a local ordering array starting from the current player's perspective
     const idx = state.playOrder.indexOf(playerId);
@@ -193,7 +306,7 @@ function handlePlaceTile(
     state: DominoesState,
     playerId: string,
     tile: Tile,
-    side: "left" | "right"
+    side: "left" | "right",
 ): DominoesState {
     // Validate phase
     if (state.phase !== "playing") {
@@ -242,7 +355,7 @@ function handlePlaceTile(
                 board: newBoard,
                 consecutivePasses,
             },
-            playerId
+            playerId,
         );
     }
 
@@ -255,6 +368,8 @@ function handlePlaceTile(
         board: newBoard,
         currentTurnIndex: nextTurnIndex,
         consecutivePasses,
+        // Reset turn timer for next player
+        turnStartedAt: new Date().toISOString(),
     };
 }
 
@@ -293,7 +408,7 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
                 ...state,
                 consecutivePasses,
             },
-            null // No clear winner, will determine based on lowest pip count
+            null, // No clear winner, will determine based on lowest pip count
         );
     }
 
@@ -304,6 +419,8 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
         ...state,
         currentTurnIndex: nextTurnIndex,
         consecutivePasses,
+        // Reset turn timer for next player
+        turnStartedAt: new Date().toISOString(),
     };
 }
 
@@ -312,24 +429,75 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
  */
 function endRound(
     state: DominoesState,
-    winnerId: string | null
+    winnerId: string | null,
 ): DominoesState {
-    const { scores, pipCounts, roundWinner, isTie } = calculateRoundScores(
+    const scoreResult = calculateRoundScores(
         state.hands,
         state.playerScores,
-        winnerId
+        state.teamScores ?? {},
+        winnerId,
+        state.gameMode,
+        state.teams,
     );
 
     // Check if anyone has reached the win target
-    const gameWinner =
-        checkWinCondition(scores, state.settings.winTarget) ?? undefined;
+    let gameWinner: string | undefined;
+    let winningTeamId: number | undefined;
+
+    if (state.gameMode === "team") {
+        // In team mode, check team scores
+        const winningTeam = checkWinCondition(
+            scoreResult.teamScores,
+            state.settings.winTarget,
+        );
+        if (winningTeam !== null) {
+            winningTeamId = Number(winningTeam);
+            // Set gameWinner to the first player on the winning team for display
+            gameWinner = state.teams?.[winningTeamId]?.players[0];
+        }
+
+        // Update team objects with new scores
+        const updatedTeams: Record<number, DominoesTeam> = {};
+        for (const [teamId, team] of Object.entries(state.teams ?? {})) {
+            updatedTeams[Number(teamId)] = {
+                ...team,
+                score: scoreResult.teamScores[Number(teamId)] ?? team.score,
+            };
+        }
+
+        return {
+            ...state,
+            teams: updatedTeams,
+            teamScores: scoreResult.teamScores,
+            playerScores: scoreResult.playerScores,
+            roundPipCounts: scoreResult.pipCounts,
+            roundWinner: scoreResult.roundWinner,
+            winningTeam: scoreResult.winningTeam,
+            roundPoints: scoreResult.roundPoints,
+            isRoundTie: scoreResult.isTie,
+            gameWinner,
+            winningTeamId,
+            phase: winningTeamId !== undefined ? "finished" : "round-summary",
+        };
+    }
+
+    // Individual mode
+    const winner = checkWinCondition(
+        scoreResult.playerScores,
+        state.settings.winTarget,
+    );
+    if (winner !== null) {
+        gameWinner = String(winner);
+    }
 
     return {
         ...state,
-        playerScores: scores,
-        roundPipCounts: pipCounts,
-        roundWinner,
-        isRoundTie: isTie,
+        playerScores: scoreResult.playerScores,
+        roundPipCounts: scoreResult.pipCounts,
+        roundWinner: scoreResult.roundWinner,
+        winningTeam: null,
+        roundPoints: scoreResult.roundPoints,
+        isRoundTie: scoreResult.isTie,
         gameWinner,
         phase: gameWinner ? "finished" : "round-summary",
     };
@@ -365,7 +533,11 @@ function startNextRound(state: DominoesState): DominoesState {
         consecutivePasses: 0,
         roundPipCounts: undefined,
         roundWinner: undefined,
+        winningTeam: undefined,
+        roundPoints: undefined,
         isRoundTie: undefined,
+        // Reset turn timer for new round
+        turnStartedAt: new Date().toISOString(),
     };
 }
 
@@ -375,7 +547,7 @@ function currentPlayerId(state: DominoesState): string {
 
 function logHistory(state: DominoesState, action: GameAction): void {
     state.history.push(
-        `Action: ${action.type}, Player: ${action.userId}, Payload: ${JSON.stringify(action.payload)}`
+        `Action: ${action.type}, Player: ${action.userId}, Payload: ${JSON.stringify(action.payload)}`,
     );
 }
 

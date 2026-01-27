@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Tile as TileType } from "@shared/types";
 
@@ -12,6 +13,8 @@ interface TileProps {
     size?: "sm" | "md" | "lg";
     onClick?: () => void;
     className?: string;
+    /** Unique ID for layout animations between hand and board */
+    layoutId?: string;
 }
 
 // Pip positions for each value (0-6)
@@ -100,6 +103,7 @@ export default function Tile({
     size = "md",
     onClick,
     className,
+    layoutId,
 }: TileProps) {
     const config = SIZE_CONFIG[size];
     const { width, height, pipSize, gap } = config;
@@ -113,8 +117,9 @@ export default function Tile({
     const isDouble = tile.left === tile.right;
 
     return (
-        <button
+        <motion.button
             type="button"
+            layoutId={layoutId}
             onClick={onClick}
             disabled={!onClick}
             className={cn(
@@ -125,11 +130,13 @@ export default function Tile({
                     "cursor-not-allowed grayscale brightness-75",
                 !onClick && "cursor-default",
                 isSelected && "ring-2 ring-yellow-400 scale-110 z-10",
-                className
+                className,
             )}
             style={{
                 transform: isHorizontal ? "rotate(90deg)" : undefined,
             }}
+            layout
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
             <svg
                 width={svgWidth}
@@ -137,7 +144,7 @@ export default function Tile({
                 viewBox={`0 0 ${width} ${height}`}
                 className={cn(
                     "drop-shadow-md",
-                    isDouble && "ring-1 ring-amber-500/50 rounded"
+                    isDouble && "ring-1 ring-amber-500/50 rounded",
                 )}
             >
                 {/* Background */}
@@ -180,6 +187,6 @@ export default function Tile({
                     offsetY={halfHeight + gap}
                 />
             </svg>
-        </button>
+        </motion.button>
     );
 }
