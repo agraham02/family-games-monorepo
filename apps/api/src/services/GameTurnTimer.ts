@@ -30,6 +30,13 @@ import {
 } from "../games/dominoes";
 import { DominoesState } from "../games/dominoes";
 
+import {
+    getAutoAction as getLRCAutoAction,
+    shouldTimerBeActive as lrcTimerActive,
+    shouldAutoConfirm as lrcShouldAutoConfirm,
+} from "../games/lrc";
+import { LRCState, LRC_AUTO_CONFIRM_DELAY } from "@family-games/shared";
+
 let io: SocketIOServer | null = null;
 
 /**
@@ -211,6 +218,99 @@ function handleDominoesTimeout(
 }
 
 /**
+ * Handle a timeout for an LRC game.
+ * Dispatches the appropriate auto-action based on game phase.
+ */
+function handleLRCTimeout(gameId: string, room: Room, state: LRCState): void {
+    const currentPlayer = state.lrcPlayers[state.currentPlayerIndex];
+    const currentPlayerId = currentPlayer?.id;
+    const playerName = currentPlayer?.name || "Unknown";
+
+    console.log(
+        `⏰ Handling LRC timeout for ${playerName} in ${state.phase} phase`,
+    );
+
+    const autoAction = getLRCAutoAction(state, currentPlayerId ?? "");
+
+    if (!autoAction) {
+        console.log(`⚠️ No auto-action for LRC phase: ${state.phase}`);
+        return;
+    }
+
+    const action: GameAction = {
+        ...autoAction,
+        userId: currentPlayerId ?? "",
+    };
+
+    console.log(
+        `🤖 Auto-executing LRC action: ${action.type} for ${playerName}`,
+    );
+
+    try {
+        // Dispatch the auto-action
+        const newState = gameManager.dispatch(gameId, action);
+
+        // Emit timeout event to clients
+        emitTurnTimeout(
+            room.id,
+            {
+                playerId: currentPlayerId ?? "",
+                playerName,
+                action: "auto-play",
+                gameId,
+            },
+            newState,
+        );
+
+        // Check if we need to start a new timer for the next player
+        maybeStartTimer(gameId, room, newState);
+    } catch (err) {
+        console.error("Error dispatching LRC auto-action:", err);
+    }
+}
+
+/**
+ * Handle auto-confirm timeout for LRC showing-results phase.
+ * This is separate from the main turn timer - it's the 5-second delay after rolling.
+ */
+function handleLRCAutoConfirm(
+    gameId: string,
+    room: Room,
+    state: LRCState,
+): void {
+    const currentPlayer = state.lrcPlayers[state.currentPlayerIndex];
+    const currentPlayerId = currentPlayer?.id;
+    const playerName = currentPlayer?.name || "Unknown";
+
+    console.log(`⏰ Auto-confirming LRC results for ${playerName}`);
+
+    const action: GameAction = {
+        type: "CONFIRM_RESULTS",
+        userId: currentPlayerId ?? "",
+        payload: {},
+    };
+
+    try {
+        // Dispatch the confirm action
+        const newState = gameManager.dispatch(gameId, action);
+
+        // Emit a game sync to all clients
+        if (io) {
+            io.to(room.id).emit("game_event", {
+                event: "sync",
+                gameState: gameManager.getGameState(newState.id),
+                timestamp: new Date().toISOString(),
+            });
+        }
+
+        // Check if we need to start a new timer for the next player
+        maybeStartTimer(gameId, room, newState);
+    } catch (err) {
+        console.error("Error dispatching LRC auto-confirm:", err);
+    }
+}
+
+/**
  * Maybe start a timer based on the current game state.
  * Only starts if the phase requires a timer (bidding or playing).
  */
@@ -290,6 +390,86 @@ export function maybeStartTimer(
                 }
             },
         );
+        return;
+    }
+
+    // ========================================================================
+    // LRC (Left Right Center)
+    // ========================================================================
+    if (state.type === "lrc") {
+        const lrcState = state as unknown as LRCState;
+
+        // LRC has two types of timers:
+        // 1. Turn timer (for waiting-for-roll, wild-target-selection, last-chip-challenge)
+        // 2. Auto-confirm timer (for showing-results phase)
+
+        // Handle auto-confirm timer for showing-results phase
+        if (lrcShouldAutoConfirm(lrcState)) {
+            const autoConfirmAt = lrcState.autoConfirmAt;
+            if (autoConfirmAt) {
+                const deadline = new Date(autoConfirmAt).getTime();
+                const now = Date.now();
+                const remainingMs = Math.max(0, deadline - now);
+
+                // Cancel any existing timer and start confirm timer
+                turnTimerService.cancelTurn(gameId);
+
+                if (remainingMs > 0) {
+                    // Use a simple setTimeout for auto-confirm since it's a fixed short delay
+                    setTimeout(() => {
+                        const freshState = gameManager.getGame(gameId);
+                        if (freshState && freshState.type === "lrc") {
+                            const freshLRCState =
+                                freshState as unknown as LRCState;
+                            // Only auto-confirm if still in showing-results phase
+                            if (freshLRCState.phase === "showing-results") {
+                                handleLRCAutoConfirm(
+                                    gameId,
+                                    room,
+                                    freshLRCState,
+                                );
+                            }
+                        }
+                    }, remainingMs);
+                }
+            }
+            return;
+        }
+
+        // Handle main turn timer
+        const turnTimeLimit = lrcState.settings?.turnTimeLimit;
+
+        // Use turn time limit if set, otherwise skip (LRC doesn't require turn timer by default)
+        if (!turnTimeLimit || turnTimeLimit <= 0) {
+            turnTimerService.cancelTurn(gameId);
+            return;
+        }
+
+        if (!lrcTimerActive(lrcState)) {
+            turnTimerService.cancelTurn(gameId);
+            return;
+        }
+
+        const currentPlayer = lrcState.lrcPlayers[lrcState.currentPlayerIndex];
+        const currentPlayerId = currentPlayer?.id;
+
+        if (currentPlayerId) {
+            turnTimerService.startTurn(
+                gameId,
+                currentPlayerId,
+                turnTimeLimit,
+                () => {
+                    const freshState = gameManager.getGame(gameId);
+                    if (freshState && freshState.type === "lrc") {
+                        handleLRCTimeout(
+                            gameId,
+                            room,
+                            freshState as unknown as LRCState,
+                        );
+                    }
+                },
+            );
+        }
         return;
     }
 }

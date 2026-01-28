@@ -6,6 +6,15 @@ import { Badge } from "../ui/badge";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { ConfirmDialog } from "../ui/confirm-dialog";
+import { Input } from "../ui/input";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "../ui/dialog";
 import { User, LobbyData } from "@shared/types";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
@@ -23,6 +32,7 @@ import {
     GamepadIcon,
     EyeIcon,
     WifiOffIcon,
+    PencilIcon,
 } from "lucide-react";
 
 interface PlayerListCardProps {
@@ -48,6 +58,11 @@ export default function PlayerListCard({
     const { userId, roomId } = useSession();
     const [isReady, setIsReady] = useState(!!readyStates[userId]);
     const [kickTarget, setKickTarget] = useState<User | null>(null);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [newName, setNewName] = useState("");
+
+    // Find current user's name
+    const currentUser = users.find((u) => u.id === userId);
 
     // Sync local ready state with server state when readyStates changes
     useEffect(() => {
@@ -94,6 +109,32 @@ export default function PlayerListCard({
                 users.find((u) => u.id === newLeaderId)?.name
             } to leader`,
         );
+    }
+
+    function handleOpenEditName() {
+        setNewName(currentUser?.name || "");
+        setIsEditingName(true);
+    }
+
+    function handleSaveName() {
+        if (!socket || !connected) {
+            toast.error("Not connected to the server");
+            return;
+        }
+
+        const trimmed = newName.trim();
+        if (trimmed.length < 2) {
+            toast.error("Name must be at least 2 characters");
+            return;
+        }
+        if (trimmed.length > 20) {
+            toast.error("Name must be at most 20 characters");
+            return;
+        }
+
+        socket.emit("update_name", { roomId, userId, newName: trimmed });
+        setIsEditingName(false);
+        toast.success("Name updated!");
     }
 
     return (
@@ -225,6 +266,23 @@ export default function PlayerListCard({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1.5">
+                                    {isCurrentUser && !isGameInProgress && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-zinc-600 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                                    onClick={handleOpenEditName}
+                                                >
+                                                    <PencilIcon className="w-4 h-4" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                Edit name
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
                                     {isCurrentUser && (
                                         <Button
                                             size="sm"
@@ -298,6 +356,50 @@ export default function PlayerListCard({
                 onConfirm={confirmKick}
                 onCancel={() => setKickTarget(null)}
             />
+
+            {/* Edit Name Dialog */}
+            <Dialog open={isEditingName} onOpenChange={setIsEditingName}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Your Name</DialogTitle>
+                        <DialogDescription>
+                            Enter a new display name (2-20 characters).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            id="name"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            placeholder="Enter your name"
+                            maxLength={20}
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    handleSaveName();
+                                }
+                            }}
+                        />
+                        <p className="text-xs text-zinc-500 mt-2">
+                            {newName.trim().length}/20 characters
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsEditingName(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSaveName}
+                            disabled={newName.trim().length < 2}
+                        >
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }

@@ -632,6 +632,7 @@ export async function createRoom(
         readyStates: { [user.id]: false },
         state: "lobby",
         selectedGameType: "spades",
+        gameSettings: gameManager.getSettingsForGame("spades")?.defaults ?? {},
         gameId: null,
         createdAt: new Date(),
         isPaused: false,
@@ -931,6 +932,60 @@ export function toggleReadyState(roomId: string, userId: string): void {
 }
 
 /**
+ * Update a user's display name in the room.
+ * Only works in lobby state (not during active game).
+ * Name must be at least 2 characters.
+ *
+ * @param roomId - The room ID
+ * @param userId - The user's ID
+ * @param newName - The new display name
+ */
+export function updateUserName(
+    roomId: string,
+    userId: string,
+    newName: string,
+): void {
+    const room = getRoom(roomId);
+    if (!room) throw notFound("Room not found.");
+
+    const user = room.users.find((u) => u.id === userId);
+    if (!user) throw forbidden("User not in room.");
+
+    // Validate name length (minimum 2 characters)
+    const trimmedName = newName.trim();
+    if (trimmedName.length < 2) {
+        throw badRequest("Name must be at least 2 characters.");
+    }
+
+    // Limit name length to prevent abuse
+    if (trimmedName.length > 20) {
+        throw badRequest("Name must be at most 20 characters.");
+    }
+
+    // Only allow name changes in lobby state
+    if (isActiveGame(room)) {
+        throw badRequest("Cannot change name during an active game.");
+    }
+
+    const oldName = user.name;
+    user.name = trimmedName;
+
+    emitRoomEvent<{ userId: string; oldName: string; newName: string }>(
+        room,
+        "user_name_changed",
+        {
+            userId,
+            oldName,
+            newName: trimmedName,
+        },
+    );
+
+    console.log(
+        `User ${oldName} changed name to ${trimmedName} in room ${room.code}`,
+    );
+}
+
+/**
  * Reset all ready states in a room to false.
  * Called when:
  * - A new player joins the room (in lobby state)
@@ -983,11 +1038,18 @@ export function selectGame(
     if (room.selectedGameType === gameType) {
         // If the same game is selected, clear the selection
         room.selectedGameType = "";
+        room.gameSettings = {};
     } else {
         room.selectedGameType = gameType;
+        // Initialize game settings with defaults for the selected game
+        const gameSettings = gameManager.getSettingsForGame(gameType);
+        room.gameSettings = gameSettings?.defaults ?? {};
     }
 
-    emitRoomEvent(room, "game_selected", { gameType });
+    emitRoomEvent(room, "game_selected", {
+        gameType: room.selectedGameType,
+        gameSettings: room.gameSettings,
+    });
 }
 
 /**
@@ -1244,6 +1306,25 @@ export function startGame(
 
     // Validate teams are complete for team-based games
     const module = gameManager.getGameModule(gameType);
+
+    // Validate minimum players requirement
+    if (module) {
+        const minPlayers = module.metadata.minPlayers;
+        const maxPlayers = module.metadata.maxPlayers;
+        const playerCount = room.users.length;
+
+        if (playerCount < minPlayers) {
+            throw badRequest(
+                `This game requires at least ${minPlayers} players. Currently ${playerCount} player(s) in room.`,
+            );
+        }
+        if (maxPlayers && playerCount > maxPlayers) {
+            throw badRequest(
+                `This game supports at most ${maxPlayers} players. Currently ${playerCount} player(s) in room.`,
+            );
+        }
+    }
+
     if (module && module.metadata.numTeams && module.metadata.numTeams > 0) {
         if (!room.teams || room.teams.length === 0) {
             throw badRequest(
@@ -1255,9 +1336,11 @@ export function startGame(
     }
 
     // Mark all users as connected when starting the game
-    room.users.forEach((user) => {
-        user.isConnected = true;
-    });
+    // Create new user objects to avoid mutating frozen/read-only objects
+    room.users = room.users.map((user) => ({
+        ...user,
+        isConnected: true,
+    }));
 
     // Track which players are in this game (for rejoin eligibility)
     const playerIds = room.users.map((u) => u.id);

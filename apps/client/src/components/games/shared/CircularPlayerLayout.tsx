@@ -69,6 +69,10 @@ export function useCircularLayout() {
  * Calculate player positions around a circle.
  * Hero player is always at the bottom (6 o'clock position).
  *
+ * Players are arranged counter-clockwise around the circle so that:
+ * - index + 1 (next player, receives L chips) appears on the LEFT side of screen
+ * - index - 1 (previous player, receives R chips) appears on the RIGHT side of screen
+ *
  * @param playerCount - Number of players
  * @param heroPlayerIndex - Index of the hero player in the player array
  * @param radiusPercent - Radius as percentage of container (default 40)
@@ -85,13 +89,15 @@ function calculatePlayerPositions(
     const angleStep = (2 * Math.PI) / playerCount;
 
     // Hero position is at bottom (180 degrees = π radians from top)
-    // We need to rotate the whole circle so hero ends up at bottom
+    // We arrange players counter-clockwise so that:
+    // - Higher indices (next player, receive L) appear on left side
+    // - Lower indices (previous player, receive R) appear on right side
     const heroAngle = Math.PI; // Bottom of circle
-    const startAngle = heroAngle - heroPlayerIndex * angleStep;
+    const startAngle = heroAngle + heroPlayerIndex * angleStep;
 
     for (let i = 0; i < playerCount; i++) {
-        // Calculate angle for this player (clockwise from top)
-        const angle = startAngle + i * angleStep;
+        // Calculate angle for this player (counter-clockwise from top)
+        const angle = startAngle - i * angleStep;
 
         // Convert to x,y percentages (0-100)
         // sin gives us x offset, -cos gives us y offset (because y increases downward)

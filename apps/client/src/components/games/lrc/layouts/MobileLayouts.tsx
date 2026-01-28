@@ -65,8 +65,8 @@ export interface MobileLayoutProps {
 /**
  * Calculate the relative position of a player to the hero.
  * In LRC, play goes clockwise, so:
- * - Player immediately after hero in array = hero's RIGHT (receives chips on "R")
- * - Player immediately before hero in array = hero's LEFT (receives chips on "L")
+ * - Player immediately after hero in array = hero's LEFT (receives chips on "L")
+ * - Player immediately before hero in array = hero's RIGHT (receives chips on "R")
  */
 function getRelativePosition(
     playerIndex: number,
@@ -82,14 +82,14 @@ function getRelativePosition(
         (heroIndex - playerIndex + playerCount) % playerCount;
 
     // Immediate neighbors
-    if (clockwiseDistance === 1) return "right"; // Next player clockwise = right
-    if (counterClockwiseDistance === 1) return "left"; // Previous player clockwise = left
+    if (clockwiseDistance === 1) return "left"; // Next player clockwise = left (receives L)
+    if (counterClockwiseDistance === 1) return "right"; // Previous player clockwise = right (receives R)
 
     // For players further away, determine which side they're closer to
     if (clockwiseDistance <= counterClockwiseDistance) {
-        return "right";
+        return "left";
     }
-    return "left";
+    return "right";
 }
 
 /**

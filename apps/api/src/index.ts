@@ -18,6 +18,7 @@ import {
     setTeams,
     startGame,
     toggleReadyState,
+    updateUserName,
     updateRoomSettings,
     updateGameSettings,
     addSpectator,
@@ -133,6 +134,12 @@ function startServer() {
                         `join_room missing roomId or userId for socket ${socket.id}`,
                     );
                 }
+
+                // IMPORTANT: Join the socket room BEFORE registering the user
+                // This ensures the socket receives any events emitted during registration
+                // (like game_resumed when a player reconnects)
+                socket.join(roomId);
+
                 const result = registerSocketUser(socket.id, roomId, userId);
 
                 // If user already has an active connection, disconnect the old socket
@@ -153,10 +160,9 @@ function startServer() {
                     }
                     // Notify the new socket that this is taking over from another tab
                     socket.emit("already_joined", { roomId, userId });
-                    // Don't return - still need to join room and sync state below
+                    // Don't return - still need to sync state below
                 }
 
-                socket.join(roomId);
                 const room = getRoom(roomId);
                 if (!room) {
                     throw new Error("Room not found");
@@ -205,6 +211,15 @@ function startServer() {
                 handleSocketError(socket, err);
             }
         });
+
+        socket.on("update_name", ({ roomId, userId, newName }) => {
+            try {
+                updateUserName(roomId, userId, newName);
+            } catch (err) {
+                handleSocketError(socket, err);
+            }
+        });
+
         socket.on("promote_leader", ({ roomId, userId, newLeaderId }) => {
             try {
                 promoteLeader(roomId, userId, newLeaderId);

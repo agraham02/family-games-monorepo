@@ -290,7 +290,7 @@ export const LRC_MAX_PLAYERS = 10;
 export const LRC_MAX_DICE = 3;
 
 /** Default auto-confirm delay in seconds */
-export const LRC_AUTO_CONFIRM_DELAY = 4;
+export const LRC_AUTO_CONFIRM_DELAY = 5;
 
 /** Die face to d6 value mapping (standard LRC dice) */
 export const DIE_FACE_VALUES: Record<number, DieFace> = {

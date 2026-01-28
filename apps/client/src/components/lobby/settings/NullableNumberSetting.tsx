@@ -4,12 +4,7 @@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { InfoIcon } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { SettingDefinition } from "@shared/types";
 
 interface NullableNumberSettingProps {
@@ -64,24 +59,7 @@ export function NullableNumberSetting({
                         {definition.label}
                     </Label>
                     {definition.description && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button
-                                    type="button"
-                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                                >
-                                    <InfoIcon className="w-3.5 h-3.5" />
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent
-                                side="top"
-                                className="max-w-[200px]"
-                            >
-                                <p className="text-xs">
-                                    {definition.description}
-                                </p>
-                            </TooltipContent>
-                        </Tooltip>
+                        <InfoTooltip content={definition.description} />
                     )}
                 </div>
                 <div className="flex items-center gap-3">

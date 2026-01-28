@@ -13,7 +13,7 @@ import { ChipMovement, DieRoll, LRCPlayer } from "@family-games/shared";
  * Calculate chip movements based on dice roll.
  * Uses player array order (seat indices) to determine left/right neighbors.
  *
- * Seat arrangement (circular):
+ * Seat arrangement (circular, clockwise play order):
  * ```
  *        P1
  *      /    \
@@ -21,7 +21,10 @@ import { ChipMovement, DieRoll, LRCPlayer } from "@family-games/shared";
  *      \    /
  *        P3
  * ```
- * Left = counter-clockwise, Right = clockwise
+ *
+ * In clockwise play, looking down at the table:
+ * - LEFT = next player (clockwise, index + 1)
+ * - RIGHT = previous player (counter-clockwise, index - 1)
  *
  * Note: WILD dice require pre-selected targets passed via wildTargets array.
  *
@@ -47,8 +50,9 @@ export function calculateChipMovements(
     }
 
     // Indices for neighbors (wrap around)
-    const leftIndex = (rollerIndex - 1 + count) % count;
-    const rightIndex = (rollerIndex + 1) % count;
+    // In clockwise play: LEFT = next player (after you), RIGHT = previous player (before you)
+    const leftIndex = (rollerIndex + 1) % count;
+    const rightIndex = (rollerIndex - 1 + count) % count;
 
     let wildTargetIndex = 0;
 

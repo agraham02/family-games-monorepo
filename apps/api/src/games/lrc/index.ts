@@ -38,7 +38,11 @@ import {
 } from "./helpers/chips";
 
 // Export auto-action helpers for TurnTimerService
-export { getAutoAction, shouldTimerBeActive } from "./helpers/autoAction";
+export {
+    getAutoAction,
+    shouldTimerBeActive,
+    shouldAutoConfirm,
+} from "./helpers/autoAction";
 
 const LRC_NAME = "lrc";
 const LRC_DISPLAY_NAME = "Left Right Center";
