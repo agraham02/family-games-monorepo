@@ -46,3 +46,6 @@ export { TurnTimer } from "./TurnTimer";
 
 // Celebration animations
 export { Celebration, WinnerAnnouncement } from "./Celebration";
+
+// Game summary modal for end-of-game results
+export { GameSummaryModal } from "./GameSummaryModal";

@@ -4,3 +4,4 @@
 export * from "./errors";
 export * from "./player";
 export * from "./shuffle";
+export * from "./getUserPosition";

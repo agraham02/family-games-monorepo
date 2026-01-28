@@ -71,6 +71,12 @@ function startServer() {
         cors: {
             origin: "*",
         },
+        // Enable connection state recovery for seamless reconnection
+        // Allows clients to reconnect within 2 minutes and recover their session
+        connectionStateRecovery: {
+            maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+            skipMiddlewares: true, // Skip auth middlewares on recovery
+        },
     });
 
     // Store io instance for use in REST controllers
@@ -136,8 +142,14 @@ function startServer() {
                         console.log(
                             `Force disconnecting old socket: ${result.oldSocketId}`,
                         );
+                        // Notify the old socket that it's being disconnected due to duplicate connection
+                        oldSocket.emit("duplicate_connection_warning", {
+                            message:
+                                "You've connected from another tab. This session will be disconnected.",
+                        });
                         oldSocket.disconnect(true);
                     }
+                    // Notify the new socket that this is taking over from another tab
                     socket.emit("already_joined", { roomId, userId });
                     // Don't return - still need to join room and sync state below
                 }

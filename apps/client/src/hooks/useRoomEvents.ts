@@ -6,15 +6,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getSocket, emitJoinRoom } from "@/lib/socket";
 import { useSession } from "@/contexts/SessionContext";
-import { RoomEventPayload, LobbyData } from "@shared/types";
+import { RoomEventPayload, LobbyData, GameSummary } from "@shared/types";
 
 interface UseRoomEventsOptions {
     /** Called when room state is synced */
     onSync?: (roomState: LobbyData) => void;
     /** Called when game starts - return false to prevent default navigation */
     onGameStarted?: (
-        payload: RoomEventPayload & { event: "game_started" }
+        payload: RoomEventPayload & { event: "game_started" },
     ) => boolean | void;
+    /** Called when game ends - return false to prevent default navigation back to lobby */
+    onGameEnded?: (summary: GameSummary) => boolean | void;
     /** Called when game is aborted */
     onGameAborted?: (reason: string) => void;
     /** Called when game is paused */
@@ -23,6 +25,8 @@ interface UseRoomEventsOptions {
     onGameResumed?: () => void;
     /** Whether to auto-navigate on game_started (default: true) */
     autoNavigateOnGameStart?: boolean;
+    /** Whether to auto-navigate to lobby on game_ended (default: false - modal handles it) */
+    autoNavigateOnGameEnd?: boolean;
     /** Room code for navigation */
     roomCode: string;
     /** Whether this user is currently a spectator (affects navigation) */
@@ -37,10 +41,12 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
     const {
         onSync,
         onGameStarted,
+        onGameEnded,
         onGameAborted,
         onGamePaused,
         onGameResumed,
         autoNavigateOnGameStart = true,
+        autoNavigateOnGameEnd = false,
         roomCode,
         isSpectator: _isSpectator = false,
     } = options;
@@ -51,6 +57,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
     // Use refs for callbacks to avoid effect re-runs when callbacks change
     const onSyncRef = useRef(onSync);
     const onGameStartedRef = useRef(onGameStarted);
+    const onGameEndedRef = useRef(onGameEnded);
     const onGameAbortedRef = useRef(onGameAborted);
     const onGamePausedRef = useRef(onGamePaused);
     const onGameResumedRef = useRef(onGameResumed);
@@ -60,6 +67,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
     useEffect(() => {
         onSyncRef.current = onSync;
         onGameStartedRef.current = onGameStarted;
+        onGameEndedRef.current = onGameEnded;
         onGameAbortedRef.current = onGameAborted;
         onGamePausedRef.current = onGamePaused;
         onGameResumedRef.current = onGameResumed;
@@ -117,7 +125,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                         toast.info(
                             `${
                                 payload.userName || "A player"
-                            } was kicked from the room.`
+                            } was kicked from the room.`,
                         );
                     }
                     break;
@@ -127,7 +135,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                         toast.info("You are now the room leader!");
                     } else {
                         toast.info(
-                            `${payload.newLeaderName} is now the room leader.`
+                            `${payload.newLeaderName} is now the room leader.`,
                         );
                     }
                     break;
@@ -135,7 +143,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                 case "game_aborted":
                     if (payload.reason === "reconnect_timeout") {
                         toast.warning(
-                            "Game aborted: Players did not reconnect in time."
+                            "Game aborted: Players did not reconnect in time.",
                         );
                     } else if (payload.reason === "not_enough_players") {
                         toast.warning("Game aborted: Not enough players.");
@@ -149,19 +157,19 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
 
                 case "user_disconnected":
                     toast.warning(
-                        `${payload.userName || "A player"} disconnected.`
+                        `${payload.userName || "A player"} disconnected.`,
                     );
                     break;
 
                 case "user_reconnected":
                     toast.success(
-                        `${payload.userName || "A player"} reconnected.`
+                        `${payload.userName || "A player"} reconnected.`,
                     );
                     break;
 
                 case "game_paused":
                     toast.warning(
-                        "Game paused: Waiting for players to reconnect..."
+                        "Game paused: Waiting for players to reconnect...",
                     );
                     onGamePausedRef.current?.(payload.timeoutAt);
                     break;
@@ -184,13 +192,44 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                         toast.success("You have joined the game!");
                     } else {
                         toast.info(
-                            `${payload.claimingUserName} has joined the game.`
+                            `${payload.claimingUserName} has joined the game.`,
                         );
                     }
                     break;
+
+                case "game_ended": {
+                    // Game has ended normally - let the caller handle showing the summary modal
+                    const shouldNavigate =
+                        onGameEndedRef.current?.(payload.summary) !== false;
+                    if (shouldNavigate && autoNavigateOnGameEnd) {
+                        // Only auto-navigate if explicitly requested
+                        router.push(`/lobby/${roomCode}`);
+                    }
+                    // Note: The game page should show the GameSummaryModal
+                    // and handle navigation when user clicks "Return to Lobby"
+                    break;
+                }
+
+                case "ready_states_reset":
+                    // Ready states were reset due to player join/leave
+                    // Just update the UI via onSync (already called above)
+                    // Don't show a toast - this happens during player join/leave events
+                    break;
+
+                case "user_ready_state_changed":
+                    // Individual user changed their ready state
+                    // Just update the UI via onSync (already called above)
+                    break;
             }
         },
-        [userId, roomCode, router, clearRoomSession, autoNavigateOnGameStart]
+        [
+            userId,
+            roomCode,
+            router,
+            clearRoomSession,
+            autoNavigateOnGameStart,
+            autoNavigateOnGameEnd,
+        ],
     );
 
     const handleError = useCallback(
@@ -214,7 +253,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                 errorMessage.includes("doesn't exist")
             ) {
                 console.log(
-                    "Session expired, room expired, or not in room - clearing session..."
+                    "Session expired, room expired, or not in room - clearing session...",
                 );
                 clearRoomSession();
                 // Don't redirect - let the lobby page's useEffect handle the rejoin
@@ -227,7 +266,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
                 errorMessage.includes("game is currently active")
             ) {
                 toast.error(
-                    "Game is in progress. Wait for it to pause or end before joining."
+                    "Game is in progress. Wait for it to pause or end before joining.",
                 );
                 return;
             }
@@ -236,7 +275,7 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
             console.error("Room/game error:", errorMessage);
             toast.error(errorMessage);
         },
-        [clearRoomSession, clearUserSession, router]
+        [clearRoomSession, clearUserSession, router],
     );
 
     // Track last roomId to detect actual room changes vs. temporary clears
@@ -269,15 +308,31 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
         // Handle duplicate join acknowledgment (server-side deduplication)
         function handleAlreadyJoined() {
             console.log(
-                "🔗 Already joined - duplicate connection detected by server"
+                "🔗 Already joined - duplicate connection detected by server",
             );
             hasJoinedRef.current = true;
             toast.info(
                 "You're connected to this room in another tab. This tab is now active.",
-                { duration: 5000 }
+                { duration: 5000 },
             );
         }
         socket.on("already_joined", handleAlreadyJoined);
+
+        // Handle duplicate connection warning (old tab being disconnected)
+        function handleDuplicateConnectionWarning(data: { message: string }) {
+            console.warn(
+                "⚠️ Duplicate connection detected - this tab is being disconnected",
+            );
+            toast.warning(
+                data.message ||
+                    "You've connected from another tab. This session will be disconnected.",
+                { duration: 8000 },
+            );
+        }
+        socket.on(
+            "duplicate_connection_warning",
+            handleDuplicateConnectionWarning,
+        );
 
         // Emit join_room when roomId/userId change or on initial mount
         // hasJoinedRef prevents duplicate joins within the same roomId session
@@ -304,6 +359,10 @@ export function useRoomEvents(options: UseRoomEventsOptions) {
             socket.off("room_event", handleRoomEvent);
             socket.off("error", handleError);
             socket.off("already_joined", handleAlreadyJoined);
+            socket.off(
+                "duplicate_connection_warning",
+                handleDuplicateConnectionWarning,
+            );
         };
     }, [roomId, userId, handleRoomEvent, handleError]);
 

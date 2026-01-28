@@ -6,12 +6,13 @@ import { Badge } from "../ui/badge";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { ConfirmDialog } from "../ui/confirm-dialog";
-import { User } from "@shared/types";
+import { User, LobbyData } from "@shared/types";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { toast } from "sonner";
 import { getInitials } from "@shared/utils";
 import { getAvatarColor } from "@/lib/colors";
+import { getUserPosition } from "@shared/utils";
 import {
     CrownIcon,
     CheckCircle2Icon,
@@ -19,19 +20,30 @@ import {
     UserXIcon,
     ShieldPlusIcon,
     UsersIcon,
+    GamepadIcon,
+    EyeIcon,
+    WifiOffIcon,
 } from "lucide-react";
+
+interface PlayerListCardProps {
+    users: User[];
+    leaderId: string;
+    readyStates: Record<string, boolean>;
+    isPartyLeader: boolean;
+    /** Full lobby data for position tracking (optional - for in-game position badges) */
+    lobbyData?: LobbyData;
+    /** Whether a game is currently in progress */
+    isGameInProgress?: boolean;
+}
 
 export default function PlayerListCard({
     users,
     leaderId,
     readyStates,
     isPartyLeader,
-}: {
-    users: User[];
-    leaderId: string;
-    readyStates: Record<string, boolean>;
-    isPartyLeader: boolean;
-}) {
+    lobbyData,
+    isGameInProgress = false,
+}: PlayerListCardProps) {
     const { socket, connected } = useWebSocket();
     const { userId, roomId } = useSession();
     const [isReady, setIsReady] = useState(!!readyStates[userId]);
@@ -80,7 +92,7 @@ export default function PlayerListCard({
         toast(
             `Promoted ${
                 users.find((u) => u.id === newLeaderId)?.name
-            } to leader`
+            } to leader`,
         );
     }
 
@@ -105,6 +117,15 @@ export default function PlayerListCard({
                         const ready = readyStates[user.id];
                         const isCurrentUser = user.id === userId;
                         const isLeader = user.id === leaderId;
+                        const isDisconnected = user.isConnected === false;
+
+                        // Get user position if game is in progress
+                        const position =
+                            isGameInProgress && lobbyData
+                                ? getUserPosition(lobbyData, user.id)
+                                : null;
+                        const isInGame = position === "in-game";
+                        const isSpectating = position === "spectating";
 
                         return (
                             <motion.div
@@ -117,13 +138,13 @@ export default function PlayerListCard({
                                     isCurrentUser
                                         ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 ring-1 ring-blue-200 dark:ring-blue-800"
                                         : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                                }`}
+                                } ${isDisconnected ? "opacity-60" : ""}`}
                             >
                                 {/* Avatar */}
                                 <div className="relative flex-shrink-0">
                                     <Avatar
                                         className={`w-10 h-10 ${getAvatarColor(
-                                            user.name
+                                            user.name,
                                         )}`}
                                     >
                                         <AvatarFallback className="text-white font-semibold text-sm bg-transparent">
@@ -135,11 +156,16 @@ export default function PlayerListCard({
                                             <CrownIcon className="w-3 h-3 text-amber-900" />
                                         </div>
                                     )}
+                                    {isDisconnected && (
+                                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-zinc-900">
+                                            <WifiOffIcon className="w-3 h-3 text-white" />
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Name and Status */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-medium truncate text-zinc-900 dark:text-white">
                                             {user.name}
                                         </span>
@@ -151,22 +177,49 @@ export default function PlayerListCard({
                                                 You
                                             </Badge>
                                         )}
+                                        {/* Position badges during game */}
+                                        {isGameInProgress && isInGame && (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-xs py-0 px-1.5 border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 gap-1"
+                                            >
+                                                <GamepadIcon className="w-3 h-3" />
+                                                In Game
+                                            </Badge>
+                                        )}
+                                        {isGameInProgress && isSpectating && (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-xs py-0 px-1.5 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 gap-1"
+                                            >
+                                                <EyeIcon className="w-3 h-3" />
+                                                Spectating
+                                            </Badge>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
-                                        {ready ? (
-                                            <CheckCircle2Icon className="w-3.5 h-3.5 text-emerald-500" />
+                                        {isDisconnected ? (
+                                            <>
+                                                <WifiOffIcon className="w-3.5 h-3.5 text-red-500" />
+                                                <span className="text-xs text-red-600 dark:text-red-400">
+                                                    Disconnected
+                                                </span>
+                                            </>
+                                        ) : ready ? (
+                                            <>
+                                                <CheckCircle2Icon className="w-3.5 h-3.5 text-emerald-500" />
+                                                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                                                    Ready
+                                                </span>
+                                            </>
                                         ) : (
-                                            <CircleIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                            <>
+                                                <CircleIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                                                    Not ready
+                                                </span>
+                                            </>
                                         )}
-                                        <span
-                                            className={`text-xs ${
-                                                ready
-                                                    ? "text-emerald-600 dark:text-emerald-400"
-                                                    : "text-zinc-500 dark:text-zinc-400"
-                                            }`}
-                                        >
-                                            {ready ? "Ready" : "Not ready"}
-                                        </span>
                                     </div>
                                 </div>
 
@@ -195,7 +248,7 @@ export default function PlayerListCard({
                                                         className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30"
                                                         onClick={() =>
                                                             handlePromote(
-                                                                user.id
+                                                                user.id,
                                                             )
                                                         }
                                                     >

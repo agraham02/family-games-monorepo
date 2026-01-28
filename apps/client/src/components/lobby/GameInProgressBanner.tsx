@@ -10,6 +10,7 @@ import {
     UsersIcon,
     AlertCircleIcon,
     XCircleIcon,
+    WifiOffIcon,
 } from "lucide-react";
 import { LobbyData } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
@@ -17,6 +18,7 @@ import { useSession } from "@/contexts/SessionContext";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { attemptDirectGameRejoin } from "@/services/lobby";
+import { getUserPosition, canRejoinGame } from "@shared/utils";
 
 interface GameInProgressBannerProps {
     lobbyData: LobbyData;
@@ -32,28 +34,31 @@ export default function GameInProgressBanner({
     // Check if this user is the leader
     const isLeader = lobbyData.leaderId === userId;
 
-    // Check if this user is a spectator
-    const isSpectator = lobbyData.spectators?.includes(userId || "");
+    // Use utility functions for position checking
+    const userPosition = getUserPosition(lobbyData, userId);
+    const isSpectator = userPosition === "spectating";
+    const isInGame = userPosition === "in-game";
+    const canRejoin = canRejoinGame(lobbyData, userId);
 
-    // Check if this user is a player in the game (not a spectator)
-    const isActivePlayer =
-        lobbyData.users.some((u) => u.id === userId) && !isSpectator;
+    // Check if this user was an original player (can rejoin)
+    const wasOriginalPlayer =
+        lobbyData.originalGamePlayerIds?.includes(userId || "") ?? false;
 
     // Find disconnected players (available slots)
     const disconnectedPlayers = lobbyData.users.filter(
-        (u) => u.isConnected === false && !lobbyData.spectators?.includes(u.id)
+        (u) => u.isConnected === false && !lobbyData.spectators?.includes(u.id),
     );
     const hasOpenSlots = disconnectedPlayers.length > 0;
 
     async function handleJoinGame() {
-        // If already a player, trigger rejoin to ensure server reconnection
-        if (isActivePlayer) {
+        // If user is an active player in the game, navigate to rejoin
+        if (isInGame || canRejoin || wasOriginalPlayer) {
             try {
                 // Call rejoin to trigger server-side socket re-registration and resume logic
                 await attemptDirectGameRejoin(
                     lobbyData.code,
                     userName || "Player",
-                    userId
+                    userId,
                 );
                 router.push(`/game/${lobbyData.code}`);
             } catch (error) {
@@ -87,7 +92,7 @@ export default function GameInProgressBanner({
         if (!isLeader) return;
 
         const confirmed = confirm(
-            "Are you sure you want to end the game and return all players to the lobby?"
+            "Are you sure you want to end the game and return all players to the lobby?",
         );
 
         if (confirmed) {
@@ -136,8 +141,8 @@ export default function GameInProgressBanner({
                                                 (u) =>
                                                     u.isConnected !== false &&
                                                     !lobbyData.spectators?.includes(
-                                                        u.id
-                                                    )
+                                                        u.id,
+                                                    ),
                                             ).length
                                         }{" "}
                                         active players
@@ -163,6 +168,18 @@ export default function GameInProgressBanner({
                                         </Badge>
                                     )}
                                 </div>
+                                {/* Show disconnected player names */}
+                                {hasOpenSlots && (
+                                    <div className="flex items-center gap-2 mt-2 text-xs text-amber-600 dark:text-amber-400">
+                                        <WifiOffIcon className="w-3 h-3 flex-shrink-0" />
+                                        <span>
+                                            Waiting for:{" "}
+                                            {disconnectedPlayers
+                                                .map((p) => p.name)
+                                                .join(", ")}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -180,23 +197,50 @@ export default function GameInProgressBanner({
                                 </Button>
                             )}
 
-                            {/* Join button - for active players or spectators with open slots */}
-                            {(isActivePlayer ||
-                                (isSpectator && hasOpenSlots)) && (
+                            {/* Join/Return button - for active players or original players who can rejoin */}
+                            {(isInGame || canRejoin || wasOriginalPlayer) && (
                                 <Button
                                     onClick={handleJoinGame}
                                     disabled={!connected}
                                     className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
                                 >
                                     <PlayCircleIcon className="w-4 h-4 mr-2" />
-                                    {isActivePlayer
-                                        ? "Return to Game"
-                                        : "Join Game"}
+                                    Return to Game
                                 </Button>
                             )}
 
-                            {/* Spectate button - for non-players */}
-                            {!isActivePlayer && (
+                            {/* Claim Slot button - for spectators when there are open slots */}
+                            {isSpectator &&
+                                hasOpenSlots &&
+                                !wasOriginalPlayer && (
+                                    <Button
+                                        onClick={handleJoinGame}
+                                        disabled={!connected}
+                                        className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    >
+                                        <PlayCircleIcon className="w-4 h-4 mr-2" />
+                                        Join Game
+                                    </Button>
+                                )}
+
+                            {/* Spectate button - for non-players and non-spectators */}
+                            {!isInGame &&
+                                !isSpectator &&
+                                !canRejoin &&
+                                !wasOriginalPlayer && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleSpectate}
+                                        disabled={!connected}
+                                        className="flex-1 sm:flex-none border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                                    >
+                                        <EyeIcon className="w-4 h-4 mr-2" />
+                                        Spectate
+                                    </Button>
+                                )}
+
+                            {/* Watch button - for spectators to go back to spectating */}
+                            {isSpectator && !hasOpenSlots && (
                                 <Button
                                     variant="outline"
                                     onClick={handleSpectate}
@@ -204,7 +248,7 @@ export default function GameInProgressBanner({
                                     className="flex-1 sm:flex-none border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
                                 >
                                     <EyeIcon className="w-4 h-4 mr-2" />
-                                    Spectate
+                                    Watch Game
                                 </Button>
                             )}
                         </div>

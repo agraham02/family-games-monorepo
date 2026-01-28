@@ -8,7 +8,14 @@ import SpectatorBanner from "@/components/games/SpectatorBanner";
 import { getGameComponent } from "@/components/games/registry";
 import { GameSkeleton } from "@/components/skeletons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { GameData, GameEventPayload, PlayerData, User } from "@shared/types";
+import {
+    GameData,
+    GameEventPayload,
+    PlayerData,
+    User,
+    GameSummary,
+    LobbyData,
+} from "@shared/types";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
@@ -17,6 +24,7 @@ import { getSocket } from "@/lib/socket";
 import { useOptimisticGameAction } from "@/hooks/useOptimisticGameAction";
 import { optimisticGameReducer } from "@/lib/gameReducers";
 import { NameEntryModal } from "@/components/NameEntryModal";
+import { GameSummaryModal } from "@/components/games/shared";
 
 export default function GamePage() {
     const { roomId, userId } = useSession();
@@ -33,6 +41,9 @@ export default function GamePage() {
     const [, setSpectators] = useState<string[]>([]);
     // Accessibility: Track announcements for screen readers
     const [announcement, setAnnouncement] = useState<string>("");
+    // Game ended state - for showing summary modal
+    const [gameSummary, setGameSummary] = useState<GameSummary | null>(null);
+    const [lobbyData, setLobbyData] = useState<LobbyData | null>(null);
     const router = useRouter();
 
     // Handle direct game URL recovery (rejoin with name prompt if session lost)
@@ -68,8 +79,11 @@ export default function GamePage() {
     useRoomEvents({
         roomCode,
         autoNavigateOnGameStart: false, // Already on game page
+        autoNavigateOnGameEnd: false, // We show the summary modal first
         isSpectator,
         onSync: (roomState) => {
+            // Store lobby data for GameSummaryModal player name lookups
+            setLobbyData(roomState);
             // Update leader from room state
             setLeaderId(roomState.leaderId);
             // Update spectators list
@@ -92,16 +106,23 @@ export default function GamePage() {
                     const disconnected = roomState.users.filter(
                         (u) =>
                             u.isConnected === false &&
-                            !roomState.spectators?.includes(u.id)
+                            !roomState.spectators?.includes(u.id),
                     );
                     setDisconnectedPlayers(disconnected);
                 }
             }
-            // If room is in lobby state, redirect back to lobby
-            if (roomState.state === "lobby") {
+            // If room is in lobby state and we don't have a game summary, redirect
+            // (This handles cases like game aborted, not normal game end)
+            if (roomState.state === "lobby" && !gameSummary) {
                 toast.info("Game ended. Returning to lobby.");
                 router.push(`/lobby/${roomCode}`);
             }
+        },
+        onGameEnded: (summary) => {
+            // Store the summary to show the modal
+            setGameSummary(summary);
+            // Return false to prevent auto-navigation - we'll handle it via the modal
+            return false;
         },
         onGameAborted: () => {
             setIsPaused(false);
@@ -130,7 +151,7 @@ export default function GamePage() {
                     setLeaderId(payload.gameState.leaderId);
                     // Update disconnected players from game state
                     const disconnected = Object.values(
-                        payload.gameState.players
+                        payload.gameState.players,
                     ).filter((p) => p.isConnected === false);
                     setDisconnectedPlayers(disconnected);
                     // Request player-specific state
@@ -146,7 +167,7 @@ export default function GamePage() {
                     setIsPaused(true);
                     setTimeoutAt(payload.timeoutAt);
                     toast.warning(
-                        "Game paused: Waiting for players to reconnect..."
+                        "Game paused: Waiting for players to reconnect...",
                     );
                     break;
                 case "game_resumed":
@@ -173,12 +194,12 @@ export default function GamePage() {
                 case "user_reconnected":
                     // Remove from disconnected list
                     setDisconnectedPlayers((prev) =>
-                        prev.filter((p) => p.id !== payload.userId)
+                        prev.filter((p) => p.id !== payload.userId),
                     );
                     break;
             }
         },
-        [emit, roomId, userId]
+        [emit, roomId, userId],
     );
 
     // Set up game event listeners
@@ -205,7 +226,7 @@ export default function GamePage() {
                 `${payload.playerName} ran out of time - ${actionText}`,
                 {
                     duration: 3000,
-                }
+                },
             );
         }
         sock.on("turn_timeout", handleTurnTimeout);
@@ -303,6 +324,12 @@ export default function GamePage() {
         }
     }
 
+    /** Handler for returning to lobby from the game summary modal */
+    function handleReturnToLobbyFromSummary() {
+        setGameSummary(null); // Clear the summary so modal closes
+        router.push(`/lobby/${roomCode}`);
+    }
+
     // Accessibility: Announce turn changes for screen readers
     useEffect(() => {
         if (!gameData || isSpectator) return;
@@ -342,91 +369,105 @@ export default function GamePage() {
     const isLeader = leaderId === userId;
 
     return (
-        <main
-            className={`w-full min-h-dvh overflow-hidden bg-zinc-50 dark:bg-zinc-950 ${
-                isSpectator ? "pt-12" : ""
-            }`}
-        >
-            {/* Spectator Banner */}
-            {isSpectator && (
-                <SpectatorBanner
-                    disconnectedPlayers={disconnectedPlayers}
-                    onClaimSlot={handleClaimSlot}
-                    onReturnToLobby={handleReturnToLobby}
+        <>
+            {/* Game Summary Modal - shown when game ends normally */}
+            {gameSummary && lobbyData && (
+                <GameSummaryModal
+                    summary={gameSummary}
+                    lobbyData={lobbyData}
+                    isOpen={true}
+                    onReturnToLobby={handleReturnToLobbyFromSummary}
+                    autoReturnSeconds={15}
                 />
             )}
 
-            {/* Pending Action Indicator */}
-            {optimisticAction.hasPendingAction && (
-                <div
-                    className={`fixed ${
-                        isSpectator ? "top-20" : "top-16"
-                    } right-4 z-50 bg-blue-500 text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 text-xs font-medium`}
-                >
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                    Processing...
-                </div>
-            )}
+            <main
+                className={`w-full min-h-dvh overflow-hidden bg-zinc-50 dark:bg-zinc-950 ${
+                    isSpectator ? "pt-12" : ""
+                }`}
+            >
+                {/* Spectator Banner */}
+                {isSpectator && (
+                    <SpectatorBanner
+                        disconnectedPlayers={disconnectedPlayers}
+                        onClaimSlot={handleClaimSlot}
+                        onReturnToLobby={handleReturnToLobby}
+                    />
+                )}
 
-            {/* Game Paused Overlay - only show for active players */}
-            {!isSpectator && (
-                <GamePausedOverlay
-                    isPaused={isPaused}
-                    disconnectedPlayers={disconnectedPlayers}
-                    timeoutAt={timeoutAt}
-                    isLeader={isLeader}
-                    onKickPlayer={handleKickPlayer}
-                    onLeaveGame={handleLeaveGame}
-                />
-            )}
-
-            {/* Accessibility: Screen reader announcements */}
-            <div aria-live="polite" aria-atomic="true" className="sr-only">
-                {announcement}
-            </div>
-
-            {/* Game UI */}
-            {(() => {
-                const GameComponent = getGameComponent(gameData.type);
-                // Show game component for spectators even without playerData
-                if (GameComponent && (playerData || isSpectator)) {
-                    return (
-                        <ErrorBoundary
-                            onReset={handleGameError}
-                            fallback={
-                                <div className="flex flex-col items-center justify-center h-full gap-4 text-zinc-500 dark:text-zinc-400">
-                                    <p>
-                                        Something went wrong loading the game.
-                                    </p>
-                                    <button
-                                        onClick={handleGameError}
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                                    >
-                                        Return to Lobby
-                                    </button>
-                                </div>
-                            }
-                        >
-                            <GameComponent
-                                gameData={gameData}
-                                playerData={playerData}
-                                dispatchOptimisticAction={
-                                    isSpectator
-                                        ? undefined
-                                        : optimisticAction.dispatch
-                                }
-                                isSpectator={isSpectator}
-                                roomCode={roomCode}
-                            />
-                        </ErrorBoundary>
-                    );
-                }
-                return (
-                    <div className="flex items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
-                        No game UI available for &quot;{gameData.type}&quot;
+                {/* Pending Action Indicator */}
+                {optimisticAction.hasPendingAction && (
+                    <div
+                        className={`fixed ${
+                            isSpectator ? "top-20" : "top-16"
+                        } right-4 z-50 bg-blue-500 text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 text-xs font-medium`}
+                    >
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                        Processing...
                     </div>
-                );
-            })()}
-        </main>
+                )}
+
+                {/* Game Paused Overlay - only show for active players */}
+                {!isSpectator && (
+                    <GamePausedOverlay
+                        isPaused={isPaused}
+                        disconnectedPlayers={disconnectedPlayers}
+                        timeoutAt={timeoutAt}
+                        isLeader={isLeader}
+                        onKickPlayer={handleKickPlayer}
+                        onLeaveGame={handleLeaveGame}
+                    />
+                )}
+
+                {/* Accessibility: Screen reader announcements */}
+                <div aria-live="polite" aria-atomic="true" className="sr-only">
+                    {announcement}
+                </div>
+
+                {/* Game UI */}
+                {(() => {
+                    const GameComponent = getGameComponent(gameData.type);
+                    // Show game component for spectators even without playerData
+                    if (GameComponent && (playerData || isSpectator)) {
+                        return (
+                            <ErrorBoundary
+                                onReset={handleGameError}
+                                fallback={
+                                    <div className="flex flex-col items-center justify-center h-full gap-4 text-zinc-500 dark:text-zinc-400">
+                                        <p>
+                                            Something went wrong loading the
+                                            game.
+                                        </p>
+                                        <button
+                                            onClick={handleGameError}
+                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                                        >
+                                            Return to Lobby
+                                        </button>
+                                    </div>
+                                }
+                            >
+                                <GameComponent
+                                    gameData={gameData}
+                                    playerData={playerData}
+                                    dispatchOptimisticAction={
+                                        isSpectator
+                                            ? undefined
+                                            : optimisticAction.dispatch
+                                    }
+                                    isSpectator={isSpectator}
+                                    roomCode={roomCode}
+                                />
+                            </ErrorBoundary>
+                        );
+                    }
+                    return (
+                        <div className="flex items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
+                            No game UI available for &quot;{gameData.type}&quot;
+                        </div>
+                    );
+                })()}
+            </main>
+        </>
     );
 }

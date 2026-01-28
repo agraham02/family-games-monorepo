@@ -27,6 +27,8 @@ export interface Room {
     timeoutAt?: Date; // Timestamp when the pause timeout expires (for countdown on client)
     spectators?: string[]; // Array of user IDs who are spectating
     kickedUserIds?: string[]; // Array of user IDs who have been kicked (cannot rejoin)
+    gamePlayerIds?: string[]; // User IDs currently playing in the active game
+    originalGamePlayerIds?: string[]; // User IDs who started the game (for rejoin eligibility)
 }
 
 // Re-export settings types for backwards compatibility

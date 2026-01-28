@@ -38,7 +38,7 @@ export type TypedGameSettings =
  */
 export function isSpadesSettings(
     settings: PartialGameSettings,
-    gameType: string | null
+    gameType: string | null,
 ): settings is Partial<SpadesSettings> {
     return gameType === "spades";
 }
@@ -48,7 +48,7 @@ export function isSpadesSettings(
  */
 export function isDominoesSettings(
     settings: PartialGameSettings,
-    gameType: string | null
+    gameType: string | null,
 ): settings is Partial<DominoesSettings> {
     return gameType === "dominoes";
 }
@@ -58,7 +58,7 @@ export function isDominoesSettings(
  */
 export function toTypedSettings(
     gameType: string | null,
-    settings: PartialGameSettings
+    settings: PartialGameSettings,
 ): TypedGameSettings {
     if (gameType === "spades") {
         return {
@@ -101,6 +101,8 @@ export type LobbyData = {
     pausedAt?: string; // ISO timestamp when game was paused
     timeoutAt?: string; // ISO timestamp when the pause timeout expires (used for countdown)
     spectators?: string[]; // User IDs of spectators
+    gamePlayerIds?: string[]; // User IDs currently playing in the active game
+    originalGamePlayerIds?: string[]; // User IDs who started the game (for rejoin eligibility)
 };
 
 // ============================================================================
@@ -194,4 +196,56 @@ export type RoomEventPayload =
     | (BaseRoomEvent & {
           event: "teams_set";
           teams: string[][];
+      })
+    | (BaseRoomEvent & {
+          event: "game_ended";
+          reason: "completed" | "aborted";
+          summary: GameSummary;
+      })
+    | (BaseRoomEvent & {
+          event: "ready_states_reset";
+      })
+    | (BaseRoomEvent & {
+          event: "user_ready_state_changed";
+          userId: string;
+          ready: boolean;
       });
+
+// ============================================================================
+// Game Summary Types
+// ============================================================================
+
+/**
+ * Summary data shown when a game ends.
+ * Each game type can extend this with game-specific data.
+ */
+export interface GameSummary {
+    /** The game type that was played */
+    gameType: string;
+    /** Winner information - can be a player ID, team index, or descriptive string */
+    winner: string | number | null;
+    /** Final scores for all players/teams */
+    finalScores: Record<string, number>;
+    /** Duration of the game in milliseconds */
+    durationMs: number;
+    /** Number of rounds played */
+    roundsPlayed: number;
+    /** Optional round-by-round history */
+    roundHistory?: RoundSummary[];
+    /** Optional MVP or notable stats */
+    mvp?: {
+        userId: string;
+        userName: string;
+        stat: string;
+        value: number;
+    };
+}
+
+/**
+ * Summary data for a single round.
+ */
+export interface RoundSummary {
+    roundNumber: number;
+    scores: Record<string, number>;
+    winner?: string | number;
+}
