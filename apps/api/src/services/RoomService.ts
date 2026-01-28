@@ -392,6 +392,25 @@ function cancelReconnectTimeout(roomId: string): void {
 }
 
 /**
+ * Clean up game state when transitioning back to lobby.
+ * Centralizes the logic for resetting game-related room properties.
+ *
+ * @param room - The room to clean up
+ * @param emitResetEvent - Whether to emit a ready_states_reset event (default: false)
+ */
+function cleanupGameState(room: Room, emitResetEvent: boolean = false): void {
+    // Clear player tracking arrays
+    room.gamePlayerIds = [];
+    room.originalGamePlayerIds = [];
+
+    // Convert spectators to regular room members (they can participate in next game)
+    room.spectators = [];
+
+    // Reset ready states for all users
+    resetReadyStates(room, emitResetEvent);
+}
+
+/**
  * Abort a game due to reconnection timeout expiry.
  * Sets room state to ended and notifies all clients.
  */
@@ -414,16 +433,10 @@ function abortGameDueToTimeout(roomId: string): void {
     room.gameId = null;
     room.isPaused = false;
     room.pausedAt = undefined;
+    room.timeoutAt = undefined;
 
-    // Clear player tracking arrays
-    room.gamePlayerIds = [];
-    room.originalGamePlayerIds = [];
-
-    // Convert spectators to regular room members
-    room.spectators = [];
-
-    // Reset ready states for all users
-    resetReadyStates(room, false); // Don't emit event, we'll emit game_aborted
+    // Use helper to clean up game-related state
+    cleanupGameState(room, false); // Don't emit event, we'll emit game_aborted
 
     emitRoomEvent<{ reason: string }>(room, "game_aborted", {
         reason: "reconnect_timeout",
@@ -559,10 +572,13 @@ export function registerSocketUser(
     // This handles the case where user was marked connected by lobby's join_room before game page loaded
     if (isActiveGame(room) && room.isPaused) {
         // Only reconnect if user is actually a player in the game (not a new/replacement user)
+        // Check both game state and originalGamePlayerIds for robustness
         const isGamePlayer = gameManager.isPlayerInGame(room.gameId, userId);
+        const wasOriginalPlayer =
+            room.originalGamePlayerIds?.includes(userId) ?? false;
         const isSpectator = room.spectators?.includes(userId) ?? false;
 
-        if (isGamePlayer && !isSpectator) {
+        if ((isGamePlayer || wasOriginalPlayer) && !isSpectator) {
             // Ensure the game state's player is marked as connected
             gameManager.handlePlayerReconnect(room.gameId, userId);
 
@@ -1294,11 +1310,31 @@ export function leaveGame(roomId: string, userId: string): void {
     const userName = user.name;
 
     if (isActiveGame(room)) {
+        // Check if leaving player is the current turn player - if so, pause the timer
+        if (room.gameId) {
+            const gameState = gameManager.getGame(room.gameId);
+            // Access game-specific properties using type assertion (playOrder/currentTurnIndex exist on game states)
+            const state = gameState as unknown as {
+                playOrder?: string[];
+                currentTurnIndex?: number;
+            };
+            const currentPlayerId =
+                state?.playOrder?.[state?.currentTurnIndex ?? 0];
+            if (currentPlayerId === userId) {
+                // Pause turn timer since current player is leaving
+                pauseTimer(room.gameId);
+            }
+        }
+
         // Remove player from game entirely (not just disconnect)
         // This prevents auto-reconnection when they return to the lobby
         if (room.gameId) {
             gameManager.removePlayerFromGame(room.gameId, userId);
         }
+
+        // Remove from gamePlayerIds tracking array
+        room.gamePlayerIds =
+            room.gamePlayerIds?.filter((id) => id !== userId) ?? [];
 
         // Remove user from room completely (they're going back to lobby page,
         // but we remove them from participants so a new player can join)
@@ -1420,16 +1456,8 @@ export function abortGame(roomId: string, userId: string): void {
     room.pausedAt = undefined;
     room.timeoutAt = undefined;
 
-    // Clear player tracking arrays
-    room.gamePlayerIds = [];
-    // Keep originalGamePlayerIds briefly for reference, but clear after transition
-    room.originalGamePlayerIds = [];
-
-    // Convert spectators to regular room members (they can participate in next game)
-    room.spectators = [];
-
-    // Reset ready states for all users
-    resetReadyStates(room);
+    // Use helper to clean up game-related state (emits ready_states_reset)
+    cleanupGameState(room, true);
 
     // Emit game_aborted with "leader_ended" reason
     emitRoomEvent<{ reason: string }>(room, "game_aborted", {
@@ -1498,15 +1526,9 @@ export function endGame(roomId: string, summary?: Partial<GameSummary>): void {
     room.pausedAt = undefined;
     room.timeoutAt = undefined;
 
-    // Clear player tracking arrays
-    room.gamePlayerIds = [];
-    room.originalGamePlayerIds = [];
-
-    // Convert spectators to regular room members (they can participate in next game)
-    room.spectators = [];
-
-    // Reset ready states for all users
-    resetReadyStates(room, false); // Don't emit separate event, game_ended includes room state
+    // Use helper to clean up game-related state
+    // Don't emit ready_states_reset - game_ended includes room state
+    cleanupGameState(room, false);
 
     // Emit game_ended with summary
     emitRoomEvent<{ reason: "completed" | "aborted"; summary: GameSummary }>(
@@ -1609,6 +1631,10 @@ export function moveToSpectators(roomId: string, userId: string): void {
     // Add to spectators
     room.spectators.push(userId);
 
+    // Remove from gamePlayerIds since they're now spectating
+    room.gamePlayerIds =
+        room.gamePlayerIds?.filter((id) => id !== userId) ?? [];
+
     // Mark their game slot as disconnected (available for replacement)
     if (room.gameId) {
         gameManager.handlePlayerDisconnect(room.gameId, userId);
@@ -1686,6 +1712,18 @@ export function claimPlayerSlot(
             team.map((id) => (id === targetSlotUserId ? claimingUserId : id)),
         );
     }
+
+    // Update gamePlayerIds: replace old user with new user
+    room.gamePlayerIds =
+        room.gamePlayerIds?.map((id) =>
+            id === targetSlotUserId ? claimingUserId : id,
+        ) ?? [];
+
+    // Update originalGamePlayerIds for rejoin eligibility
+    room.originalGamePlayerIds =
+        room.originalGamePlayerIds?.map((id) =>
+            id === targetSlotUserId ? claimingUserId : id,
+        ) ?? [];
 
     // Check if game can resume (all slots filled)
     const allPlayersConnected = room.users

@@ -40,9 +40,9 @@ export default function GameInProgressBanner({
     const isInGame = userPosition === "in-game";
     const canRejoin = canRejoinGame(lobbyData, userId);
 
-    // Check if this user was an original player (can rejoin)
-    const wasOriginalPlayer =
-        lobbyData.originalGamePlayerIds?.includes(userId || "") ?? false;
+    // Simplified: user can return to game if they're actively playing OR were an original player
+    // canRejoin already checks originalGamePlayerIds, so we don't need wasOriginalPlayer separately
+    const canReturnToGame = isInGame || canRejoin;
 
     // Find disconnected players (available slots)
     const disconnectedPlayers = lobbyData.users.filter(
@@ -50,9 +50,12 @@ export default function GameInProgressBanner({
     );
     const hasOpenSlots = disconnectedPlayers.length > 0;
 
+    // Spectator count
+    const spectatorCount = lobbyData.spectators?.length ?? 0;
+
     async function handleJoinGame() {
-        // If user is an active player in the game, navigate to rejoin
-        if (isInGame || canRejoin || wasOriginalPlayer) {
+        // If user can return to the game (active player or original player)
+        if (canReturnToGame) {
             try {
                 // Call rejoin to trigger server-side socket re-registration and resume logic
                 await attemptDirectGameRejoin(
@@ -147,6 +150,12 @@ export default function GameInProgressBanner({
                                         }{" "}
                                         active players
                                     </span>
+                                    {spectatorCount > 0 && (
+                                        <span className="flex items-center gap-1">
+                                            <EyeIcon className="w-3 h-3" />
+                                            {spectatorCount} watching
+                                        </span>
+                                    )}
                                     {lobbyData.isPaused && (
                                         <Badge
                                             variant="secondary"
@@ -198,7 +207,7 @@ export default function GameInProgressBanner({
                             )}
 
                             {/* Join/Return button - for active players or original players who can rejoin */}
-                            {(isInGame || canRejoin || wasOriginalPlayer) && (
+                            {canReturnToGame && (
                                 <Button
                                     onClick={handleJoinGame}
                                     disabled={!connected}
@@ -212,7 +221,7 @@ export default function GameInProgressBanner({
                             {/* Claim Slot button - for spectators when there are open slots */}
                             {isSpectator &&
                                 hasOpenSlots &&
-                                !wasOriginalPlayer && (
+                                !canReturnToGame && (
                                     <Button
                                         onClick={handleJoinGame}
                                         disabled={!connected}
@@ -224,20 +233,17 @@ export default function GameInProgressBanner({
                                 )}
 
                             {/* Spectate button - for non-players and non-spectators */}
-                            {!isInGame &&
-                                !isSpectator &&
-                                !canRejoin &&
-                                !wasOriginalPlayer && (
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleSpectate}
-                                        disabled={!connected}
-                                        className="flex-1 sm:flex-none border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                                    >
-                                        <EyeIcon className="w-4 h-4 mr-2" />
-                                        Spectate
-                                    </Button>
-                                )}
+                            {!isInGame && !isSpectator && !canReturnToGame && (
+                                <Button
+                                    variant="outline"
+                                    onClick={handleSpectate}
+                                    disabled={!connected}
+                                    className="flex-1 sm:flex-none border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                                >
+                                    <EyeIcon className="w-4 h-4 mr-2" />
+                                    Spectate
+                                </Button>
+                            )}
 
                             {/* Watch button - for spectators to go back to spectating */}
                             {isSpectator && !hasOpenSlots && (

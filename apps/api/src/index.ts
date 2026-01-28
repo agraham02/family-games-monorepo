@@ -429,7 +429,18 @@ function startServer() {
             "return_to_lobby",
             ({ roomId, userId }: { roomId: string; userId: string }) => {
                 try {
+                    // Check if user is already a spectator - if so, just navigate without error
+                    const room = getRoom(roomId);
+                    if (room?.spectators?.includes(userId)) {
+                        // User is already a spectator, acknowledge silently
+                        socket.emit("return_to_lobby_ack", {
+                            success: true,
+                            alreadySpectator: true,
+                        });
+                        return;
+                    }
                     moveToSpectators(roomId, userId);
+                    socket.emit("return_to_lobby_ack", { success: true });
                 } catch (err) {
                     handleSocketError(socket, err);
                 }

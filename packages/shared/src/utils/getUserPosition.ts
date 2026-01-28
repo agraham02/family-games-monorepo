@@ -55,10 +55,12 @@ export function getUserPosition(
         return "in-game";
     }
 
-    // Fallback: if gamePlayerIds not populated, check if user is in users list
-    // and not a spectator (legacy compatibility)
+    // Fallback: if gamePlayerIds not populated (undefined or empty array),
+    // check if user is in users list and not a spectator (legacy compatibility)
+    const hasGamePlayerIds =
+        roomState.gamePlayerIds && roomState.gamePlayerIds.length > 0;
     if (
-        !roomState.gamePlayerIds &&
+        !hasGamePlayerIds &&
         roomState.users.some((u) => u.id === userId) &&
         !roomState.spectators?.includes(userId)
     ) {
