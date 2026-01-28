@@ -27,6 +27,8 @@ import {
     requestToJoinRoom,
     acceptJoinRequest,
     rejectJoinRequest,
+    endGame,
+    buildGameSummary,
 } from "./services/RoomService";
 import { GameAction, gameManager } from "./services/GameManager";
 import { spadesModule } from "./games/spades";
@@ -311,6 +313,31 @@ function startServer() {
                     }
                     const gameId = room.gameId ?? null;
                     const newState = gameManager.dispatch(gameId, action);
+
+                    // Check if game just finished (phase === "finished")
+                    const gamePhase = (
+                        newState as unknown as { phase?: string }
+                    )?.phase;
+                    if (gamePhase === "finished") {
+                        // Clean up timer before ending
+                        if (gameId) {
+                            cleanupGameTimers(gameId);
+                        }
+                        // Build summary and end the game
+                        const summary = buildGameSummary(
+                            room,
+                            newState as unknown as Record<string, unknown>,
+                        );
+                        endGame(roomId, summary);
+                        // Send ack and return - endGame handles all cleanup and events
+                        if (actionId) {
+                            socket.emit("action_ack", {
+                                actionId,
+                                success: true,
+                            });
+                        }
+                        return;
+                    }
 
                     // Handle turn timer after action
                     if (gameId) {

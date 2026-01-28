@@ -13,7 +13,6 @@ import { SpadesData, SpadesPlayerData, PlayingCard } from "@shared/types";
 import PlaceBidModal from "./ui/PlaceBidModal";
 import BlindBidModal from "./ui/BlindBidModal";
 import RoundSummaryModal from "./ui/RoundSummaryModal";
-import GameSummaryModal from "./ui/GameSummaryModal";
 import { Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 import { useWebSocketError } from "@/hooks";
@@ -82,7 +81,7 @@ export default function Spades({
                 socket.emit("game_action", { roomId, action });
             }
         },
-        [dispatchOptimisticAction, socket, connected, userId, roomId]
+        [dispatchOptimisticAction, socket, connected, userId, roomId],
     );
 
     // For non-player system actions (CONTINUE_AFTER_TRICK_RESULT, CONTINUE_AFTER_ROUND_SUMMARY)
@@ -97,7 +96,7 @@ export default function Spades({
             };
             socket.emit("game_action", { roomId, action });
         },
-        [socket, connected, userId, roomId]
+        [socket, connected, userId, roomId],
     );
 
     // Assume gameData has phase, players, currentIndex, and bids fields
@@ -126,7 +125,7 @@ export default function Spades({
 
         const maxScore = Math.max(
             ...Object.values(gameData.teams).map((t) => t.score),
-            0
+            0,
         );
         const teamScoreDeficit =
             playerTeamId !== undefined
@@ -247,17 +246,12 @@ export default function Spades({
         setHasSeenCards(true);
     }
 
-    function handleReturnToLobby() {
-        if (!socket || !connected) return;
-        socket.emit("abort_game", { roomId, userId });
-    }
-
     const handleCardPlay = useCallback(
         (card: PlayingCard) => {
             if (!isMyTurn) return;
             sendGameAction("PLAY_CARD", { card });
         },
-        [isMyTurn, sendGameAction]
+        [isMyTurn, sendGameAction],
     );
 
     // Build team scores for scoreboard
@@ -379,11 +373,7 @@ export default function Spades({
                 sendGameAction={sendGameAction}
             />
 
-            {/* Game Summary Modal */}
-            <GameSummaryModal
-                gameData={gameData}
-                onReturnToLobby={handleReturnToLobby}
-            />
+            {/* Game Summary Modal is now handled by the game page via game_ended event */}
         </div>
     );
 }

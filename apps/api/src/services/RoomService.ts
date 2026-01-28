@@ -1267,6 +1267,9 @@ export function startGame(
     // Clear spectators from previous game
     room.spectators = [];
 
+    // Track game start time for duration calculation
+    room.gameStartedAt = new Date();
+
     // Create game instance
     const gameId = gameManager.createGame(gameType, room, customSettings);
     room.state = "in-game";
@@ -1467,12 +1470,150 @@ export function abortGame(roomId: string, userId: string): void {
     console.log(`Game aborted by leader in room ${roomId}`);
 }
 
+// ============================================================================
+// Game Summary Builder
+// ============================================================================
+
+/**
+ * Build a GameSummary from the current game state.
+ * Extracts winner, scores, duration, and other metadata based on game type.
+ */
+export function buildGameSummary(
+    room: Room,
+    gameState: Record<string, unknown>,
+): GameSummary {
+    const gameType = room.selectedGameType;
+    const durationMs = room.gameStartedAt
+        ? Date.now() - room.gameStartedAt.getTime()
+        : 0;
+
+    // Extract common fields
+    const round = (gameState.round as number) ?? 1;
+
+    // Build base summary
+    const summary: GameSummary = {
+        gameType,
+        winner: null,
+        finalScores: {},
+        durationMs,
+        roundsPlayed: round,
+    };
+
+    // Game-specific extraction
+    switch (gameType) {
+        case "spades": {
+            // Spades uses team-based scoring
+            const winnerTeamId = gameState.winnerTeamId as number | undefined;
+            const teams = gameState.teams as
+                | Record<number, { players: string[]; score: number }>
+                | undefined;
+
+            if (winnerTeamId !== undefined) {
+                summary.winner = winnerTeamId;
+            }
+
+            if (teams) {
+                // Convert team scores to a record
+                Object.entries(teams).forEach(([teamId, team]) => {
+                    summary.finalScores[`Team ${Number(teamId) + 1}`] =
+                        team.score;
+                });
+            }
+            break;
+        }
+
+        case "dominoes": {
+            const gameMode = (gameState.settings as Record<string, unknown>)
+                ?.gameMode as string | undefined;
+            const isTeamMode = gameMode === "team";
+
+            if (isTeamMode) {
+                // Team mode
+                const winningTeamId = gameState.winningTeamId as
+                    | number
+                    | undefined;
+                const teamScores = gameState.teamScores as
+                    | Record<number, number>
+                    | undefined;
+
+                if (winningTeamId !== undefined) {
+                    summary.winner = winningTeamId;
+                }
+
+                if (teamScores) {
+                    Object.entries(teamScores).forEach(([teamId, score]) => {
+                        summary.finalScores[`Team ${Number(teamId) + 1}`] =
+                            score;
+                    });
+                }
+            } else {
+                // Individual mode
+                const gameWinner = gameState.gameWinner as string | undefined;
+                const playerScores = gameState.playerScores as
+                    | Record<string, number>
+                    | undefined;
+
+                if (gameWinner) {
+                    summary.winner = gameWinner;
+                }
+
+                if (playerScores) {
+                    summary.finalScores = { ...playerScores };
+                }
+            }
+            break;
+        }
+
+        case "lrc": {
+            // LRC uses individual scoring with chips as money
+            const winnerId = gameState.winnerId as string | undefined;
+            const playerChips = gameState.playerChips as
+                | Record<string, number>
+                | undefined;
+            const roundWinners = gameState.roundWinners as string[] | undefined;
+
+            if (winnerId) {
+                summary.winner = winnerId;
+            }
+
+            if (playerChips) {
+                summary.finalScores = { ...playerChips };
+            }
+
+            // Track round history for LRC
+            if (roundWinners && roundWinners.length > 0) {
+                summary.roundHistory = roundWinners.map((winner, idx) => ({
+                    roundNumber: idx + 1,
+                    scores: {}, // LRC doesn't have per-round scores
+                    winner,
+                }));
+            }
+            break;
+        }
+
+        default:
+            // Generic fallback - try to extract common fields
+            if (gameState.winner) {
+                summary.winner = gameState.winner as string | number;
+            }
+            if (gameState.scores && typeof gameState.scores === "object") {
+                summary.finalScores = gameState.scores as Record<
+                    string,
+                    number
+                >;
+            }
+            break;
+    }
+
+    return summary;
+}
+
 /**
  * End a game normally (game completed with a winner).
  * Generates a summary and returns all players to lobby.
  *
  * @param roomId - The room ID
- * @param summary - Optional pre-computed summary. If not provided, a basic one will be generated.
+ * @param summary - Optional pre-computed summary. If not provided, one will be generated from game state.
  */
 export function endGame(roomId: string, summary?: Partial<GameSummary>): void {
     const room = rooms.get(roomId);
@@ -1486,32 +1627,37 @@ export function endGame(roomId: string, summary?: Partial<GameSummary>): void {
     const gameState = room.gameId
         ? gameManager.getGame(room.gameId)
         : undefined;
-    const gameType = room.selectedGameType;
 
-    // Generate default summary if not provided
-    const gameSummary: GameSummary = {
-        gameType,
-        winner: summary?.winner ?? null,
-        finalScores: summary?.finalScores ?? {},
-        durationMs: summary?.durationMs ?? 0,
-        roundsPlayed: summary?.roundsPlayed ?? 0,
-        roundHistory: summary?.roundHistory,
-        mvp: summary?.mvp,
-    };
-
-    // If we have game state, try to extract more info for the summary
+    // Build summary from game state, then overlay any provided summary fields
+    let gameSummary: GameSummary;
     if (gameState) {
-        // Extract player names for final scores display if not provided
-        if (Object.keys(gameSummary.finalScores).length === 0) {
-            // Try to get scores from game state if available
-            const state = gameState as unknown as Record<string, unknown>;
-            if (state.scores && typeof state.scores === "object") {
-                gameSummary.finalScores = state.scores as Record<
-                    string,
-                    number
-                >;
-            }
+        gameSummary = buildGameSummary(
+            room,
+            gameState as unknown as Record<string, unknown>,
+        );
+        // Overlay any provided summary fields
+        if (summary) {
+            gameSummary = {
+                ...gameSummary,
+                ...summary,
+                // Ensure we don't lose fields if summary is partial
+                finalScores:
+                    Object.keys(summary.finalScores ?? {}).length > 0
+                        ? summary.finalScores!
+                        : gameSummary.finalScores,
+            };
         }
+    } else {
+        // No game state - use provided summary or defaults
+        gameSummary = {
+            gameType: room.selectedGameType,
+            winner: summary?.winner ?? null,
+            finalScores: summary?.finalScores ?? {},
+            durationMs: summary?.durationMs ?? 0,
+            roundsPlayed: summary?.roundsPlayed ?? 0,
+            roundHistory: summary?.roundHistory,
+            mvp: summary?.mvp,
+        };
     }
 
     // Clean up game state
@@ -1525,6 +1671,7 @@ export function endGame(roomId: string, summary?: Partial<GameSummary>): void {
     room.isPaused = false;
     room.pausedAt = undefined;
     room.timeoutAt = undefined;
+    room.gameStartedAt = undefined;
 
     // Use helper to clean up game-related state
     // Don't emit ready_states_reset - game_ended includes room state

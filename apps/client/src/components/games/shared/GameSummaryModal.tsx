@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/contexts/SessionContext";
@@ -36,6 +36,22 @@ export function GameSummaryModal({
 }: GameSummaryModalProps) {
     const { userId } = useSession();
     const [countdown, setCountdown] = useState(autoReturnSeconds);
+    // Track if we've already triggered return to prevent double-calls
+    const hasReturnedRef = useRef(false);
+    // Store callback in ref to avoid effect restarts when callback changes
+    const onReturnToLobbyRef = useRef(onReturnToLobby);
+
+    // Keep ref updated with latest callback
+    useEffect(() => {
+        onReturnToLobbyRef.current = onReturnToLobby;
+    }, [onReturnToLobby]);
+
+    // Reset hasReturned when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            hasReturnedRef.current = false;
+        }
+    }, [isOpen]);
 
     // Determine if current user is the winner
     const isWinner = summary.winner === userId;
@@ -79,7 +95,7 @@ export function GameSummaryModal({
         ([, a], [, b]) => b - a,
     );
 
-    // Auto-return countdown
+    // Auto-return countdown with race condition protection
     useEffect(() => {
         if (!isOpen || autoReturnSeconds === 0) {
             return;
@@ -91,7 +107,12 @@ export function GameSummaryModal({
             setCountdown((prev) => {
                 if (prev <= 1) {
                     clearInterval(interval);
-                    onReturnToLobby();
+                    // Prevent double-calls using ref
+                    if (!hasReturnedRef.current) {
+                        hasReturnedRef.current = true;
+                        // Use ref to get latest callback without causing effect restart
+                        onReturnToLobbyRef.current();
+                    }
                     return 0;
                 }
                 return prev - 1;
@@ -99,7 +120,7 @@ export function GameSummaryModal({
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isOpen, autoReturnSeconds, onReturnToLobby]);
+    }, [isOpen, autoReturnSeconds]); // Removed onReturnToLobby from deps - using ref instead
 
     return (
         <Dialog open={isOpen}>

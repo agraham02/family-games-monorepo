@@ -29,6 +29,7 @@ export interface Room {
     kickedUserIds?: string[]; // Array of user IDs who have been kicked (cannot rejoin)
     gamePlayerIds?: string[]; // User IDs currently playing in the active game
     originalGamePlayerIds?: string[]; // User IDs who started the game (for rejoin eligibility)
+    gameStartedAt?: Date; // Timestamp when the current game started (for duration tracking)
 }
 
 // Re-export settings types for backwards compatibility

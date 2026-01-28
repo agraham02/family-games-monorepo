@@ -10,7 +10,6 @@ import {
 } from "@shared/types";
 import DominoesGameTable from "./ui/DominoesGameTable";
 import RoundSummaryModal from "./ui/RoundSummaryModal";
-import GameSummaryModal from "./ui/GameSummaryModal";
 import {
     GameMenu,
     GameSettingToggle,
@@ -72,12 +71,6 @@ export default function Dominoes({
         sendGameAction("PASS", {});
     }, [sendGameAction]);
 
-    // Handle return to lobby after game ends
-    const handleReturnToLobby = useCallback(() => {
-        if (!socket || !connected) return;
-        socket.emit("return_to_lobby", { roomId });
-    }, [socket, connected, roomId]);
-
     return (
         <div className="h-screen w-full overflow-hidden">
             <DominoesGameTable
@@ -105,11 +98,7 @@ export default function Dominoes({
                 sendGameAction={sendGameAction}
             />
 
-            {/* Game Summary Modal (game finished) */}
-            <GameSummaryModal
-                gameData={gameData}
-                onReturnToLobby={handleReturnToLobby}
-            />
+            {/* Game Summary Modal is now handled by the game page via game_ended event */}
         </div>
     );
 }
