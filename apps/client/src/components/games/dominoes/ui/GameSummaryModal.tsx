@@ -8,6 +8,7 @@ import { DominoesData } from "@shared/types";
 import { motion, AnimatePresence } from "motion/react";
 import { Trophy, Crown, Users, Award, Home, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Celebration } from "@/components/games/shared";
 
 interface GameSummaryModalProps {
     gameData: DominoesData;
@@ -57,6 +58,12 @@ export default function GameSummaryModal({
             <DialogContent className="flex flex-col items-center gap-4 sm:gap-6 max-w-[95vw] sm:max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-slate-900 border-white/10 text-white p-4 sm:p-8">
                 {/* Hidden but accessible title for screen readers */}
                 <DialogTitle className="sr-only">Game Over</DialogTitle>
+
+                {/* Celebration animation for winners */}
+                {isWinner && (
+                    <Celebration show={true} type="confetti" duration={4000} />
+                )}
+
                 <AnimatePresence>
                     {isOpen && (
                         <>

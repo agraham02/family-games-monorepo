@@ -31,3 +31,19 @@ export {
     getResponsiveTileSize,
 } from "./useResponsiveTileSize";
 export type { TileSize } from "./useResponsiveTileSize";
+
+export {
+    usePrefersReducedMotion,
+    getAnimationDuration,
+    getMotionConfig,
+} from "./usePrefersReducedMotion";
+export type { MotionConfig } from "./usePrefersReducedMotion";
+
+export {
+    useKeyboardNavigation,
+    useGameKeyboard,
+} from "./useKeyboardNavigation";
+export type {
+    KeyboardNavigationConfig,
+    GameKeyboardConfig,
+} from "./useKeyboardNavigation";

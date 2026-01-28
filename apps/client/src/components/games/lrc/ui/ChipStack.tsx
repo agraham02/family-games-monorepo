@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { ChipMovement } from "@shared/types";
+import { usePrefersReducedMotion } from "@/hooks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -305,6 +306,7 @@ interface FlyingChipProps {
 
 /**
  * FlyingChip - A chip that animates from one position to another with an arc trajectory.
+ * Respects prefers-reduced-motion for accessibility.
  */
 export function FlyingChip({
     from,
@@ -314,9 +316,26 @@ export function FlyingChip({
     onComplete,
     size = 30,
 }: FlyingChipProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
+
     // Calculate arc control point (above the midpoint)
     const midX = (from.x + to.x) / 2;
     const midY = Math.min(from.y, to.y) - 50; // Arc above
+
+    // Reduced motion: instant transition
+    if (prefersReducedMotion) {
+        return (
+            <motion.div
+                className="fixed pointer-events-none z-50"
+                initial={{ x: to.x - size / 2, y: to.y - size / 2, opacity: 0 }}
+                animate={{ opacity: [0, 1, 0] }}
+                transition={{ duration: 0.3, delay }}
+                onAnimationComplete={onComplete}
+            >
+                <Chip size={size} />
+            </motion.div>
+        );
+    }
 
     return (
         <motion.div
@@ -326,12 +345,14 @@ export function FlyingChip({
                 y: from.y - size / 2,
                 scale: 1,
                 opacity: 1,
+                rotate: 0,
             }}
             animate={{
                 x: [from.x - size / 2, midX - size / 2, to.x - size / 2],
                 y: [from.y - size / 2, midY - size / 2, to.y - size / 2],
-                scale: [1, 1.2, 1],
-                opacity: [1, 1, 0.8],
+                scale: [1, 1.3, 1],
+                opacity: [1, 1, 0.9],
+                rotate: [0, 180, 360],
             }}
             transition={{
                 duration,
@@ -341,7 +362,7 @@ export function FlyingChip({
             }}
             onAnimationComplete={onComplete}
         >
-            <Chip size={size} />
+            <Chip size={size} variant="gold" />
         </motion.div>
     );
 }

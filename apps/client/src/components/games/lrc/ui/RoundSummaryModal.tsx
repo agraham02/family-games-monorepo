@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { LRCPlayer } from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Trophy, PartyPopper, DollarSign, RotateCcw, Home } from "lucide-react";
+import { Celebration } from "@/components/games/shared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -101,36 +102,11 @@ export function RoundSummaryModal({
                         transition={{ type: "spring", damping: 20 }}
                     >
                         {/* Celebration confetti effect */}
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {[...Array(20)].map((_, i) => (
-                                <motion.div
-                                    key={i}
-                                    className="absolute w-3 h-3 rounded-full"
-                                    style={{
-                                        background: [
-                                            "#FFD700",
-                                            "#FFA500",
-                                            "#FF6347",
-                                            "#00CED1",
-                                            "#9370DB",
-                                        ][i % 5],
-                                        left: `${Math.random() * 100}%`,
-                                    }}
-                                    initial={{ y: -20, opacity: 1 }}
-                                    animate={{
-                                        y: 400,
-                                        opacity: 0,
-                                        rotate: Math.random() * 360,
-                                    }}
-                                    transition={{
-                                        duration: 2 + Math.random(),
-                                        delay: Math.random() * 0.5,
-                                        repeat: Infinity,
-                                        repeatDelay: 1,
-                                    }}
-                                />
-                            ))}
-                        </div>
+                        <Celebration
+                            show={true}
+                            type="confetti"
+                            duration={5000}
+                        />
 
                         {/* Header */}
                         <div className="relative p-6 text-center border-b border-amber-700/50">

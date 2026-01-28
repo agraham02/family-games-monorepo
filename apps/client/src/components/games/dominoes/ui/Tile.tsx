@@ -1,22 +1,27 @@
 "use client";
 
-import React from "react";
+import React, { forwardRef } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Tile as TileType } from "@shared/types";
+import { usePrefersReducedMotion } from "@/hooks";
 
 interface TileProps {
     tile: TileType;
     isSelected?: boolean;
     isPlayable?: boolean;
+    isFocused?: boolean;
     isHorizontal?: boolean;
     size?: "xs" | "sm" | "md" | "lg";
     onClick?: () => void;
+    onFocus?: () => void;
     className?: string;
     /** Unique ID for layout animations between hand and board */
     layoutId?: string;
     /** Show double tile with special styling */
     highlightDouble?: boolean;
+    /** Render double tiles perpendicular (vertical when on horizontal board) */
+    perpendicularDoubles?: boolean;
 }
 
 // Pip positions for each value (0-6)
@@ -98,37 +103,71 @@ function PipHalf({
     );
 }
 
-export default function Tile({
-    tile,
-    isSelected = false,
-    isPlayable = true,
-    isHorizontal = false,
-    size = "md",
-    onClick,
-    className,
-    layoutId,
-    highlightDouble = true,
-}: TileProps) {
+const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
+    {
+        tile,
+        isSelected = false,
+        isPlayable = true,
+        isFocused = false,
+        isHorizontal = false,
+        size = "md",
+        onClick,
+        onFocus,
+        className,
+        layoutId,
+        highlightDouble = true,
+        perpendicularDoubles = false,
+    },
+    ref,
+) {
+    const prefersReducedMotion = usePrefersReducedMotion();
     const config = SIZE_CONFIG[size];
     const { width, height, pipSize, gap } = config;
-
-    // For horizontal display, swap dimensions
-    const svgWidth = isHorizontal ? height : width;
-    const svgHeight = isHorizontal ? width : height;
-
-    const halfHeight = (height - gap) / 2;
 
     const isDouble = tile.left === tile.right;
     const showDoubleHighlight = isDouble && highlightDouble;
 
+    // Doubles on the board render perpendicular (vertical when board is horizontal)
+    const shouldRenderPerpendicular =
+        isDouble && perpendicularDoubles && isHorizontal;
+
+    // For horizontal display, swap dimensions (unless perpendicular double)
+    const svgWidth =
+        isHorizontal && !shouldRenderPerpendicular ? height : width;
+    const svgHeight =
+        isHorizontal && !shouldRenderPerpendicular ? width : height;
+
+    const halfHeight = (height - gap) / 2;
+
+    // Calculate rotation based on display mode
+    const getRotation = () => {
+        if (shouldRenderPerpendicular) {
+            // Perpendicular doubles stay vertical on horizontal board
+            return 0;
+        }
+        if (isHorizontal) {
+            return 90;
+        }
+        return 0;
+    };
+
+    const animationProps = prefersReducedMotion
+        ? {}
+        : {
+              whileHover: onClick && isPlayable ? { y: -4 } : undefined,
+              whileTap: onClick && isPlayable ? { scale: 0.95 } : undefined,
+          };
+
     return (
         <motion.button
+            ref={ref}
             type="button"
             layoutId={layoutId}
             onClick={onClick}
+            onFocus={onFocus}
             disabled={!onClick}
             className={cn(
-                "relative rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                "relative rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-green-800",
                 onClick &&
                     isPlayable &&
                     "cursor-pointer hover:scale-105 active:scale-95",
@@ -138,18 +177,23 @@ export default function Tile({
                 !onClick && "cursor-default",
                 isSelected &&
                     "ring-2 ring-yellow-400 scale-110 z-10 shadow-lg shadow-yellow-400/30",
+                isFocused && !isSelected && "ring-2 ring-blue-400 z-10",
+                prefersReducedMotion && "transition-none",
                 className,
             )}
             style={{
-                transform: isHorizontal ? "rotate(90deg)" : undefined,
+                transform: `rotate(${getRotation()}deg)`,
             }}
-            layout
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            whileHover={onClick && isPlayable ? { y: -4 } : undefined}
-            whileTap={onClick && isPlayable ? { scale: 0.95 } : undefined}
+            layout={!prefersReducedMotion}
+            transition={
+                prefersReducedMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 300, damping: 30 }
+            }
+            {...animationProps}
         >
             {/* Double tile glow effect */}
-            {showDoubleHighlight && (
+            {showDoubleHighlight && !prefersReducedMotion && (
                 <motion.div
                     className="absolute -inset-1 rounded-lg bg-amber-400/30 blur-sm -z-10"
                     animate={{ opacity: [0.3, 0.6, 0.3] }}
@@ -159,6 +203,10 @@ export default function Tile({
                         ease: "easeInOut",
                     }}
                 />
+            )}
+            {/* Static highlight for reduced motion */}
+            {showDoubleHighlight && prefersReducedMotion && (
+                <div className="absolute -inset-1 rounded-lg bg-amber-400/40 -z-10" />
             )}
             <svg
                 width={svgWidth}
@@ -211,4 +259,6 @@ export default function Tile({
             </svg>
         </motion.button>
     );
-}
+});
+
+export default Tile;

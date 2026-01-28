@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { DieFace, DIE_FACE_COLORS } from "@shared/types";
 import { ArrowLeft, ArrowRight, Circle, Target, Sparkles } from "lucide-react";
+import { usePrefersReducedMotion } from "@/hooks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -171,6 +172,7 @@ function DieFaceIcon({ face, size }: { face: DieFace; size: number }) {
  * - Roll animation with tumbling effect
  * - Color-coded faces (L=blue, R=green, C=red, DOT=purple, WILD=amber)
  * - Bounce effect on reveal
+ * - Reduced motion support
  */
 export function Die({
     face,
@@ -179,67 +181,119 @@ export function Die({
     revealDelay = 0,
     className,
 }: DieProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
     const [_showFace, setShowFace] = useState(!isRolling);
     const [rollComplete, setRollComplete] = useState(!isRolling);
+    const [showGlow, setShowGlow] = useState(false);
 
     // Handle rolling animation
     useEffect(() => {
         if (isRolling) {
             setShowFace(false);
             setRollComplete(false);
+            setShowGlow(false);
+
+            // Reduced motion: skip animation
+            const animDuration = prefersReducedMotion ? 100 : 800;
 
             // Show face after roll animation + reveal delay
             const timer = setTimeout(() => {
                 setShowFace(true);
                 setRollComplete(true);
-            }, 800 + revealDelay);
+                // Show glow after reveal
+                setTimeout(() => setShowGlow(true), 200);
+            }, animDuration + revealDelay);
 
             return () => clearTimeout(timer);
         } else {
             setShowFace(true);
             setRollComplete(true);
         }
-    }, [isRolling, revealDelay]);
+    }, [isRolling, revealDelay, prefersReducedMotion]);
+
+    // Auto-hide glow after a delay
+    useEffect(() => {
+        if (showGlow) {
+            const timer = setTimeout(() => setShowGlow(false), 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [showGlow]);
 
     const faceColor = DIE_FACE_COLORS[face];
 
     return (
         <div
-            className={cn("relative perspective-500", className)}
-            style={{ width: size, height: size }}
+            className={cn("relative", className)}
+            style={{
+                width: size,
+                height: size,
+                perspective: 500,
+            }}
         >
+            {/* Glow effect after reveal */}
+            <AnimatePresence>
+                {showGlow && !prefersReducedMotion && (
+                    <motion.div
+                        className="absolute -inset-2 rounded-2xl blur-md"
+                        style={{ backgroundColor: faceColor }}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 0.4, scale: 1.1 }}
+                        exit={{ opacity: 0, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                    />
+                )}
+            </AnimatePresence>
+
             <AnimatePresence mode="wait">
                 {isRolling && !rollComplete ? (
                     // Rolling animation
-                    <motion.div
-                        key="rolling"
-                        className="absolute inset-0 rounded-xl bg-white shadow-lg"
-                        style={{
-                            transformStyle: "preserve-3d",
-                        }}
-                        animate={{
-                            rotateX: [0, 360, 720, 1080],
-                            rotateY: [0, 180, 360, 540],
-                            rotateZ: [0, 90, 180, 270],
-                        }}
-                        transition={{
-                            duration: 0.8,
-                            ease: "easeOut",
-                        }}
-                    >
-                        <div
-                            className="absolute inset-0 rounded-xl flex items-center justify-center"
-                            style={{
-                                background:
-                                    "linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)",
-                            }}
+                    prefersReducedMotion ? (
+                        // Reduced motion: simple fade
+                        <motion.div
+                            key="rolling-reduced"
+                            className="absolute inset-0 rounded-xl bg-gray-300 shadow-lg flex items-center justify-center"
+                            animate={{ opacity: [0.5, 1, 0.5] }}
+                            transition={{ duration: 0.3, repeat: Infinity }}
                         >
                             <Circle
                                 size={size * 0.4}
-                                className="text-gray-400"
+                                className="text-gray-500"
                             />
-                        </div>
-                    </motion.div>
+                        </motion.div>
+                    ) : (
+                        // Full rolling animation
+                        <motion.div
+                            key="rolling"
+                            className="absolute inset-0 rounded-xl bg-white shadow-lg"
+                            style={{
+                                transformStyle: "preserve-3d",
+                            }}
+                            initial={{ scale: 1 }}
+                            animate={{
+                                rotateX: [0, 360, 720, 1080],
+                                rotateY: [0, 180, 360, 540],
+                                rotateZ: [0, 90, 180, 270],
+                                scale: [1, 0.9, 1.1, 1],
+                            }}
+                            transition={{
+                                duration: 0.8,
+                                ease: "easeOut",
+                            }}
+                        >
+                            <div
+                                className="absolute inset-0 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background:
+                                        "linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)",
+                                }}
+                            >
+                                <Circle
+                                    size={size * 0.4}
+                                    className="text-gray-400"
+                                />
+                            </div>
+                        </motion.div>
+                    )
                 ) : (
                     // Final face
                     <motion.div
@@ -249,16 +303,20 @@ export function Die({
                             background: `linear-gradient(135deg, ${faceColor} 0%, ${faceColor}cc 100%)`,
                         }}
                         initial={
-                            isRolling
+                            isRolling && !prefersReducedMotion
                                 ? { scale: 0.5, opacity: 0, rotateY: 180 }
                                 : { scale: 1, opacity: 1 }
                         }
                         animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-                        transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 20,
-                        }}
+                        transition={
+                            prefersReducedMotion
+                                ? { duration: 0.1 }
+                                : {
+                                      type: "spring",
+                                      stiffness: 300,
+                                      damping: 20,
+                                  }
+                        }
                     >
                         {/* Die face content */}
                         <div className="absolute inset-0 flex items-center justify-center text-white">
@@ -364,26 +422,53 @@ export function RollButton({
     diceCount = 3,
     className,
 }: RollButtonProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
+
+    const hoverAnimation =
+        !disabled && !isRolling && !prefersReducedMotion
+            ? { scale: 1.05, boxShadow: "0 10px 30px rgba(245, 158, 11, 0.4)" }
+            : {};
+
+    const tapAnimation =
+        !disabled && !isRolling && !prefersReducedMotion ? { scale: 0.95 } : {};
+
     return (
         <motion.button
             className={cn(
                 "px-8 py-4 rounded-full font-bold text-lg",
                 "bg-linear-to-br from-amber-500 to-orange-600",
-                "text-white shadow-lg",
+                "text-white shadow-lg shadow-amber-500/30",
                 "hover:from-amber-400 hover:to-orange-500",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
-                "transition-colors",
+                "transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-900",
                 className,
             )}
             onClick={onClick}
             disabled={disabled || isRolling}
-            whileHover={!disabled && !isRolling ? { scale: 1.05 } : {}}
-            whileTap={!disabled && !isRolling ? { scale: 0.95 } : {}}
+            whileHover={hoverAnimation}
+            whileTap={tapAnimation}
+            initial={false}
+            animate={
+                !disabled && !isRolling && !prefersReducedMotion
+                    ? { scale: [1, 1.02, 1] }
+                    : {}
+            }
+            transition={
+                prefersReducedMotion
+                    ? { duration: 0 }
+                    : {
+                          scale: {
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                          },
+                      }
+            }
         >
             {isRolling ? (
                 <span className="flex items-center gap-2">
                     <motion.span
-                        animate={{ rotate: 360 }}
+                        animate={prefersReducedMotion ? {} : { rotate: 360 }}
                         transition={{
                             duration: 0.5,
                             repeat: Infinity,
@@ -396,7 +481,21 @@ export function RollButton({
                 </span>
             ) : (
                 <span className="flex items-center gap-2">
-                    🎲 Roll {diceCount} {diceCount === 1 ? "Die" : "Dice"}
+                    <motion.span
+                        animate={
+                            prefersReducedMotion
+                                ? {}
+                                : { rotate: [0, -10, 10, -10, 0] }
+                        }
+                        transition={{
+                            duration: 0.5,
+                            repeat: Infinity,
+                            repeatDelay: 2,
+                        }}
+                    >
+                        🎲
+                    </motion.span>
+                    Roll {diceCount} {diceCount === 1 ? "Die" : "Dice"}
                 </span>
             )}
         </motion.button>

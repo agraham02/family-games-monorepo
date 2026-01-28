@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Tile as TileType, BoardState } from "@shared/types";
 import Tile from "./Tile";
-import { TileSize } from "@/hooks";
+import { TileSize, useKeyboardNavigation } from "@/hooks";
 
 interface TileHandProps {
     tiles: TileType[];
@@ -55,6 +55,48 @@ export default function TileHand({
 }: TileHandProps) {
     const playableTiles = tiles.filter((t) => canPlayTile(t, board));
     const hasPlayableTile = playableTiles.length > 0;
+    const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
+    const [focusedIndex, setFocusedIndex] = useState(-1);
+
+    // Find index of currently selected tile
+    const selectedIndex = selectedTile
+        ? tiles.findIndex((t) => t.id === selectedTile.id)
+        : -1;
+
+    // Keyboard navigation for tile selection
+    const handleConfirm = useCallback(
+        (index: number) => {
+            const tile = tiles[index];
+            if (tile) {
+                onTileSelect(selectedTile?.id === tile.id ? null : tile);
+            }
+        },
+        [tiles, selectedTile, onTileSelect],
+    );
+
+    const handleCancel = useCallback(() => {
+        if (selectedTile) {
+            onTileSelect(null);
+        }
+        setFocusedIndex(-1);
+    }, [selectedTile, onTileSelect]);
+
+    useKeyboardNavigation({
+        items: tiles,
+        selectedIndex: focusedIndex >= 0 ? focusedIndex : selectedIndex,
+        onSelect: setFocusedIndex,
+        onConfirm: handleConfirm,
+        onCancel: handleCancel,
+        enabled: isMyTurn && tiles.length > 0,
+        wrap: true,
+    });
+
+    // Focus the tile element when focusedIndex changes via keyboard
+    useEffect(() => {
+        if (focusedIndex >= 0 && tileRefs.current[focusedIndex]) {
+            tileRefs.current[focusedIndex]?.focus();
+        }
+    }, [focusedIndex]);
 
     return (
         <div className={cn("w-full", className)}>
@@ -88,11 +130,19 @@ export default function TileHand({
                     "flex gap-1 sm:gap-2 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30 transition-opacity duration-300",
                     !isMyTurn && "opacity-50",
                 )}
+                role="listbox"
+                aria-label="Your domino tiles"
+                aria-activedescendant={
+                    focusedIndex >= 0
+                        ? `tile-${tiles[focusedIndex]?.id}`
+                        : undefined
+                }
             >
                 {tiles.map((tile, index) => {
                     // Only check playability when hints are enabled
                     const isPlayable = !showHints || canPlayTile(tile, board);
                     const isSelected = selectedTile?.id === tile.id;
+                    const isFocused = focusedIndex === index;
 
                     return (
                         <motion.div
@@ -101,11 +151,18 @@ export default function TileHand({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}
+                            role="option"
+                            aria-selected={isSelected}
+                            id={`tile-${tile.id}`}
                         >
                             <Tile
+                                ref={(el) => {
+                                    tileRefs.current[index] = el;
+                                }}
                                 tile={tile}
                                 isSelected={isSelected}
                                 isPlayable={isMyTurn && isPlayable}
+                                isFocused={isFocused}
                                 size={tileSize}
                                 layoutId={
                                     layoutIdPrefix
@@ -120,6 +177,7 @@ export default function TileHand({
                                               )
                                         : undefined
                                 }
+                                onFocus={() => setFocusedIndex(index)}
                             />
                         </motion.div>
                     );

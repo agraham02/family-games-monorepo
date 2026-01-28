@@ -43,3 +43,6 @@ export {
 
 // Turn timer for time-limited games
 export { TurnTimer } from "./TurnTimer";
+
+// Celebration animations
+export { Celebration, WinnerAnnouncement } from "./Celebration";

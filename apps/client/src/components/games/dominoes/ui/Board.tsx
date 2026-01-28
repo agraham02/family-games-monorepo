@@ -7,7 +7,7 @@ import { BoardState, Tile as TileType } from "@shared/types";
 import Tile from "./Tile";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { TileSize } from "@/hooks";
+import { TileSize, usePrefersReducedMotion } from "@/hooks";
 
 interface BoardProps {
     board: BoardState;
@@ -43,11 +43,41 @@ export default function Board({
 }: BoardProps) {
     // Use ghostTileSize if provided, otherwise fall back to tileSize
     const effectiveGhostSize = ghostTileSize ?? tileSize;
+    const prefersReducedMotion = usePrefersReducedMotion();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(false);
     const [showLeftFade, setShowLeftFade] = useState(false);
     const [showRightFade, setShowRightFade] = useState(false);
+
+    // Track previous end values for animation
+    const [prevLeftEnd, setPrevLeftEnd] = useState<number | null>(null);
+    const [prevRightEnd, setPrevRightEnd] = useState<number | null>(null);
+    const [leftEndChanged, setLeftEndChanged] = useState(false);
+    const [rightEndChanged, setRightEndChanged] = useState(false);
+
+    // Detect end value changes for animation
+    useEffect(() => {
+        const newLeft = board.leftEnd?.value ?? null;
+        const newRight = board.rightEnd?.value ?? null;
+
+        if (prevLeftEnd !== null && prevLeftEnd !== newLeft) {
+            setLeftEndChanged(true);
+            setTimeout(() => setLeftEndChanged(false), 600);
+        }
+        if (prevRightEnd !== null && prevRightEnd !== newRight) {
+            setRightEndChanged(true);
+            setTimeout(() => setRightEndChanged(false), 600);
+        }
+
+        setPrevLeftEnd(newLeft);
+        setPrevRightEnd(newRight);
+    }, [
+        board.leftEnd?.value,
+        board.rightEnd?.value,
+        prevLeftEnd,
+        prevRightEnd,
+    ]);
 
     // Check scroll position to show/hide arrows and fades
     function updateScrollIndicators() {
@@ -132,13 +162,53 @@ export default function Board({
                 {board.leftEnd && board.rightEnd && (
                     <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1 text-xs">
-                            <span className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+                            <motion.span
+                                key={`left-${board.leftEnd.value}`}
+                                initial={
+                                    prefersReducedMotion
+                                        ? false
+                                        : {
+                                              scale: 1.2,
+                                              backgroundColor:
+                                                  "rgb(251 191 36)",
+                                          }
+                                }
+                                animate={{
+                                    scale:
+                                        leftEndChanged && !prefersReducedMotion
+                                            ? [1, 1.3, 1]
+                                            : 1,
+                                    backgroundColor: "rgb(245 158 11 / 0.8)",
+                                }}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                                className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-sm"
+                            >
                                 {board.leftEnd.value}
-                            </span>
+                            </motion.span>
                             <span className="text-white/50">—</span>
-                            <span className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+                            <motion.span
+                                key={`right-${board.rightEnd.value}`}
+                                initial={
+                                    prefersReducedMotion
+                                        ? false
+                                        : {
+                                              scale: 1.2,
+                                              backgroundColor:
+                                                  "rgb(251 191 36)",
+                                          }
+                                }
+                                animate={{
+                                    scale:
+                                        rightEndChanged && !prefersReducedMotion
+                                            ? [1, 1.3, 1]
+                                            : 1,
+                                    backgroundColor: "rgb(245 158 11 / 0.8)",
+                                }}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                                className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-sm"
+                            >
                                 {board.rightEnd.value}
-                            </span>
+                            </motion.span>
                         </span>
                     </div>
                 )}
@@ -340,6 +410,7 @@ export default function Board({
                                         tile={tile}
                                         isHorizontal={true}
                                         size={tileSize}
+                                        perpendicularDoubles={true}
                                         layoutId={
                                             layoutIdPrefix
                                                 ? `${layoutIdPrefix}-tile-${tile.id}`
