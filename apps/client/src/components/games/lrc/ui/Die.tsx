@@ -28,62 +28,129 @@ interface DieProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DieFaceIcon({ face, size }: { face: DieFace; size: number }) {
-    const iconSize = Math.round(size * 0.5);
+    const iconSize = Math.round(size * 0.45);
+    const labelSize = Math.round(size * 0.22);
+
+    // Get distinct background gradient for each face type
+    const getFaceStyles = () => {
+        switch (face) {
+            case "L":
+                return "drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]"; // Blue glow
+            case "R":
+                return "drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]"; // Green glow
+            case "C":
+                return "drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"; // Red glow
+            case "DOT":
+                return "drop-shadow-[0_0_6px_rgba(147,51,234,0.8)]"; // Purple glow
+            case "WILD":
+                return "drop-shadow-[0_0_10px_rgba(245,158,11,0.9)]"; // Amber glow
+            default:
+                return "";
+        }
+    };
 
     switch (face) {
         case "L":
             return (
-                <div className="flex flex-col items-center justify-center gap-1">
-                    <ArrowLeft size={iconSize} strokeWidth={3} />
+                <div
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-0.5",
+                        getFaceStyles(),
+                    )}
+                >
+                    <ArrowLeft
+                        size={iconSize}
+                        strokeWidth={3.5}
+                        className="drop-shadow-md"
+                    />
                     <span
-                        className="font-bold"
-                        style={{ fontSize: iconSize * 0.6 }}
+                        className="font-black tracking-wider drop-shadow-md"
+                        style={{ fontSize: labelSize }}
                     >
-                        L
+                        LEFT
                     </span>
                 </div>
             );
         case "R":
             return (
-                <div className="flex flex-col items-center justify-center gap-1">
-                    <ArrowRight size={iconSize} strokeWidth={3} />
+                <div
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-0.5",
+                        getFaceStyles(),
+                    )}
+                >
+                    <ArrowRight
+                        size={iconSize}
+                        strokeWidth={3.5}
+                        className="drop-shadow-md"
+                    />
                     <span
-                        className="font-bold"
-                        style={{ fontSize: iconSize * 0.6 }}
+                        className="font-black tracking-wider drop-shadow-md"
+                        style={{ fontSize: labelSize }}
                     >
-                        R
+                        RIGHT
                     </span>
                 </div>
             );
         case "C":
             return (
-                <div className="flex flex-col items-center justify-center gap-1">
-                    <Target size={iconSize} strokeWidth={3} />
+                <div
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-0.5",
+                        getFaceStyles(),
+                    )}
+                >
+                    <Target
+                        size={iconSize}
+                        strokeWidth={3}
+                        className="drop-shadow-md"
+                    />
                     <span
-                        className="font-bold"
-                        style={{ fontSize: iconSize * 0.6 }}
+                        className="font-black tracking-wider drop-shadow-md"
+                        style={{ fontSize: labelSize }}
                     >
-                        C
+                        CENTER
                     </span>
                 </div>
             );
         case "DOT":
             return (
-                <div className="flex items-center justify-center">
+                <div
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-1",
+                        getFaceStyles(),
+                    )}
+                >
                     <Circle
-                        size={iconSize}
+                        size={iconSize * 0.8}
                         fill="currentColor"
                         strokeWidth={0}
+                        className="drop-shadow-lg"
                     />
+                    <span
+                        className="font-bold tracking-wide opacity-80"
+                        style={{ fontSize: labelSize * 0.9 }}
+                    >
+                        KEEP
+                    </span>
                 </div>
             );
         case "WILD":
             return (
-                <div className="flex flex-col items-center justify-center gap-1">
-                    <Sparkles size={iconSize} strokeWidth={2} />
+                <div
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-0.5",
+                        getFaceStyles(),
+                    )}
+                >
+                    <Sparkles
+                        size={iconSize}
+                        strokeWidth={2.5}
+                        className="drop-shadow-lg"
+                    />
                     <span
-                        className="font-bold"
-                        style={{ fontSize: iconSize * 0.5 }}
+                        className="font-black tracking-widest drop-shadow-md"
+                        style={{ fontSize: labelSize }}
                     >
                         WILD
                     </span>

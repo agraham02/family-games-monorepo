@@ -10,11 +10,13 @@ interface TileProps {
     isSelected?: boolean;
     isPlayable?: boolean;
     isHorizontal?: boolean;
-    size?: "sm" | "md" | "lg";
+    size?: "xs" | "sm" | "md" | "lg";
     onClick?: () => void;
     className?: string;
     /** Unique ID for layout animations between hand and board */
     layoutId?: string;
+    /** Show double tile with special styling */
+    highlightDouble?: boolean;
 }
 
 // Pip positions for each value (0-6)
@@ -55,6 +57,7 @@ const PIP_POSITIONS: Record<number, [number, number][]> = {
 };
 
 const SIZE_CONFIG = {
+    xs: { width: 20, height: 40, pipSize: 3, gap: 1.5 },
     sm: { width: 28, height: 56, pipSize: 4, gap: 2 },
     md: { width: 40, height: 80, pipSize: 6, gap: 3 },
     lg: { width: 56, height: 112, pipSize: 8, gap: 4 },
@@ -104,6 +107,7 @@ export default function Tile({
     onClick,
     className,
     layoutId,
+    highlightDouble = true,
 }: TileProps) {
     const config = SIZE_CONFIG[size];
     const { width, height, pipSize, gap } = config;
@@ -115,6 +119,7 @@ export default function Tile({
     const halfHeight = (height - gap) / 2;
 
     const isDouble = tile.left === tile.right;
+    const showDoubleHighlight = isDouble && highlightDouble;
 
     return (
         <motion.button
@@ -124,12 +129,15 @@ export default function Tile({
             disabled={!onClick}
             className={cn(
                 "relative rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                onClick && isPlayable && "cursor-pointer hover:scale-105",
+                onClick &&
+                    isPlayable &&
+                    "cursor-pointer hover:scale-105 active:scale-95",
                 onClick &&
                     !isPlayable &&
                     "cursor-not-allowed grayscale brightness-75",
                 !onClick && "cursor-default",
-                isSelected && "ring-2 ring-yellow-400 scale-110 z-10",
+                isSelected &&
+                    "ring-2 ring-yellow-400 scale-110 z-10 shadow-lg shadow-yellow-400/30",
                 className,
             )}
             style={{
@@ -137,14 +145,28 @@ export default function Tile({
             }}
             layout
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            whileHover={onClick && isPlayable ? { y: -4 } : undefined}
+            whileTap={onClick && isPlayable ? { scale: 0.95 } : undefined}
         >
+            {/* Double tile glow effect */}
+            {showDoubleHighlight && (
+                <motion.div
+                    className="absolute -inset-1 rounded-lg bg-amber-400/30 blur-sm -z-10"
+                    animate={{ opacity: [0.3, 0.6, 0.3] }}
+                    transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                    }}
+                />
+            )}
             <svg
                 width={svgWidth}
                 height={svgHeight}
                 viewBox={`0 0 ${width} ${height}`}
                 className={cn(
                     "drop-shadow-md",
-                    isDouble && "ring-1 ring-amber-500/50 rounded",
+                    showDoubleHighlight && "ring-2 ring-amber-500/70 rounded",
                 )}
             >
                 {/* Background */}

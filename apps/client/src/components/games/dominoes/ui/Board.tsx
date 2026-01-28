@@ -7,6 +7,7 @@ import { BoardState, Tile as TileType } from "@shared/types";
 import Tile from "./Tile";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { TileSize } from "@/hooks";
 
 interface BoardProps {
     board: BoardState;
@@ -20,6 +21,10 @@ interface BoardProps {
     className?: string;
     /** Prefix for layoutId to enable shared animations with TileHand */
     layoutIdPrefix?: string;
+    /** Tile size for responsive display */
+    tileSize?: TileSize;
+    /** Ghost tile size for placement previews (defaults to tileSize) */
+    ghostTileSize?: TileSize;
 }
 
 export default function Board({
@@ -33,19 +38,31 @@ export default function Board({
     lastPlayedSide,
     className,
     layoutIdPrefix,
+    tileSize = "sm",
+    ghostTileSize,
 }: BoardProps) {
+    // Use ghostTileSize if provided, otherwise fall back to tileSize
+    const effectiveGhostSize = ghostTileSize ?? tileSize;
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(false);
+    const [showLeftFade, setShowLeftFade] = useState(false);
+    const [showRightFade, setShowRightFade] = useState(false);
 
-    // Check scroll position to show/hide arrows
-    function updateArrowVisibility() {
+    // Check scroll position to show/hide arrows and fades
+    function updateScrollIndicators() {
         const container = scrollContainerRef.current;
         if (!container) return;
 
         const { scrollLeft, scrollWidth, clientWidth } = container;
-        setShowLeftArrow(scrollLeft > 0);
-        setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 1);
+        const hasOverflow = scrollWidth > clientWidth;
+
+        setShowLeftArrow(scrollLeft > 20);
+        setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 20);
+        setShowLeftFade(hasOverflow && scrollLeft > 0);
+        setShowRightFade(
+            hasOverflow && scrollLeft < scrollWidth - clientWidth - 1,
+        );
     }
 
     // Auto-scroll to the side where the last tile was played
@@ -68,12 +85,17 @@ export default function Board({
 
     // Update arrows on mount and scroll
     useEffect(() => {
-        updateArrowVisibility();
+        updateScrollIndicators();
         const container = scrollContainerRef.current;
         if (container) {
-            container.addEventListener("scroll", updateArrowVisibility);
-            return () =>
-                container.removeEventListener("scroll", updateArrowVisibility);
+            container.addEventListener("scroll", updateScrollIndicators);
+            // Also update on resize
+            const resizeObserver = new ResizeObserver(updateScrollIndicators);
+            resizeObserver.observe(container);
+            return () => {
+                container.removeEventListener("scroll", updateScrollIndicators);
+                resizeObserver.disconnect();
+            };
         }
     }, [board.tiles.length]);
 
@@ -94,70 +116,134 @@ export default function Board({
     const isEmpty = board.tiles.length === 0;
     const showGhostPreviews = selectedTile && isMyTurn && !isEmpty;
 
+    // Determine ghost tile size (use dedicated ghost size if provided)
+    const ghostSize = effectiveGhostSize;
+
     return (
         <div className={cn("relative w-full", className)}>
-            {/* Board label */}
-            <div className="mb-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-                <span>Board ({board.tiles.length} tiles)</span>
-                {board.leftEnd && board.rightEnd && (
-                    <span className="text-xs">
-                        Ends: {board.leftEnd.value} — {board.rightEnd.value}
+            {/* Board label with end values */}
+            <div className="mb-2 text-sm font-medium text-white/70 flex items-center justify-between px-1">
+                <span className="flex items-center gap-2">
+                    Board
+                    <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">
+                        {board.tiles.length} tiles
                     </span>
+                </span>
+                {board.leftEnd && board.rightEnd && (
+                    <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs">
+                            <span className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+                                {board.leftEnd.value}
+                            </span>
+                            <span className="text-white/50">—</span>
+                            <span className="bg-amber-500/80 text-black font-bold w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+                                {board.rightEnd.value}
+                            </span>
+                        </span>
+                    </div>
                 )}
             </div>
 
             {/* Board container */}
-            <div className="relative bg-green-800 dark:bg-green-900 rounded-xl p-4 min-h-35 shadow-inner">
+            <div className="relative bg-gradient-to-b from-green-700 to-green-800 dark:from-green-800 dark:to-green-900 rounded-xl p-3 sm:p-4 min-h-[100px] sm:min-h-[120px] shadow-inner border border-green-600/30">
+                {/* Left gradient fade */}
+                <div
+                    className={cn(
+                        "absolute left-0 top-0 bottom-0 w-12 sm:w-16 bg-gradient-to-r from-green-700 dark:from-green-800 to-transparent z-10 pointer-events-none rounded-l-xl transition-opacity duration-200",
+                        showLeftFade ? "opacity-100" : "opacity-0",
+                    )}
+                />
+
+                {/* Right gradient fade */}
+                <div
+                    className={cn(
+                        "absolute right-0 top-0 bottom-0 w-12 sm:w-16 bg-gradient-to-l from-green-700 dark:from-green-800 to-transparent z-10 pointer-events-none rounded-r-xl transition-opacity duration-200",
+                        showRightFade ? "opacity-100" : "opacity-0",
+                    )}
+                />
+
                 {/* Left scroll arrow */}
-                {showLeftArrow && !showGhostPreviews && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute left-1 top-1/2 -translate-y-1/2 z-20 bg-white/80 dark:bg-zinc-800/80 hover:bg-white dark:hover:bg-zinc-800 rounded-full shadow-md"
-                        onClick={() => scrollToEnd("left")}
-                    >
-                        <ChevronLeft className="h-5 w-5" />
-                    </Button>
-                )}
+                <AnimatePresence>
+                    {showLeftArrow && !showGhostPreviews && (
+                        <motion.div
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                        >
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute left-1 top-1/2 -translate-y-1/2 z-20 bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-800 rounded-full shadow-lg h-8 w-8 sm:h-10 sm:w-10"
+                                onClick={() => scrollToEnd("left")}
+                            >
+                                <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Right scroll arrow */}
-                {showRightArrow && !showGhostPreviews && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 z-20 bg-white/80 dark:bg-zinc-800/80 hover:bg-white dark:hover:bg-zinc-800 rounded-full shadow-md"
-                        onClick={() => scrollToEnd("right")}
-                    >
-                        <ChevronRight className="h-5 w-5" />
-                    </Button>
-                )}
+                <AnimatePresence>
+                    {showRightArrow && !showGhostPreviews && (
+                        <motion.div
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                        >
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 z-20 bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-800 rounded-full shadow-lg h-8 w-8 sm:h-10 sm:w-10"
+                                onClick={() => scrollToEnd("right")}
+                            >
+                                <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Ghost tile preview - LEFT */}
                 <AnimatePresence>
                     {showGhostPreviews && canPlaceLeft && (
                         <motion.button
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
+                            initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                            exit={{ opacity: 0, scale: 0.8, x: 20 }}
                             onClick={() => onPlaceTile("left")}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
+                            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
                         >
-                            <div className="relative">
+                            <motion.div
+                                className="relative"
+                                animate={{ scale: [1, 1.02, 1] }}
+                                transition={{
+                                    duration: 1.5,
+                                    repeat: Infinity,
+                                    ease: "easeInOut",
+                                }}
+                            >
                                 {/* Ghost tile with reduced opacity */}
-                                <div className="opacity-50 group-hover:opacity-80 transition-opacity">
+                                <div className="opacity-50 group-hover:opacity-90 transition-opacity duration-200">
                                     <Tile
                                         tile={selectedTile}
                                         isHorizontal={true}
-                                        size="sm"
+                                        size={ghostSize}
+                                        highlightDouble={false}
                                     />
                                 </div>
                                 {/* Pulsing ring */}
-                                <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400 animate-pulse" />
+                                <motion.div
+                                    className="absolute inset-0 rounded-lg ring-2 ring-yellow-400"
+                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                    transition={{
+                                        duration: 1.5,
+                                        repeat: Infinity,
+                                    }}
+                                />
                                 {/* Label */}
-                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-yellow-300 whitespace-nowrap">
-                                    Place Left
+                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full">
+                                    Tap to place
                                 </span>
-                            </div>
+                            </motion.div>
                         </motion.button>
                     )}
                 </AnimatePresence>
@@ -166,28 +252,44 @@ export default function Board({
                 <AnimatePresence>
                     {showGhostPreviews && canPlaceRight && (
                         <motion.button
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
+                            initial={{ opacity: 0, scale: 0.8, x: -20 }}
+                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                            exit={{ opacity: 0, scale: 0.8, x: -20 }}
                             onClick={() => onPlaceTile("right")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
+                            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-30 cursor-pointer group"
                         >
-                            <div className="relative">
+                            <motion.div
+                                className="relative"
+                                animate={{ scale: [1, 1.02, 1] }}
+                                transition={{
+                                    duration: 1.5,
+                                    repeat: Infinity,
+                                    ease: "easeInOut",
+                                }}
+                            >
                                 {/* Ghost tile with reduced opacity */}
-                                <div className="opacity-50 group-hover:opacity-80 transition-opacity">
+                                <div className="opacity-50 group-hover:opacity-90 transition-opacity duration-200">
                                     <Tile
                                         tile={selectedTile}
                                         isHorizontal={true}
-                                        size="sm"
+                                        size={ghostSize}
+                                        highlightDouble={false}
                                     />
                                 </div>
                                 {/* Pulsing ring */}
-                                <div className="absolute inset-0 rounded-lg ring-2 ring-yellow-400 animate-pulse" />
+                                <motion.div
+                                    className="absolute inset-0 rounded-lg ring-2 ring-yellow-400"
+                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                    transition={{
+                                        duration: 1.5,
+                                        repeat: Infinity,
+                                    }}
+                                />
                                 {/* Label */}
-                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-medium text-yellow-300 whitespace-nowrap">
-                                    Place Right
+                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full">
+                                    Tap to place
                                 </span>
-                            </div>
+                            </motion.div>
                         </motion.button>
                     )}
                 </AnimatePresence>
@@ -195,29 +297,56 @@ export default function Board({
                 {/* Scrollable tiles container */}
                 <div
                     ref={scrollContainerRef}
-                    className="overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-thin scrollbar-thumb-green-600 scrollbar-track-green-900"
+                    className="overflow-x-auto scroll-smooth scrollbar-thin scrollbar-thumb-green-600/50 scrollbar-track-transparent hover:scrollbar-thumb-green-600"
                 >
-                    <div className="flex items-center gap-1 min-w-max px-12">
+                    <div className="flex items-center gap-0.5 sm:gap-1 min-w-max px-8 sm:px-12 py-2">
                         {isEmpty ? (
-                            <div className="text-green-300 italic py-8 text-center w-full">
-                                {isMyTurn
-                                    ? "Place the first tile to start the game"
-                                    : "Waiting for first tile..."}
-                            </div>
+                            <motion.div
+                                className="text-green-200/80 italic py-6 sm:py-8 text-center w-full flex flex-col items-center gap-2"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                            >
+                                <motion.div
+                                    className="w-3 h-3 rounded-full bg-green-400/50"
+                                    animate={{
+                                        scale: [1, 1.5, 1],
+                                        opacity: [0.5, 1, 0.5],
+                                    }}
+                                    transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                    }}
+                                />
+                                <span className="text-sm">
+                                    {isMyTurn
+                                        ? "Select a tile from your hand to start"
+                                        : "Waiting for first tile..."}
+                                </span>
+                            </motion.div>
                         ) : (
                             board.tiles.map((tile) => (
-                                <div key={tile.id} className="snap-center">
+                                <motion.div
+                                    key={tile.id}
+                                    className="shrink-0"
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{
+                                        type: "spring",
+                                        stiffness: 300,
+                                        damping: 25,
+                                    }}
+                                >
                                     <Tile
                                         tile={tile}
                                         isHorizontal={true}
-                                        size="sm"
+                                        size={tileSize}
                                         layoutId={
                                             layoutIdPrefix
                                                 ? `${layoutIdPrefix}-tile-${tile.id}`
                                                 : undefined
                                         }
                                     />
-                                </div>
+                                </motion.div>
                             ))
                         )}
                     </div>

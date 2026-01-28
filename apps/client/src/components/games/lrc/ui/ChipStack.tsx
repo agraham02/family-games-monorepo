@@ -45,18 +45,46 @@ interface ChipProps {
 
 /**
  * Chip - A single poker-style chip with 3D appearance.
+ * Enhanced with colored variants based on value tier.
  */
 export function Chip({
     size = 40,
     offset = 0,
     zIndex = 0,
     className,
-}: ChipProps) {
+    variant = "red",
+}: ChipProps & { variant?: "red" | "blue" | "green" | "gold" }) {
+    // Color schemes for different chip variants
+    const colorSchemes = {
+        red: {
+            gradient: "from-red-500 via-red-600 to-red-700",
+            inner: "from-red-400 to-red-600",
+            edge: "bg-white/80",
+        },
+        blue: {
+            gradient: "from-blue-500 via-blue-600 to-blue-700",
+            inner: "from-blue-400 to-blue-600",
+            edge: "bg-white/80",
+        },
+        green: {
+            gradient: "from-green-500 via-green-600 to-green-700",
+            inner: "from-green-400 to-green-600",
+            edge: "bg-white/80",
+        },
+        gold: {
+            gradient: "from-amber-400 via-amber-500 to-amber-600",
+            inner: "from-amber-300 to-amber-500",
+            edge: "bg-white/90",
+        },
+    };
+
+    const colors = colorSchemes[variant];
+
     return (
         <div
             className={cn(
                 "rounded-full relative",
-                "bg-linear-to-br from-red-500 via-red-600 to-red-700",
+                `bg-linear-to-br ${colors.gradient}`,
                 "shadow-lg",
                 className,
             )}
@@ -69,7 +97,10 @@ export function Chip({
         >
             {/* Inner circle pattern */}
             <div
-                className="absolute rounded-full bg-linear-to-br from-red-400 to-red-600"
+                className={cn(
+                    "absolute rounded-full",
+                    `bg-linear-to-br ${colors.inner}`,
+                )}
                 style={{
                     top: "15%",
                     left: "15%",
@@ -82,7 +113,7 @@ export function Chip({
             {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
                 <div
                     key={angle}
-                    className="absolute bg-white/80"
+                    className={cn("absolute", colors.edge)}
                     style={{
                         width: "20%",
                         height: "6%",
@@ -141,6 +172,19 @@ export function ChipStack({
     const visibleCount = Math.min(count, maxVisible);
     const stackOffset = isLargePot ? 4 : 3;
 
+    // Determine chip colors based on position in stack (for variety)
+    const getChipVariant = (
+        index: number,
+    ): "red" | "blue" | "green" | "gold" => {
+        if (isLargePot) {
+            // Center pot gets gold chips
+            return "gold";
+        }
+        // Alternate colors for visual interest
+        const variants: ("red" | "blue" | "green")[] = ["red", "blue", "green"];
+        return variants[index % variants.length];
+    };
+
     // Calculate money value
     const moneyValue = count * chipValue;
     const formattedMoney = useMemo(() => {
@@ -198,7 +242,10 @@ export function ChipStack({
                                 damping: 20,
                             }}
                         >
-                            <Chip size={chipSize} />
+                            <Chip
+                                size={chipSize}
+                                variant={getChipVariant(idx)}
+                            />
                         </motion.div>
                     ))}
                 </AnimatePresence>

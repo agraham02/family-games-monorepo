@@ -86,44 +86,80 @@ function PlayerSlot({
     return (
         <motion.div
             className={cn(
-                "relative flex flex-col items-center gap-2 p-3 rounded-xl transition-colors",
-                isCurrentTurn && "ring-2 ring-amber-400 bg-amber-500/20",
-                isWinner && "ring-2 ring-green-400 bg-green-500/20",
-                !isConnected && "opacity-50",
+                "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-xl transition-all duration-300",
+                "bg-black/20 backdrop-blur-sm",
+                isCurrentTurn &&
+                    "ring-2 ring-amber-400 bg-amber-500/30 shadow-lg shadow-amber-500/20",
+                isWinner &&
+                    "ring-2 ring-green-400 bg-green-500/30 shadow-lg shadow-green-500/20",
+                !isConnected && "opacity-40 grayscale",
+                isHero && "scale-105",
             )}
             layout
+            animate={{
+                scale: isCurrentTurn ? 1.05 : 1,
+            }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
             {/* Player name */}
             <div
                 className={cn(
-                    "text-sm font-medium truncate max-w-20",
-                    isHero ? "text-amber-400" : "text-white",
+                    "text-xs sm:text-sm font-semibold truncate max-w-16 sm:max-w-24 text-center",
+                    isHero ? "text-amber-300" : "text-white/90",
                 )}
             >
                 {player.name}
-                {isHero && " (You)"}
+                {isHero && (
+                    <span className="text-amber-400/70 text-[10px] block">
+                        (You)
+                    </span>
+                )}
             </div>
 
-            {/* Chip stack */}
+            {/* Chip stack - slightly larger for visibility */}
             <ChipStack
                 count={player.chips}
                 chipValue={chipValue}
-                showMoney={showMoney}
-                size="sm"
+                showMoney={false}
+                size={isHero ? "md" : "sm"}
             />
 
-            {/* Money value */}
+            {/* Money value (shown below stack) */}
             {moneyValue && (
-                <div className="text-xs text-green-400">{moneyValue}</div>
+                <div className="text-[10px] sm:text-xs text-green-400 font-medium bg-green-500/20 px-1.5 py-0.5 rounded-full">
+                    {moneyValue}
+                </div>
             )}
 
-            {/* Current turn indicator */}
+            {/* Current turn pulsing indicator */}
             {isCurrentTurn && (
                 <motion.div
-                    className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full"
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 1, repeat: Infinity }}
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full shadow-lg"
+                    animate={{
+                        scale: [1, 1.3, 1],
+                        opacity: [1, 0.7, 1],
+                    }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
                 />
+            )}
+
+            {/* Winner crown */}
+            {isWinner && (
+                <motion.div
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400"
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                >
+                    👑
+                </motion.div>
+            )}
+
+            {/* Disconnected indicator */}
+            {!isConnected && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                    <span className="text-xs text-white/60">Offline</span>
+                </div>
             )}
         </motion.div>
     );

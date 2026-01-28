@@ -29,7 +29,7 @@ import {
     DealingOverlay,
     useGameTable,
 } from "@/components/games/shared";
-import { useTurnTimer } from "@/hooks";
+import { useTurnTimer, useResponsiveTileSize } from "@/hooks";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 
 interface DominoesGameTableProps {
@@ -119,6 +119,10 @@ function DominoesGameTable({
     const [visibleTileCounts, setVisibleTileCounts] = useState<
         Record<string, number>
     >({});
+
+    // Responsive tile sizing
+    const { boardTileSize, handTileSize, ghostTileSize, isCompact } =
+        useResponsiveTileSize();
 
     // Refs for deal animation tracking
     const previousRoundRef = useRef<number | null>(null);
@@ -534,6 +538,7 @@ function DominoesGameTable({
                                         }
                                         onTileSelect={handleTileSelect}
                                         showHints={showHints}
+                                        tileSize={handTileSize}
                                         layoutIdPrefix="dominoes"
                                     />
                                 )}
@@ -566,20 +571,43 @@ function DominoesGameTable({
                             onPlaceTile={handlePlaceTile}
                             onCancelSelection={handleCancelSelection}
                             lastPlayedSide={lastPlayedSide}
+                            tileSize={boardTileSize}
+                            ghostTileSize={ghostTileSize}
                             className="w-full"
                             layoutIdPrefix="dominoes"
                         />
 
-                        {/* Pass button when must pass */}
-                        {isMyTurn && isPlaying && mustPass && (
-                            <Button
-                                variant="destructive"
-                                onClick={handlePass}
-                                className="shadow-lg animate-pulse"
-                            >
-                                Pass (No Moves)
-                            </Button>
-                        )}
+                        {/* Pass button when must pass - enhanced visibility */}
+                        <AnimatePresence>
+                            {isMyTurn && isPlaying && mustPass && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.8, y: -10 }}
+                                    className="flex flex-col items-center gap-2"
+                                >
+                                    <Button
+                                        variant="destructive"
+                                        size={isCompact ? "default" : "lg"}
+                                        onClick={handlePass}
+                                        className="shadow-xl shadow-red-500/30 font-bold text-base px-6 py-3 ring-2 ring-red-400/50 ring-offset-2 ring-offset-black/50"
+                                    >
+                                        <motion.span
+                                            animate={{ scale: [1, 1.05, 1] }}
+                                            transition={{
+                                                duration: 1.5,
+                                                repeat: Infinity,
+                                            }}
+                                        >
+                                            Pass Turn
+                                        </motion.span>
+                                    </Button>
+                                    <span className="text-white/60 text-xs">
+                                        No playable tiles in hand
+                                    </span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
                         {/* Cancel selection hint when tile selected with both sides valid */}
                         {selectedTile && canPlaceLeft && canPlaceRight && (
