@@ -53,16 +53,15 @@ export interface ChipMovement {
 
 /**
  * LRC player state.
+ * Note: Connection status is tracked in state.players[id].isConnected
  */
 export interface LRCPlayer {
     id: string;
     name: string;
     /** Current chip count */
     chips: number;
-    /** Total chips won across all rounds (for multi-round tracking) */
-    totalWinnings: number;
-    /** Whether player is connected */
-    isConnected: boolean;
+    /** Net chips gained/lost this round (chips - startingChips) */
+    netChipsThisRound: number;
     /** Seat index for determining left/right neighbors */
     seatIndex: number;
 }

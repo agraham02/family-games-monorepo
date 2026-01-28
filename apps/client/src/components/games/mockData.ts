@@ -345,6 +345,7 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         currentTurnIndex,
         startingPlayerIndex: 0,
         handsCounts,
+        boneyardCount: 0,
         board,
         phase,
         round,
@@ -353,6 +354,7 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         playerScores,
         settings: {
             winTarget: 100,
+            roundLimit: null,
             gameMode: "individual",
             drawFromBoneyard: false,
             turnTimeLimit: null,
@@ -428,8 +430,7 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
             id,
             name: MOCK_PLAYER_NAMES[i] || `Player ${i + 1}`,
             chips,
-            totalWinnings: 0,
-            isConnected: true,
+            netChipsThisRound: 0,
             seatIndex: i,
         });
     }
@@ -454,12 +455,13 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
     }
 
     // Generate standard players map for base type compatibility
+    // Connection status is tracked in players, not in LRCPlayer
     const players: Record<
         string,
         { id: string; name: string; isConnected: boolean }
     > = {};
     lrcPlayers.forEach((p) => {
-        players[p.id] = { id: p.id, name: p.name, isConnected: p.isConnected };
+        players[p.id] = { id: p.id, name: p.name, isConnected: true };
     });
 
     const gameData: LRCData = {

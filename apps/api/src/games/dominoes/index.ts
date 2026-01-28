@@ -75,6 +75,7 @@ export interface DominoesState extends GameState {
 
     hands: Record<string, Tile[]>;
     handsCounts?: Record<string, number>; // For public state
+    boneyard: Tile[]; // Remaining tiles available to draw
     board: BoardState;
 
     phase: DominoesPhase;
@@ -143,6 +144,18 @@ function init(
             }
         }
 
+        // Validate all team players exist in room and are unique
+        const allTeamPlayers = room.teams.flat();
+        const uniquePlayers = new Set(allTeamPlayers);
+        if (uniquePlayers.size !== 4) {
+            throw new Error("Duplicate players detected in teams");
+        }
+        for (const playerId of allTeamPlayers) {
+            if (!room.users.find((u) => u.id === playerId)) {
+                throw new Error(`Player ${playerId} in team but not in room`);
+            }
+        }
+
         // Build teams object
         teams = {};
         teamScores = {};
@@ -174,15 +187,27 @@ function init(
     const dominoSet = buildDominoSet();
     const shuffledDominoes = shuffleTiles(dominoSet);
 
-    // Deal tiles to players
-    const hands = dealTilesToPlayers(shuffledDominoes, players);
+    // Deal tiles to players (with optional boneyard)
+    const { hands, boneyard } = dealTilesToPlayers(
+        shuffledDominoes,
+        players,
+        settings.drawFromBoneyard,
+    );
 
     // Determine starting player (player with highest double)
     // If no player has a double, start with first player
     const startingPlayerId = findPlayerWithHighestDouble(hands);
-    const startingPlayerIndex = startingPlayerId
+    let startingPlayerIndex = startingPlayerId
         ? playOrder.indexOf(startingPlayerId)
-        : 0; // Standard rule: first player starts if no doubles exist
+        : 0;
+
+    // Defensive check: if indexOf returned -1 (shouldn't happen), default to 0
+    if (startingPlayerIndex < 0) {
+        console.warn(
+            `Starting player ${startingPlayerId} not found in playOrder, defaulting to index 0`,
+        );
+        startingPlayerIndex = 0;
+    }
 
     // Initialize player scores
     const playerScores: Record<string, number> = {};
@@ -202,6 +227,7 @@ function init(
         startingPlayerIndex,
 
         hands,
+        boneyard,
         board: initializeBoard(),
 
         phase: "playing",
@@ -221,36 +247,49 @@ function init(
 }
 
 function reducer(state: DominoesState, action: GameAction): DominoesState {
-    logHistory(state, action);
+    // Log action to history (immutably)
+    const stateWithHistory: DominoesState = {
+        ...state,
+        history: [
+            ...state.history,
+            `Action: ${action.type}, Player: ${action.userId}, Payload: ${JSON.stringify(action.payload)}`,
+        ],
+    };
 
     switch (action.type) {
         case "PLACE_TILE":
             return handlePlaceTile(
-                state,
+                stateWithHistory,
                 action.userId,
                 action.payload.tile,
                 action.payload.side,
             );
         case "PASS":
-            return handlePass(state, action.userId);
+            return handlePass(stateWithHistory, action.userId);
+        case "DRAW_TILE":
+            return handleDrawTile(stateWithHistory, action.userId);
         case "CONTINUE_AFTER_ROUND_SUMMARY":
-            return startNextRound(state);
+            return startNextRound(stateWithHistory);
         default:
-            return state;
+            return stateWithHistory;
     }
 }
 
 function getState(state: DominoesState): Partial<DominoesState> & {
+    boneyardCount?: number;
     turnTimer?: { startedAt: number; duration: number; serverTime: number };
 } {
     const publicState = omitFields(state, [
         "hands",
+        "boneyard", // Don't expose actual tiles in boneyard
     ]) as Partial<DominoesState> & {
+        boneyardCount?: number;
         turnTimer?: { startedAt: number; duration: number; serverTime: number };
     };
     publicState.handsCounts = Object.fromEntries(
         state.playOrder.map((id) => [id, state.hands[id].length || 0]),
     );
+    publicState.boneyardCount = state.boneyard.length;
 
     // Add turn timer info if active (same format as Spades for consistency)
     const turnTimeLimit = state.settings?.turnTimeLimit;
@@ -310,29 +349,42 @@ function handlePlaceTile(
 ): DominoesState {
     // Validate phase
     if (state.phase !== "playing") {
-        throw new Error("Tiles can only be placed during the playing phase.");
+        console.warn(
+            `[DOMINOES] Tiles can only be placed during the playing phase. Current: ${state.phase}`,
+        );
+        return state;
     }
 
     // Validate turn
     if (currentPlayerId(state) !== playerId) {
-        throw new Error("Not your turn to place a tile.");
+        console.warn(
+            `[DOMINOES] Not ${playerId}'s turn. Current turn: ${currentPlayerId(state)}`,
+        );
+        return state;
     }
 
     // Check if player is connected
     if (state.players[playerId]?.isConnected === false) {
-        throw new Error("Player is disconnected and cannot place a tile.");
+        console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
+        return state;
     }
 
     // Validate tile is in hand
     const playerHand = state.hands[playerId] || [];
     const tileIdx = playerHand.findIndex((t) => t.id === tile.id);
     if (tileIdx === -1) {
-        throw new Error("Tile not in player's hand.");
+        console.warn(
+            `[DOMINOES] Tile ${tile.id} not in player ${playerId}'s hand`,
+        );
+        return state;
     }
 
     // Validate the move is legal
     if (!canPlaceTile(tile, state.board, side)) {
-        throw new Error("Tile cannot be placed on that side of the board.");
+        console.warn(
+            `[DOMINOES] Tile ${tile.id} cannot be placed on ${side} side`,
+        );
+        return state;
     }
 
     // Remove tile from hand
@@ -374,28 +426,108 @@ function handlePlaceTile(
 }
 
 /**
- * Handle a player passing their turn
+ * Handle drawing a tile from the boneyard.
+ * Only allowed when drawFromBoneyard setting is enabled and player has no legal moves.
  */
-function handlePass(state: DominoesState, playerId: string): DominoesState {
+function handleDrawTile(state: DominoesState, playerId: string): DominoesState {
+    // Validate drawFromBoneyard is enabled
+    if (!state.settings.drawFromBoneyard) {
+        console.warn(`[DOMINOES] Drawing from boneyard is disabled`);
+        return state;
+    }
+
     // Validate phase
     if (state.phase !== "playing") {
-        throw new Error("Can only pass during the playing phase.");
+        console.warn(
+            `[DOMINOES] Can only draw during the playing phase. Current: ${state.phase}`,
+        );
+        return state;
     }
 
     // Validate turn
     if (currentPlayerId(state) !== playerId) {
-        throw new Error("Not your turn to pass.");
+        console.warn(`[DOMINOES] Not ${playerId}'s turn to draw`);
+        return state;
     }
 
     // Check if player is connected
     if (state.players[playerId]?.isConnected === false) {
-        throw new Error("Player is disconnected and cannot pass.");
+        console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
+        return state;
+    }
+
+    // Validate boneyard has tiles
+    if (state.boneyard.length === 0) {
+        console.warn(`[DOMINOES] Boneyard is empty, player must pass`);
+        return state;
     }
 
     // Verify player actually cannot play (has no legal moves)
     const playerHand = state.hands[playerId] || [];
     if (hasLegalMove(playerHand, state.board)) {
-        throw new Error("Cannot pass when you have a legal move.");
+        console.warn(
+            `[DOMINOES] Player ${playerId} has legal moves and cannot draw`,
+        );
+        return state;
+    }
+
+    // Draw a tile from boneyard and add to player's hand
+    const [drawnTile, ...remainingBoneyard] = state.boneyard;
+    const newHand = [...playerHand, drawnTile];
+
+    // Reset consecutive passes since player took an action
+    // (Player's turn continues - they can draw again, play, or pass if boneyard empty)
+    return {
+        ...state,
+        hands: {
+            ...state.hands,
+            [playerId]: newHand,
+        },
+        boneyard: remainingBoneyard,
+        consecutivePasses: 0,
+        // Keep turn timer running for same player
+    };
+}
+
+/**
+ * Handle a player passing their turn
+ */
+function handlePass(state: DominoesState, playerId: string): DominoesState {
+    // Validate phase
+    if (state.phase !== "playing") {
+        console.warn(
+            `[DOMINOES] Can only pass during the playing phase. Current: ${state.phase}`,
+        );
+        return state;
+    }
+
+    // Validate turn
+    if (currentPlayerId(state) !== playerId) {
+        console.warn(`[DOMINOES] Not ${playerId}'s turn to pass`);
+        return state;
+    }
+
+    // Check if player is connected
+    if (state.players[playerId]?.isConnected === false) {
+        console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
+        return state;
+    }
+
+    // In boneyard mode, player must draw tiles until they can play or boneyard is empty
+    if (state.settings.drawFromBoneyard && state.boneyard.length > 0) {
+        console.warn(
+            `[DOMINOES] Player ${playerId} must draw from boneyard before passing`,
+        );
+        return state;
+    }
+
+    // Verify player actually cannot play (has no legal moves)
+    const playerHand = state.hands[playerId] || [];
+    if (hasLegalMove(playerHand, state.board)) {
+        console.warn(
+            `[DOMINOES] Player ${playerId} has legal moves and cannot pass`,
+        );
+        return state;
     }
 
     // Increment consecutive passes
@@ -440,6 +572,11 @@ function endRound(
         state.teams,
     );
 
+    // Check if roundLimit has been reached
+    const roundLimitReached =
+        state.settings.roundLimit !== null &&
+        state.round >= state.settings.roundLimit;
+
     // Check if anyone has reached the win target
     let gameWinner: string | undefined;
     let winningTeamId: number | undefined;
@@ -456,6 +593,22 @@ function endRound(
             gameWinner = state.teams?.[winningTeamId]?.players[0];
         }
 
+        // If round limit reached but no winner by score, determine winner by highest score
+        if (roundLimitReached && winningTeamId === undefined) {
+            const teamIds = Object.keys(scoreResult.teamScores).map(Number);
+            const highestScore = Math.max(
+                ...teamIds.map((id) => scoreResult.teamScores[id] ?? 0),
+            );
+            const winningTeamIds = teamIds.filter(
+                (id) => scoreResult.teamScores[id] === highestScore,
+            );
+            // If tied, first team wins (could also be a tie scenario)
+            if (winningTeamIds.length === 1) {
+                winningTeamId = winningTeamIds[0];
+                gameWinner = state.teams?.[winningTeamId]?.players[0];
+            }
+        }
+
         // Update team objects with new scores
         const updatedTeams: Record<number, DominoesTeam> = {};
         for (const [teamId, team] of Object.entries(state.teams ?? {})) {
@@ -464,6 +617,8 @@ function endRound(
                 score: scoreResult.teamScores[Number(teamId)] ?? team.score,
             };
         }
+
+        const isGameOver = winningTeamId !== undefined || roundLimitReached;
 
         return {
             ...state,
@@ -477,7 +632,7 @@ function endRound(
             isRoundTie: scoreResult.isTie,
             gameWinner,
             winningTeamId,
-            phase: winningTeamId !== undefined ? "finished" : "round-summary",
+            phase: isGameOver ? "finished" : "round-summary",
         };
     }
 
@@ -490,6 +645,23 @@ function endRound(
         gameWinner = String(winner);
     }
 
+    // If round limit reached but no winner by score, determine winner by highest score
+    if (roundLimitReached && !gameWinner) {
+        const playerIds = Object.keys(scoreResult.playerScores);
+        const highestScore = Math.max(
+            ...playerIds.map((id) => scoreResult.playerScores[id] ?? 0),
+        );
+        const winners = playerIds.filter(
+            (id) => scoreResult.playerScores[id] === highestScore,
+        );
+        // If tied, first player wins (could also be a tie scenario)
+        if (winners.length === 1) {
+            gameWinner = winners[0];
+        }
+    }
+
+    const isGameOver = gameWinner !== undefined || roundLimitReached;
+
     return {
         ...state,
         playerScores: scoreResult.playerScores,
@@ -499,7 +671,7 @@ function endRound(
         roundPoints: scoreResult.roundPoints,
         isRoundTie: scoreResult.isTie,
         gameWinner,
-        phase: gameWinner ? "finished" : "round-summary",
+        phase: isGameOver ? "finished" : "round-summary",
     };
 }
 
@@ -508,23 +680,40 @@ function endRound(
  */
 function startNextRound(state: DominoesState): DominoesState {
     if (state.phase !== "round-summary") {
-        throw new Error("Can only start next round from round-summary phase.");
+        console.warn(
+            `[DOMINOES] Can only start next round from round-summary phase. Current: ${state.phase}`,
+        );
+        return state;
     }
 
     // Generate new tiles
     const dominoSet = buildDominoSet();
     const shuffledDominoes = shuffleTiles(dominoSet);
-    const newHands = dealTilesToPlayers(shuffledDominoes, state.players);
+    const { hands: newHands, boneyard } = dealTilesToPlayers(
+        shuffledDominoes,
+        state.players,
+        state.settings.drawFromBoneyard,
+    );
 
     // Determine new starting player (player with highest double)
     const startingPlayerId = findPlayerWithHighestDouble(newHands);
-    const startingPlayerIndex = startingPlayerId
+    let startingPlayerIndex = startingPlayerId
         ? state.playOrder.indexOf(startingPlayerId)
         : (state.startingPlayerIndex + 1) % state.playOrder.length;
+
+    // Defensive check: if indexOf returned -1 (shouldn't happen), rotate from previous
+    if (startingPlayerIndex < 0) {
+        console.warn(
+            `Starting player ${startingPlayerId} not found in playOrder, rotating from previous`,
+        );
+        startingPlayerIndex =
+            (state.startingPlayerIndex + 1) % state.playOrder.length;
+    }
 
     return {
         ...state,
         hands: newHands,
+        boneyard,
         board: initializeBoard(),
         currentTurnIndex: startingPlayerIndex,
         startingPlayerIndex,
@@ -543,12 +732,6 @@ function startNextRound(state: DominoesState): DominoesState {
 
 function currentPlayerId(state: DominoesState): string {
     return state.playOrder[state.currentTurnIndex];
-}
-
-function logHistory(state: DominoesState, action: GameAction): void {
-    state.history.push(
-        `Action: ${action.type}, Player: ${action.userId}, Payload: ${JSON.stringify(action.payload)}`,
-    );
 }
 
 /**

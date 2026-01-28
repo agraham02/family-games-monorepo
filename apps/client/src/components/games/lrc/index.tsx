@@ -53,6 +53,7 @@ interface LRCProps {
 
 interface PlayerSlotProps {
     player: LRCPlayer;
+    isConnected: boolean;
     isCurrentTurn: boolean;
     isHero: boolean;
     isWinner: boolean;
@@ -66,6 +67,7 @@ interface PlayerSlotProps {
 
 function PlayerSlot({
     player,
+    isConnected,
     isCurrentTurn,
     isHero,
     isWinner,
@@ -87,7 +89,7 @@ function PlayerSlot({
                 "relative flex flex-col items-center gap-2 p-3 rounded-xl transition-colors",
                 isCurrentTurn && "ring-2 ring-amber-400 bg-amber-500/20",
                 isWinner && "ring-2 ring-green-400 bg-green-500/20",
-                !player.isConnected && "opacity-50",
+                !isConnected && "opacity-50",
             )}
             layout
         >
@@ -404,6 +406,9 @@ export default function LRC({
                     <CircularPlayerSlot key={player.id} playerIndex={idx}>
                         <PlayerSlot
                             player={player}
+                            isConnected={
+                                gameData.players[player.id]?.isConnected ?? true
+                            }
                             isCurrentTurn={player.id === currentPlayer?.id}
                             isHero={player.id === userId}
                             isWinner={player.id === gameData.winnerId}

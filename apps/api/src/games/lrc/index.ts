@@ -19,9 +19,10 @@ import {
 } from "@family-games/shared";
 import { GameModule, GameAction } from "../../services/GameManager";
 import { v4 as uuidv4 } from "uuid";
+import { produce } from "immer";
+import { shuffle } from "../shared";
 import {
     rollDice,
-    shufflePlayers,
     findNextPlayerIndex,
     getDiceCount,
     isTripleWild,
@@ -67,16 +68,15 @@ function init(room: Room, customSettings?: Partial<LRCSettings>): LRCState {
         ...customSettings,
     };
 
-    // Shuffle players for random turn order
-    const shuffledUsers = shufflePlayers(room.users);
+    // Shuffle players for random turn order using shared shuffle
+    const shuffledUsers = shuffle(room.users);
 
     // Create LRC players with initial chips
     const lrcPlayers: LRCPlayer[] = shuffledUsers.map((user, index) => ({
         id: user.id,
         name: user.name,
         chips: settings.startingChips,
-        totalWinnings: 0,
-        isConnected: true,
+        netChipsThisRound: 0,
         seatIndex: index,
     }));
 
@@ -115,396 +115,444 @@ function init(room: Room, customSettings?: Partial<LRCSettings>): LRCState {
 
 /**
  * LRC game reducer - handles all game actions.
+ * Uses immer for immutable state updates.
  */
 function reducer(state: LRCState, action: GameAction): LRCState {
     const { type, payload, userId } = action;
 
-    // Create a deep copy to avoid mutation
-    const newState: LRCState = JSON.parse(JSON.stringify(state));
+    return produce(state, (draft) => {
+        switch (type) {
+            case "ROLL_DICE": {
+                const currentPlayer =
+                    draft.lrcPlayers[draft.currentPlayerIndex];
 
-    switch (type) {
-        case "ROLL_DICE": {
-            const currentPlayer =
-                newState.lrcPlayers[newState.currentPlayerIndex];
-
-            // Validate it's the current player's turn
-            if (userId !== currentPlayer.id) {
-                newState.history.push(
-                    `[ERROR] ${userId} tried to roll but it's ${currentPlayer.id}'s turn`,
-                );
-                return state; // Return original state on error
-            }
-
-            // Validate phase
-            if (newState.phase !== "waiting-for-roll") {
-                newState.history.push(
-                    `[ERROR] Cannot roll in phase: ${newState.phase}`,
-                );
-                return state;
-            }
-
-            // Validate player has chips
-            if (currentPlayer.chips === 0) {
-                newState.history.push(
-                    `[ERROR] ${currentPlayer.name} has no chips to roll`,
-                );
-                return state;
-            }
-
-            // Roll dice
-            const diceCount = getDiceCount(currentPlayer.chips);
-            const roll = rollDice(diceCount, newState.settings.wildMode);
-
-            newState.currentRoll = roll;
-            newState.history.push(
-                `${currentPlayer.name} rolled ${diceCount} dice: ${roll.map((d) => d.face).join(", ")}`,
-            );
-
-            // Check for triple wild instant win
-            if (newState.settings.wildMode && isTripleWild(roll)) {
-                newState.history.push(
-                    `${currentPlayer.name} rolled TRIPLE WILD - INSTANT WIN!`,
-                );
-                newState.phase = "round-over";
-                newState.winnerId = currentPlayer.id;
-
-                // Award all chips including center pot
-                const totalChips =
-                    newState.lrcPlayers.reduce((sum, p) => sum + p.chips, 0) +
-                    newState.centerPot;
-                newState.lrcPlayers = newState.lrcPlayers.map((p) => ({
-                    ...p,
-                    chips: p.id === currentPlayer.id ? totalChips : 0,
-                }));
-                newState.centerPot = 0;
-
-                return newState;
-            }
-
-            // Check if there are WILD dice that need target selection
-            const wildCount = countWildDice(roll);
-            if (wildCount > 0 && newState.settings.wildMode) {
-                // Find indices of WILD dice
-                const wildIndices = roll
-                    .map((die, idx) => (die.face === "WILD" ? idx : -1))
-                    .filter((idx) => idx >= 0);
-
-                // Auto-select richest player for all wild targets
-                const autoTarget = findPlayerWithMostChips(
-                    newState.lrcPlayers,
-                    currentPlayer.id,
-                );
-
-                if (autoTarget) {
-                    // Auto-assign targets to richest player
-                    newState.wildTargets = wildIndices.map(() => autoTarget);
-                    newState.pendingWildTargets = [];
-
-                    // Calculate movements with auto-selected targets
-                    const movements = calculateChipMovements(
-                        newState.lrcPlayers,
-                        newState.currentPlayerIndex,
-                        roll,
-                        newState.wildTargets,
+                // Validate it's the current player's turn
+                if (userId !== currentPlayer.id) {
+                    draft.history.push(
+                        `[ERROR] ${userId} tried to roll but it's ${currentPlayer.id}'s turn`,
                     );
-                    newState.chipMovements = movements;
+                    return state; // Return original state on error
+                }
+
+                // Validate phase
+                if (draft.phase !== "waiting-for-roll") {
+                    draft.history.push(
+                        `[ERROR] Cannot roll in phase: ${draft.phase}`,
+                    );
+                    return state;
+                }
+
+                // Validate player has chips
+                if (currentPlayer.chips === 0) {
+                    draft.history.push(
+                        `[ERROR] ${currentPlayer.name} has no chips to roll`,
+                    );
+                    return state;
+                }
+
+                // Roll dice
+                const diceCount = getDiceCount(currentPlayer.chips);
+                const roll = rollDice(diceCount, draft.settings.wildMode);
+
+                draft.currentRoll = roll;
+                draft.history.push(
+                    `${currentPlayer.name} rolled ${diceCount} dice: ${roll.map((d) => d.face).join(", ")}`,
+                );
+
+                // Check for triple wild instant win
+                if (draft.settings.wildMode && isTripleWild(roll)) {
+                    draft.history.push(
+                        `${currentPlayer.name} rolled TRIPLE WILD - INSTANT WIN!`,
+                    );
+                    draft.phase = "round-over";
+                    draft.winnerId = currentPlayer.id;
+
+                    // Award all chips including center pot
+                    const totalChips =
+                        draft.lrcPlayers.reduce((sum, p) => sum + p.chips, 0) +
+                        draft.centerPot;
+
+                    for (const player of draft.lrcPlayers) {
+                        if (player.id === currentPlayer.id) {
+                            player.netChipsThisRound +=
+                                totalChips - player.chips;
+                            player.chips = totalChips;
+                        } else {
+                            player.netChipsThisRound -= player.chips;
+                            player.chips = 0;
+                        }
+                    }
+                    draft.centerPot = 0;
+                    return;
+                }
+
+                // Check if there are WILD dice that need target selection
+                const wildCount = countWildDice(roll);
+                if (wildCount > 0 && draft.settings.wildMode) {
+                    // Find indices of WILD dice
+                    const wildIndices = roll
+                        .map((die, idx) => (die.face === "WILD" ? idx : -1))
+                        .filter((idx) => idx >= 0);
+
+                    // Auto-select richest player for all wild targets
+                    const autoTarget = findPlayerWithMostChips(
+                        draft.lrcPlayers,
+                        currentPlayer.id,
+                    );
+
+                    if (autoTarget) {
+                        // Auto-assign targets to richest player
+                        draft.wildTargets = wildIndices.map(() => autoTarget);
+                        draft.pendingWildTargets = [];
+
+                        // Calculate movements with auto-selected targets
+                        const movements = calculateChipMovements(
+                            draft.lrcPlayers,
+                            draft.currentPlayerIndex,
+                            roll,
+                            draft.wildTargets,
+                        );
+                        draft.chipMovements = movements;
+                    } else {
+                        // No valid targets (everyone else has 0 chips)
+                        draft.wildTargets = [];
+                        draft.pendingWildTargets = [];
+                        const movements = calculateChipMovements(
+                            draft.lrcPlayers,
+                            draft.currentPlayerIndex,
+                            roll,
+                            [],
+                        );
+                        draft.chipMovements = movements;
+                    }
                 } else {
-                    // No valid targets (everyone else has 0 chips)
-                    newState.wildTargets = [];
-                    newState.pendingWildTargets = [];
+                    // Calculate movements for non-wild dice
                     const movements = calculateChipMovements(
-                        newState.lrcPlayers,
-                        newState.currentPlayerIndex,
+                        draft.lrcPlayers,
+                        draft.currentPlayerIndex,
                         roll,
                         [],
                     );
-                    newState.chipMovements = movements;
-                }
-            } else {
-                // Calculate movements for non-wild dice
-                const movements = calculateChipMovements(
-                    newState.lrcPlayers,
-                    newState.currentPlayerIndex,
-                    roll,
-                    [],
-                );
-                newState.chipMovements = movements;
-            }
-
-            // Transition to showing-results phase with auto-confirm timer
-            newState.phase = "showing-results";
-            const autoConfirmDelay =
-                newState.settings.turnTimeLimit ?? LRC_AUTO_CONFIRM_DELAY;
-            newState.autoConfirmAt = new Date(
-                Date.now() + autoConfirmDelay * 1000,
-            ).toISOString();
-
-            return newState;
-        }
-
-        case "CONFIRM_RESULTS": {
-            // Anyone can confirm (or auto-confirm after timeout)
-            if (newState.phase !== "showing-results") {
-                newState.history.push(
-                    `[ERROR] No results to confirm in phase: ${newState.phase}`,
-                );
-                return state;
-            }
-
-            // Apply chip movements
-            if (newState.chipMovements) {
-                const result = applyChipMovements(
-                    newState.lrcPlayers,
-                    newState.chipMovements,
-                );
-                newState.lrcPlayers = result.players;
-                newState.centerPot += result.centerPotDelta;
-            }
-
-            // Clear roll/movement state
-            newState.currentRoll = null;
-            newState.chipMovements = null;
-            newState.wildTargets = [];
-            newState.pendingWildTargets = [];
-            newState.autoConfirmAt = undefined;
-
-            // Check win condition
-            const winner = checkWinCondition(newState.lrcPlayers);
-
-            if (winner) {
-                // Check for Last Chip Challenge
-                if (
-                    newState.settings.lastChipChallenge &&
-                    !newState.lastChipChallengeActive
-                ) {
-                    newState.history.push(
-                        `${winner.name} is the last player with chips - LAST CHIP CHALLENGE!`,
-                    );
-                    newState.phase = "last-chip-challenge";
-                    newState.lastChipChallengeActive = true;
-                    newState.currentPlayerIndex = newState.lrcPlayers.findIndex(
-                        (p) => p.id === winner.id,
-                    );
-                    newState.turnStartedAt = new Date().toISOString();
-                    return newState;
+                    draft.chipMovements = movements;
                 }
 
-                // Winner determined
-                newState.history.push(
-                    `${winner.name} wins with ${winner.chips} chips!`,
-                );
-                newState.phase = "round-over";
-                newState.winnerId = winner.id;
-
-                // Award center pot to winner
-                const winnerIdx = newState.lrcPlayers.findIndex(
-                    (p) => p.id === winner.id,
-                );
-                if (winnerIdx >= 0) {
-                    newState.lrcPlayers[winnerIdx].chips += newState.centerPot;
-                    newState.lrcPlayers[winnerIdx].totalWinnings +=
-                        newState.centerPot;
-                    newState.centerPot = 0;
-                }
-
-                return newState;
-            }
-
-            // Find next player with chips
-            const nextIndex = findNextPlayerIndex(
-                newState.lrcPlayers,
-                newState.currentPlayerIndex,
-            );
-            newState.currentPlayerIndex = nextIndex;
-            newState.phase = "waiting-for-roll";
-            newState.turnStartedAt = new Date().toISOString();
-
-            newState.history.push(
-                `Turn passes to ${newState.lrcPlayers[nextIndex].name}`,
-            );
-
-            return newState;
-        }
-
-        case "CHOOSE_WILD_TARGET": {
-            // Handle manual wild target selection (if we add UI for it later)
-            if (newState.phase !== "wild-target-selection") {
-                return state;
-            }
-
-            const { targetPlayerId } = payload as { targetPlayerId: string };
-            const validTargets = getValidWildTargets(
-                newState.lrcPlayers,
-                newState.lrcPlayers[newState.currentPlayerIndex].id,
-            );
-
-            if (!validTargets.includes(targetPlayerId)) {
-                newState.history.push(
-                    `[ERROR] Invalid wild target: ${targetPlayerId}`,
-                );
-                return state;
-            }
-
-            newState.wildTargets.push(targetPlayerId);
-            newState.pendingWildTargets.shift();
-
-            if (newState.pendingWildTargets.length === 0) {
-                // All targets selected, recalculate movements and transition
-                const movements = calculateChipMovements(
-                    newState.lrcPlayers,
-                    newState.currentPlayerIndex,
-                    newState.currentRoll!,
-                    newState.wildTargets,
-                );
-                newState.chipMovements = movements;
-                newState.phase = "showing-results";
-                newState.autoConfirmAt = new Date(
-                    Date.now() +
-                        (newState.settings.turnTimeLimit ??
-                            LRC_AUTO_CONFIRM_DELAY) *
-                            1000,
+                // Transition to showing-results phase with auto-confirm timer
+                draft.phase = "showing-results";
+                const autoConfirmDelay =
+                    draft.settings.turnTimeLimit ?? LRC_AUTO_CONFIRM_DELAY;
+                draft.autoConfirmAt = new Date(
+                    Date.now() + autoConfirmDelay * 1000,
                 ).toISOString();
+                return;
             }
 
-            return newState;
-        }
-
-        case "LAST_CHIP_CHALLENGE_ROLL": {
-            if (newState.phase !== "last-chip-challenge") {
-                return state;
-            }
-
-            const challenger = newState.lrcPlayers[newState.currentPlayerIndex];
-            if (userId !== challenger.id) {
-                return state;
-            }
-
-            // Roll dice for challenge
-            const diceCount = getDiceCount(challenger.chips);
-            const roll = rollDice(diceCount, false); // No wild mode for challenge
-
-            newState.lastChipChallengeRoll = roll;
-
-            if (isAllDots(roll)) {
-                // Challenge succeeded - player wins!
-                newState.history.push(
-                    `${challenger.name} rolled ALL DOTS in Last Chip Challenge - VICTORY!`,
-                );
-                newState.lastChipChallengeSuccess = true;
-                newState.phase = "round-over";
-                newState.winnerId = challenger.id;
-
-                // Award center pot
-                challenger.chips += newState.centerPot;
-                challenger.totalWinnings += newState.centerPot;
-                newState.centerPot = 0;
-            } else {
-                // Challenge failed - apply chip movements and continue
-                newState.history.push(
-                    `${challenger.name} failed Last Chip Challenge: ${roll.map((d) => d.face).join(", ")}`,
-                );
-                newState.lastChipChallengeSuccess = false;
-                newState.lastChipChallengeActive = false;
-
-                // Calculate and apply movements from challenge roll
-                const movements = calculateChipMovements(
-                    newState.lrcPlayers,
-                    newState.currentPlayerIndex,
-                    roll,
-                    [],
-                );
-
-                const result = applyChipMovements(
-                    newState.lrcPlayers,
-                    movements,
-                );
-                newState.lrcPlayers = result.players;
-                newState.centerPot += result.centerPotDelta;
-
-                // Clear challenge state
-                newState.lastChipChallengeRoll = null;
-
-                // Check if there's now a different winner
-                const winner = checkWinCondition(newState.lrcPlayers);
-                if (winner) {
-                    newState.history.push(
-                        `${winner.name} wins after failed challenge!`,
+            case "CONFIRM_RESULTS": {
+                // Anyone can confirm (or auto-confirm after timeout)
+                if (draft.phase !== "showing-results") {
+                    draft.history.push(
+                        `[ERROR] No results to confirm in phase: ${draft.phase}`,
                     );
-                    newState.phase = "round-over";
-                    newState.winnerId = winner.id;
+                    return state;
+                }
 
-                    const winnerIdx = newState.lrcPlayers.findIndex(
+                // Apply chip movements and update netChipsThisRound
+                if (draft.chipMovements) {
+                    const result = applyChipMovements(
+                        draft.lrcPlayers,
+                        draft.chipMovements,
+                    );
+
+                    // Update netChipsThisRound for all affected players
+                    for (let i = 0; i < draft.lrcPlayers.length; i++) {
+                        const oldChips = draft.lrcPlayers[i].chips;
+                        const newChips = result.players[i].chips;
+                        draft.lrcPlayers[i].chips = newChips;
+                        draft.lrcPlayers[i].netChipsThisRound +=
+                            newChips - oldChips;
+                    }
+                    draft.centerPot += result.centerPotDelta;
+                }
+
+                // Clear roll/movement state
+                draft.currentRoll = null;
+                draft.chipMovements = null;
+                draft.wildTargets = [];
+                draft.pendingWildTargets = [];
+                draft.autoConfirmAt = undefined;
+
+                // Check win condition
+                const winner = checkWinCondition(draft.lrcPlayers);
+
+                if (winner) {
+                    // Check for Last Chip Challenge
+                    if (
+                        draft.settings.lastChipChallenge &&
+                        !draft.lastChipChallengeActive
+                    ) {
+                        draft.history.push(
+                            `${winner.name} is the last player with chips - LAST CHIP CHALLENGE!`,
+                        );
+                        draft.phase = "last-chip-challenge";
+                        draft.lastChipChallengeActive = true;
+                        draft.currentPlayerIndex = draft.lrcPlayers.findIndex(
+                            (p) => p.id === winner.id,
+                        );
+                        draft.turnStartedAt = new Date().toISOString();
+                        return;
+                    }
+
+                    // Winner determined
+                    draft.history.push(
+                        `${winner.name} wins with ${winner.chips} chips!`,
+                    );
+                    draft.phase = "round-over";
+                    draft.winnerId = winner.id;
+
+                    // Award center pot to winner and update net chips
+                    const winnerIdx = draft.lrcPlayers.findIndex(
                         (p) => p.id === winner.id,
                     );
                     if (winnerIdx >= 0) {
-                        newState.lrcPlayers[winnerIdx].chips +=
-                            newState.centerPot;
-                        newState.centerPot = 0;
+                        draft.lrcPlayers[winnerIdx].chips += draft.centerPot;
+                        draft.lrcPlayers[winnerIdx].netChipsThisRound +=
+                            draft.centerPot;
+                        draft.centerPot = 0;
                     }
-                } else {
-                    // Continue game
-                    const nextIndex = findNextPlayerIndex(
-                        newState.lrcPlayers,
-                        newState.currentPlayerIndex,
-                    );
-                    newState.currentPlayerIndex = nextIndex;
-                    newState.phase = "waiting-for-roll";
-                    newState.turnStartedAt = new Date().toISOString();
+                    return;
                 }
-            }
 
-            return newState;
-        }
-
-        case "PLAY_AGAIN": {
-            if (newState.phase !== "round-over") {
-                return state;
-            }
-
-            // Only leader can start new round
-            if (userId !== newState.leaderId) {
-                newState.history.push(
-                    `[ERROR] Only the leader can start a new round`,
+                // Find next player with chips
+                const nextIndex = findNextPlayerIndex(
+                    draft.lrcPlayers,
+                    draft.currentPlayerIndex,
                 );
+
+                // Defensive check - should never happen if game logic is correct
+                if (nextIndex < 0 || nextIndex >= draft.lrcPlayers.length) {
+                    draft.history.push(
+                        `[ERROR] Could not find next player with chips`,
+                    );
+                    return state;
+                }
+
+                draft.currentPlayerIndex = nextIndex;
+                draft.phase = "waiting-for-roll";
+                draft.turnStartedAt = new Date().toISOString();
+
+                draft.history.push(
+                    `Turn passes to ${draft.lrcPlayers[nextIndex].name}`,
+                );
+                return;
+            }
+
+            case "CHOOSE_WILD_TARGET": {
+                // Handle manual wild target selection (if we add UI for it later)
+                if (draft.phase !== "wild-target-selection") {
+                    return state;
+                }
+
+                // Validate payload
+                if (!payload || typeof payload !== "object") {
+                    draft.history.push(
+                        `[ERROR] Invalid payload for CHOOSE_WILD_TARGET`,
+                    );
+                    return state;
+                }
+
+                const { targetPlayerId } = payload as {
+                    targetPlayerId: string;
+                };
+
+                // Validate targetPlayerId exists and is a string
+                if (!targetPlayerId || typeof targetPlayerId !== "string") {
+                    draft.history.push(
+                        `[ERROR] Missing or invalid targetPlayerId`,
+                    );
+                    return state;
+                }
+
+                const validTargets = getValidWildTargets(
+                    draft.lrcPlayers,
+                    draft.lrcPlayers[draft.currentPlayerIndex].id,
+                );
+
+                if (!validTargets.includes(targetPlayerId)) {
+                    draft.history.push(
+                        `[ERROR] Invalid wild target: ${targetPlayerId}`,
+                    );
+                    return state;
+                }
+
+                draft.wildTargets.push(targetPlayerId);
+                draft.pendingWildTargets.shift();
+
+                if (draft.pendingWildTargets.length === 0) {
+                    // All targets selected, recalculate movements and transition
+                    const movements = calculateChipMovements(
+                        draft.lrcPlayers,
+                        draft.currentPlayerIndex,
+                        draft.currentRoll!,
+                        draft.wildTargets,
+                    );
+                    draft.chipMovements = movements;
+                    draft.phase = "showing-results";
+                    draft.autoConfirmAt = new Date(
+                        Date.now() +
+                            (draft.settings.turnTimeLimit ??
+                                LRC_AUTO_CONFIRM_DELAY) *
+                                1000,
+                    ).toISOString();
+                }
+                return;
+            }
+
+            case "LAST_CHIP_CHALLENGE_ROLL": {
+                if (draft.phase !== "last-chip-challenge") {
+                    return state;
+                }
+
+                const challenger = draft.lrcPlayers[draft.currentPlayerIndex];
+                if (userId !== challenger.id) {
+                    return state;
+                }
+
+                // Roll dice for challenge
+                const challengeDiceCount = getDiceCount(challenger.chips);
+                const challengeRoll = rollDice(challengeDiceCount, false); // No wild mode for challenge
+
+                draft.lastChipChallengeRoll = challengeRoll;
+
+                if (isAllDots(challengeRoll)) {
+                    // Challenge succeeded - player wins!
+                    draft.history.push(
+                        `${challenger.name} rolled ALL DOTS in Last Chip Challenge - VICTORY!`,
+                    );
+                    draft.lastChipChallengeSuccess = true;
+                    draft.phase = "round-over";
+                    draft.winnerId = challenger.id;
+
+                    // Award center pot and update net chips
+                    challenger.chips += draft.centerPot;
+                    challenger.netChipsThisRound += draft.centerPot;
+                    draft.centerPot = 0;
+                } else {
+                    // Challenge failed - apply chip movements and continue
+                    draft.history.push(
+                        `${challenger.name} failed Last Chip Challenge: ${challengeRoll.map((d) => d.face).join(", ")}`,
+                    );
+                    draft.lastChipChallengeSuccess = false;
+                    draft.lastChipChallengeActive = false;
+
+                    // Calculate and apply movements from challenge roll
+                    const challengeMovements = calculateChipMovements(
+                        draft.lrcPlayers,
+                        draft.currentPlayerIndex,
+                        challengeRoll,
+                        [],
+                    );
+
+                    const challengeResult = applyChipMovements(
+                        draft.lrcPlayers,
+                        challengeMovements,
+                    );
+
+                    // Update chips and net tracking for all players
+                    for (let i = 0; i < draft.lrcPlayers.length; i++) {
+                        const oldChips = draft.lrcPlayers[i].chips;
+                        const newChips = challengeResult.players[i].chips;
+                        draft.lrcPlayers[i].chips = newChips;
+                        draft.lrcPlayers[i].netChipsThisRound +=
+                            newChips - oldChips;
+                    }
+                    draft.centerPot += challengeResult.centerPotDelta;
+
+                    // Clear challenge state
+                    draft.lastChipChallengeRoll = null;
+
+                    // Check if there's now a different winner
+                    const challengeWinner = checkWinCondition(draft.lrcPlayers);
+                    if (challengeWinner) {
+                        draft.history.push(
+                            `${challengeWinner.name} wins after failed challenge!`,
+                        );
+                        draft.phase = "round-over";
+                        draft.winnerId = challengeWinner.id;
+
+                        const challengeWinnerIdx = draft.lrcPlayers.findIndex(
+                            (p) => p.id === challengeWinner.id,
+                        );
+                        if (challengeWinnerIdx >= 0) {
+                            draft.lrcPlayers[challengeWinnerIdx].chips +=
+                                draft.centerPot;
+                            draft.lrcPlayers[
+                                challengeWinnerIdx
+                            ].netChipsThisRound += draft.centerPot;
+                            draft.centerPot = 0;
+                        }
+                    } else {
+                        // Continue game
+                        const nextChallengeIndex = findNextPlayerIndex(
+                            draft.lrcPlayers,
+                            draft.currentPlayerIndex,
+                        );
+                        draft.currentPlayerIndex = nextChallengeIndex;
+                        draft.phase = "waiting-for-roll";
+                        draft.turnStartedAt = new Date().toISOString();
+                    }
+                }
+                return;
+            }
+
+            case "PLAY_AGAIN": {
+                if (draft.phase !== "round-over") {
+                    return state;
+                }
+
+                // Only leader can start new round
+                if (userId !== draft.leaderId) {
+                    draft.history.push(
+                        `[ERROR] Only the leader can start a new round`,
+                    );
+                    return state;
+                }
+
+                // Record round winner
+                if (draft.winnerId) {
+                    draft.roundWinners.push(draft.winnerId);
+                }
+
+                // Reset for new round - shuffle and reset all player state
+                const shuffledPlayers = shuffle([...draft.lrcPlayers]);
+                draft.lrcPlayers = shuffledPlayers.map((p, idx) => ({
+                    ...p,
+                    chips: draft.settings.startingChips,
+                    netChipsThisRound: 0, // Reset net tracking for new round
+                    seatIndex: idx,
+                }));
+
+                draft.currentPlayerIndex = 0;
+                draft.centerPot = 0;
+                draft.phase = "waiting-for-roll";
+                draft.currentRoll = null;
+                draft.chipMovements = null;
+                draft.pendingWildTargets = [];
+                draft.wildTargets = [];
+                draft.winnerId = null;
+                draft.lastChipChallengeActive = false;
+                draft.lastChipChallengeRoll = null;
+                draft.lastChipChallengeSuccess = null;
+                draft.roundNumber++;
+                draft.turnStartedAt = new Date().toISOString();
+
+                draft.history.push(`Round ${draft.roundNumber} started`);
+                return;
+            }
+
+            default:
+                draft.history.push(`[WARN] Unknown action type: ${type}`);
                 return state;
-            }
-
-            // Record round winner
-            if (newState.winnerId) {
-                newState.roundWinners.push(newState.winnerId);
-            }
-
-            // Reset for new round
-            const shuffledPlayers = shufflePlayers(newState.lrcPlayers);
-            newState.lrcPlayers = shuffledPlayers.map((p, idx) => ({
-                ...p,
-                chips: newState.settings.startingChips,
-                seatIndex: idx,
-            }));
-
-            newState.currentPlayerIndex = 0;
-            newState.centerPot = 0;
-            newState.phase = "waiting-for-roll";
-            newState.currentRoll = null;
-            newState.chipMovements = null;
-            newState.pendingWildTargets = [];
-            newState.wildTargets = [];
-            newState.winnerId = null;
-            newState.lastChipChallengeActive = false;
-            newState.lastChipChallengeRoll = null;
-            newState.lastChipChallengeSuccess = null;
-            newState.roundNumber++;
-            newState.turnStartedAt = new Date().toISOString();
-
-            newState.history.push(`Round ${newState.roundNumber} started`);
-
-            return newState;
         }
-
-        default:
-            newState.history.push(`[WARN] Unknown action type: ${type}`);
-            return state;
-    }
+    });
 }
 
 /**
@@ -589,7 +637,8 @@ function getPlayerState(state: LRCState, odusId: string): LRCPlayerData {
     const isMyTurn = currentPlayer?.id === odusId;
 
     const myChips = playerData?.chips ?? 0;
-    const netChips = myChips - state.settings.startingChips;
+    // Use tracked net chips (more accurate than recalculating)
+    const netChips = playerData?.netChipsThisRound ?? 0;
     const netWinningsCents = Math.round(
         netChips * state.settings.chipValue * 100,
     );
@@ -605,48 +654,39 @@ function getPlayerState(state: LRCState, odusId: string): LRCPlayerData {
 
 /**
  * Check if enough players are connected to continue the game.
+ * Uses state.players for connection status (single source of truth).
  */
 function checkMinimumPlayersConnected(state: LRCState): boolean {
-    const connectedPlayers = state.lrcPlayers.filter((p) => p.isConnected);
+    const connectedPlayers = state.lrcPlayers.filter(
+        (p) => state.players[p.id]?.isConnected !== false,
+    );
     return connectedPlayers.length >= LRC_MIN_PLAYERS;
 }
 
 /**
  * Handle player reconnection.
+ * Connection status is managed in state.players by GameManager.
  */
 function handleReconnect(state: LRCState, odusId: string): LRCState {
-    const playerIdx = state.lrcPlayers.findIndex((p) => p.id === odusId);
-    if (playerIdx >= 0) {
-        const newState = { ...state, lrcPlayers: [...state.lrcPlayers] };
-        newState.lrcPlayers[playerIdx] = {
-            ...newState.lrcPlayers[playerIdx],
-            isConnected: true,
-        };
-        newState.history = [
-            ...newState.history,
-            `${newState.lrcPlayers[playerIdx].name} reconnected`,
-        ];
-        return newState;
+    const player = state.lrcPlayers.find((p) => p.id === odusId);
+    if (player) {
+        return produce(state, (draft) => {
+            draft.history.push(`${player.name} reconnected`);
+        });
     }
     return state;
 }
 
 /**
  * Handle player disconnection.
+ * Connection status is managed in state.players by GameManager.
  */
 function handleDisconnect(state: LRCState, odusId: string): LRCState {
-    const playerIdx = state.lrcPlayers.findIndex((p) => p.id === odusId);
-    if (playerIdx >= 0) {
-        const newState = { ...state, lrcPlayers: [...state.lrcPlayers] };
-        newState.lrcPlayers[playerIdx] = {
-            ...newState.lrcPlayers[playerIdx],
-            isConnected: false,
-        };
-        newState.history = [
-            ...newState.history,
-            `${newState.lrcPlayers[playerIdx].name} disconnected`,
-        ];
-        return newState;
+    const player = state.lrcPlayers.find((p) => p.id === odusId);
+    if (player) {
+        return produce(state, (draft) => {
+            draft.history.push(`${player.name} disconnected`);
+        });
     }
     return state;
 }

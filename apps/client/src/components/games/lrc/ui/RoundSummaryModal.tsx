@@ -77,9 +77,11 @@ export function RoundSummaryModal({
         }).format(netValue);
     }, [netValue, chipValue]);
 
-    // Sort players by total winnings
+    // Sort players by net chips this round
     const sortedPlayers = useMemo(() => {
-        return [...players].sort((a, b) => b.totalWinnings - a.totalWinnings);
+        return [...players].sort(
+            (a, b) => b.netChipsThisRound - a.netChipsThisRound,
+        );
     }, [players]);
 
     return (

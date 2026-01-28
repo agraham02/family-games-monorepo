@@ -36,20 +36,8 @@ export function rollDice(count: number, wildMode: boolean): DieRoll[] {
     return rolls;
 }
 
-/**
- * Shuffle players for random turn order using Fisher-Yates algorithm.
- *
- * @param players - Array of players to shuffle
- * @returns New shuffled array (does not mutate original)
- */
-export function shufflePlayers<T>(players: T[]): T[] {
-    const shuffled = [...players];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
+// Note: For shuffling, use the shared shuffle utility from '../shared'
+// import { shuffle } from '../../shared';
 
 /**
  * Find the next player who should roll.
@@ -58,7 +46,8 @@ export function shufflePlayers<T>(players: T[]): T[] {
  *
  * @param players - Array of all players
  * @param currentIndex - Current player's index
- * @returns Index of next player (may be same player if only one has chips)
+ * @returns Index of next player with chips
+ * @throws Error if no player with chips can be found (game should have ended)
  */
 export function findNextPlayerIndex(
     players: LRCPlayer[],
@@ -75,7 +64,12 @@ export function findNextPlayerIndex(
     }
 
     // If we've checked all players and none have chips, game should have ended
-    // Return the next index anyway (will be caught by win condition check)
+    if (checked >= count && players[nextIndex].chips === 0) {
+        throw new Error(
+            "No players with chips remaining - win condition should have been detected",
+        );
+    }
+
     return nextIndex;
 }
 

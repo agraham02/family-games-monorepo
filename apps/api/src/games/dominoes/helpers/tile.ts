@@ -1,23 +1,24 @@
 // src/games/dominoes/helpers/tile.ts
 
 import { Tile } from "@family-games/shared";
+import { v4 as uuidv4 } from "uuid";
 import { GamePlayers } from "../../../services/GameManager";
 import { shuffle } from "../../shared";
 
 /**
  * Generate a standard double-six domino set (28 tiles)
  * Tiles range from [0,0] to [6,6]
+ * Each tile has a unique UUID to prevent ID collisions across games
  */
 export function buildDominoSet(): Tile[] {
     const tiles: Tile[] = [];
-    let idCounter = 0;
 
     for (let left = 0; left <= 6; left++) {
         for (let right = left; right <= 6; right++) {
             tiles.push({
                 left,
                 right,
-                id: `tile-${idCounter++}`,
+                id: uuidv4(),
             });
         }
     }
@@ -30,49 +31,66 @@ export function buildDominoSet(): Tile[] {
  */
 export function shuffleTiles(
     tiles: Tile[],
-    rng: () => number = Math.random
+    rng: () => number = Math.random,
 ): Tile[] {
     return shuffle(tiles, rng);
 }
 
 /**
- * Deal tiles to players. For 4 players, each gets 7 tiles.
- * Pre-condition: players.length === 4
+ * Result of dealing tiles to players
+ */
+export interface DealResult {
+    hands: Record<string, Tile[]>;
+    boneyard: Tile[];
+}
+
+/**
+ * Deal tiles to players.
+ * Standard mode (drawFromBoneyard=false): Each player gets 7 tiles, no boneyard.
+ * Boneyard mode (drawFromBoneyard=true): Each player gets 5 tiles, 8 remain in boneyard.
  */
 export function dealTilesToPlayers(
     tiles: Tile[],
-    players: GamePlayers
-): Record<string, Tile[]> {
+    players: GamePlayers,
+    drawFromBoneyard: boolean = false,
+): DealResult {
     const playerIds = Object.keys(players);
     if (playerIds.length !== 4) {
         throw new Error("Dominoes needs 4 players");
     }
+
+    const tilesPerPlayer = drawFromBoneyard ? 5 : 7;
+    const totalTilesToDeal = tilesPerPlayer * 4;
 
     const hands: Record<string, Tile[]> = playerIds.reduce(
         (acc, id) => {
             acc[id] = [];
             return acc;
         },
-        {} as Record<string, Tile[]>
+        {} as Record<string, Tile[]>,
     );
 
-    // Deal 7 tiles to each player (28 tiles total, 7 each)
-    if (tiles.length < 28) {
-        throw new Error("Not enough tiles to deal to 4 players");
+    if (tiles.length < totalTilesToDeal) {
+        throw new Error(
+            `Not enough tiles to deal ${tilesPerPlayer} to 4 players`,
+        );
     }
-    tiles.forEach((tile, idx) => {
-        if (idx < 28) {
-            const playerId = playerIds[idx % 4];
-            hands[playerId].push(tile);
-        }
-    });
+
+    // Deal tiles to each player
+    for (let i = 0; i < totalTilesToDeal; i++) {
+        const playerId = playerIds[i % 4];
+        hands[playerId].push(tiles[i]);
+    }
+
+    // Remaining tiles go to boneyard
+    const boneyard = tiles.slice(totalTilesToDeal);
 
     // Sort each hand by left value, then right value
     for (const playerId of playerIds) {
         hands[playerId] = sortHand(hands[playerId]);
     }
 
-    return hands;
+    return { hands, boneyard };
 }
 
 /**
@@ -101,7 +119,7 @@ export function getHighestDouble(hand: Tile[]): Tile | null {
     const doubles = hand.filter(isDouble);
     if (doubles.length === 0) return null;
     return doubles.reduce((highest, tile) =>
-        tile.left > highest.left ? tile : highest
+        tile.left > highest.left ? tile : highest,
     );
 }
 
@@ -110,7 +128,7 @@ export function getHighestDouble(hand: Tile[]): Tile | null {
  * Returns the playerId or null if no player has a double
  */
 export function findPlayerWithHighestDouble(
-    hands: Record<string, Tile[]>
+    hands: Record<string, Tile[]>,
 ): string | null {
     let highestDouble: Tile | null = null;
     let playerWithHighest: string | null = null;

@@ -87,7 +87,12 @@ export interface PassAction {
     playerId: string;
 }
 
-export type DominoesAction = PlaceTileAction | PassAction;
+export interface DrawTileAction {
+    type: "DRAW_TILE";
+    playerId: string;
+}
+
+export type DominoesAction = PlaceTileAction | PassAction | DrawTileAction;
 
 // ============================================================================
 // Dominoes Game State (API - extends GameState)
@@ -141,6 +146,7 @@ export interface DominoesState extends GameState {
  */
 export interface DominoesClientSettings {
     winTarget: number; // Score needed to win (default 100)
+    roundLimit: number | null; // Fixed number of rounds (null = unlimited)
     gameMode: DominoesGameMode; // Play mode (individual or team)
     drawFromBoneyard: boolean; // Allow drawing tiles instead of passing
     turnTimeLimit: number | null; // Seconds per turn (null = unlimited)
@@ -161,6 +167,7 @@ export type DominoesData = BaseGameData & {
 
     // Game pieces (public: only tile counts, not actual tiles)
     handsCounts: Record<string, number>;
+    boneyardCount: number; // Number of tiles remaining in boneyard
     board: BoardState;
 
     // Game flow

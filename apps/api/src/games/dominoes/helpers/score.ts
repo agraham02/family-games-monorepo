@@ -246,10 +246,11 @@ function calculateIndividualRoundScores(
     }
 
     // Single winner with lowest pip count
+    // Caribbean rules: Winner gets FULL opponent pips (not difference)
     const blockWinnerId = playersWithLowestPips[0];
     const winnerPoints = Object.entries(pipCounts)
         .filter(([id]) => id !== blockWinnerId)
-        .reduce((sum, [, pips]) => sum + (pips - lowestPipCount), 0);
+        .reduce((sum, [, pips]) => sum + pips, 0);
 
     playerScores[blockWinnerId] =
         (playerScores[blockWinnerId] || 0) + winnerPoints;
