@@ -3,6 +3,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { EdgePosition } from "./EdgeRegion";
+import { usePrefersReducedMotion } from "@/hooks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -30,7 +31,7 @@ const CARD_HEIGHT = 80;
 function getTargetOffset(
     position: EdgePosition,
     containerWidth: number,
-    containerHeight: number
+    containerHeight: number,
 ): { x: number; y: number; rotation: number } {
     // Calculate distance to edge (from center)
     const halfWidth = containerWidth / 2;
@@ -86,11 +87,34 @@ function DealingCard({
     onComplete,
     containerDimensions,
 }: DealingCardProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
     const target = getTargetOffset(
         targetPosition,
         containerDimensions.width,
-        containerDimensions.height
+        containerDimensions.height,
     );
+
+    // For reduced motion, just fade out quickly without flying animation
+    if (prefersReducedMotion) {
+        return (
+            <motion.div
+                className="fixed pointer-events-none"
+                style={{
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    left: `calc(50vw - ${CARD_WIDTH / 2}px)`,
+                    top: `calc(50vh - ${CARD_HEIGHT / 2}px)`,
+                    zIndex: 200,
+                }}
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 0 }}
+                transition={{ duration: 0.1, delay }}
+                onAnimationComplete={onComplete}
+            >
+                <div className="w-full h-full rounded-lg bg-linear-to-br from-blue-600 via-blue-700 to-blue-800 border border-blue-500/30 shadow-xl" />
+            </motion.div>
+        );
+    }
 
     return (
         <motion.div

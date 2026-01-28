@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PlayingCard as PlayingCardType } from "@shared/types";
 import { useGameTable } from "./GameTable";
+import { usePrefersReducedMotion } from "@/hooks";
 
 // Hash cache to avoid recalculating on every render
 const playerHashCache = new Map<string, number>();
@@ -42,7 +43,7 @@ interface TrickPileProps {
 function getCardPosition(
     index: number,
     playerId: string,
-    scale: number = 1
+    scale: number = 1,
 ): { x: number; y: number; rotation: number } {
     // Base positions for up to 8 cards
     const basePositions = [
@@ -95,6 +96,7 @@ const SUIT_COLORS = {
 
 function TrickPile({ plays, winningCard, className }: TrickPileProps) {
     const { layoutConfig } = useGameTable();
+    const prefersReducedMotion = usePrefersReducedMotion();
 
     // Scale down card positions and sizes for compact layout
     const isCompact = layoutConfig.layoutMode === "compact";
@@ -115,7 +117,7 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
             className={cn(
                 "relative flex items-center justify-center",
                 minSizeClasses,
-                className
+                className,
             )}
         >
             <AnimatePresence mode="popLayout">
@@ -128,7 +130,7 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                     const pos = getCardPosition(
                         index,
                         play.playerId,
-                        positionScale
+                        positionScale,
                     );
 
                     return (
@@ -136,16 +138,21 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                         <motion.div
                             key={`${play.playerId}-${play.card.rank}-${play.card.suit}`}
                             layoutId={`${play.playerId}-card-${play.card.suit}-${play.card.rank}`}
+                            layout={!prefersReducedMotion}
                             className="absolute"
                             style={{ zIndex: index }}
                             initial={false}
-                            transition={{
-                                layout: {
-                                    type: "spring",
-                                    stiffness: 350,
-                                    damping: 30,
-                                },
-                            }}
+                            transition={
+                                prefersReducedMotion
+                                    ? { duration: 0.1 }
+                                    : {
+                                          layout: {
+                                              type: "spring",
+                                              stiffness: 350,
+                                              damping: 30,
+                                          },
+                                      }
+                            }
                         >
                             {/* Inner wrapper: handles offset position within pile (no animation) */}
                             <div
@@ -162,22 +169,34 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                         isWinning &&
                                             (isCompact
                                                 ? "ring-2 ring-amber-400 shadow-amber-400/50"
-                                                : "ring-4 ring-amber-400 shadow-amber-400/50")
+                                                : "ring-4 ring-amber-400 shadow-amber-400/50"),
                                     )}
-                                    initial={{ scale: 0.85, opacity: 0.5 }}
+                                    initial={
+                                        prefersReducedMotion
+                                            ? false
+                                            : { scale: 0.85, opacity: 0.5 }
+                                    }
                                     animate={{ scale: 1, opacity: 1 }}
-                                    exit={{
-                                        scale: 0.3,
-                                        opacity: 0,
-                                        transition: {
-                                            duration: 0.15,
-                                            ease: "easeIn",
-                                        },
-                                    }}
-                                    transition={{
-                                        duration: 0.15,
-                                        ease: "easeOut",
-                                    }}
+                                    exit={
+                                        prefersReducedMotion
+                                            ? { opacity: 0 }
+                                            : {
+                                                  scale: 0.3,
+                                                  opacity: 0,
+                                                  transition: {
+                                                      duration: 0.15,
+                                                      ease: "easeIn",
+                                                  },
+                                              }
+                                    }
+                                    transition={
+                                        prefersReducedMotion
+                                            ? { duration: 0.1 }
+                                            : {
+                                                  duration: 0.15,
+                                                  ease: "easeOut",
+                                              }
+                                    }
                                 >
                                     {/* Card content - corner layout like real playing cards */}
                                     <div className="absolute inset-0">
@@ -189,11 +208,13 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                                     ? "text-[8px]"
                                                     : "text-[10px] md:text-xs",
                                                 "font-bold flex flex-col items-center leading-none",
-                                                SUIT_COLORS[play.card.suit]
+                                                SUIT_COLORS[play.card.suit],
                                             )}
                                         >
                                             <span>{play.card.rank}</span>
-                                            <span>{SUIT_MAP[play.card.suit]}</span>
+                                            <span>
+                                                {SUIT_MAP[play.card.suit]}
+                                            </span>
                                         </div>
 
                                         {/* Center suit */}
@@ -203,7 +224,7 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                                 isCompact
                                                     ? "text-base"
                                                     : "text-xl md:text-2xl",
-                                                SUIT_COLORS[play.card.suit]
+                                                SUIT_COLORS[play.card.suit],
                                             )}
                                         >
                                             {SUIT_MAP[play.card.suit]}
@@ -217,11 +238,13 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                                     ? "text-[8px]"
                                                     : "text-[10px] md:text-xs",
                                                 "font-bold flex flex-col items-center leading-none",
-                                                SUIT_COLORS[play.card.suit]
+                                                SUIT_COLORS[play.card.suit],
                                             )}
                                         >
                                             <span>{play.card.rank}</span>
-                                            <span>{SUIT_MAP[play.card.suit]}</span>
+                                            <span>
+                                                {SUIT_MAP[play.card.suit]}
+                                            </span>
                                         </div>
                                     </div>
                                 </motion.div>

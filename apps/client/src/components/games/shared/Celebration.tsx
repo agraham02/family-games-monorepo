@@ -2,28 +2,21 @@
  * Celebration - Reusable celebration animation component
  *
  * Provides confetti, sparkle, and winner effects for game endings.
+ * Uses @neoconfetti/react for optimized confetti animations.
  * Respects reduced motion preferences.
  */
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Confetti as NeoConfetti } from "@neoconfetti/react";
 import { cn } from "@/lib/utils";
 import { usePrefersReducedMotion } from "@/hooks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface ConfettiPiece {
-    id: number;
-    x: number;
-    color: string;
-    delay: number;
-    rotation: number;
-    size: number;
-}
 
 interface CelebrationProps {
     /** Whether to show the celebration */
@@ -56,45 +49,6 @@ const CONFETTI_COLORS = [
     "#F7DC6F", // Yellow
     "#BB8FCE", // Purple
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Confetti Piece Component
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ConfettiPieceComponent({ piece }: { piece: ConfettiPiece }) {
-    const prefersReducedMotion = usePrefersReducedMotion();
-
-    if (prefersReducedMotion) return null;
-
-    return (
-        <motion.div
-            className="absolute pointer-events-none"
-            style={{
-                left: `${piece.x}%`,
-                top: -20,
-                width: piece.size,
-                height: piece.size * 0.6,
-                backgroundColor: piece.color,
-                borderRadius: 2,
-            }}
-            initial={{
-                y: -20,
-                rotate: piece.rotation,
-                opacity: 1,
-            }}
-            animate={{
-                y: "120vh",
-                rotate: piece.rotation + 720,
-                opacity: [1, 1, 0.8, 0],
-            }}
-            transition={{
-                duration: 3,
-                delay: piece.delay,
-                ease: "linear",
-            }}
-        />
-    );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sparkle Component
@@ -169,11 +123,48 @@ function WinnerCrown({ className }: { className?: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Confetti Wrapper Component (uses @neoconfetti/react)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ConfettiEffectProps {
+    duration: number;
+    particleCount?: number;
+}
+
+function ConfettiEffect({
+    duration,
+    particleCount = 150,
+}: ConfettiEffectProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
+
+    // Skip confetti for reduced motion users
+    if (prefersReducedMotion) {
+        return null;
+    }
+
+    return (
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[100]">
+            <NeoConfetti
+                particleCount={particleCount}
+                duration={duration}
+                colors={CONFETTI_COLORS}
+                force={0.6}
+                stageHeight={800}
+                stageWidth={1400}
+                particleShape="mix"
+                particleSize={10}
+            />
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Celebration Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Celebration - Shows celebratory animations for game events
+ * Uses @neoconfetti/react for optimized confetti rendering (1.6KB)
  */
 export function Celebration({
     show,
@@ -186,24 +177,8 @@ export function Celebration({
     const prefersReducedMotion = usePrefersReducedMotion();
     const [isVisible, setIsVisible] = useState(show);
 
-    // Generate confetti pieces
-    const confettiPieces = useMemo(() => {
-        if (type !== "confetti" || prefersReducedMotion) return [];
-
-        return Array.from({ length: 50 }, (_, i) => ({
-            id: i,
-            x: Math.random() * 100,
-            color: CONFETTI_COLORS[
-                Math.floor(Math.random() * CONFETTI_COLORS.length)
-            ],
-            delay: Math.random() * 0.5,
-            rotation: Math.random() * 360,
-            size: 8 + Math.random() * 8,
-        }));
-    }, [type, prefersReducedMotion]);
-
-    // Generate sparkles
-    const sparkles = useMemo(() => {
+    // Generate sparkles (kept custom for this effect type)
+    const sparkles = React.useMemo(() => {
         if (type !== "sparkle" || prefersReducedMotion) return [];
 
         return Array.from({ length: 12 }, (_, i) => ({
@@ -241,14 +216,10 @@ export function Celebration({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                 >
-                    {/* Confetti Effect */}
-                    {type === "confetti" &&
-                        confettiPieces.map((piece) => (
-                            <ConfettiPieceComponent
-                                key={piece.id}
-                                piece={piece}
-                            />
-                        ))}
+                    {/* Confetti Effect - uses @neoconfetti/react */}
+                    {type === "confetti" && (
+                        <ConfettiEffect duration={duration} />
+                    )}
 
                     {/* Sparkle Effect */}
                     {type === "sparkle" &&
@@ -256,22 +227,14 @@ export function Celebration({
                             <Sparkle key={sparkle.id} {...sparkle} />
                         ))}
 
-                    {/* Winner Effect */}
+                    {/* Winner Effect - confetti + crown */}
                     {type === "winner" && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
                             <WinnerCrown />
-                            {!prefersReducedMotion && (
-                                <>
-                                    {confettiPieces
-                                        .slice(0, 30)
-                                        .map((piece) => (
-                                            <ConfettiPieceComponent
-                                                key={piece.id}
-                                                piece={piece}
-                                            />
-                                        ))}
-                                </>
-                            )}
+                            <ConfettiEffect
+                                duration={duration}
+                                particleCount={100}
+                            />
                         </div>
                     )}
 

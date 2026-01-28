@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { PlayingCard as PlayingCardType } from "@shared/types";
+import { usePrefersReducedMotion } from "@/hooks";
 
 const SUIT_MAP = {
     Spades: "♠",
@@ -41,7 +42,10 @@ const SIZE_DIMENSIONS: Record<CardSize, { width: number; height: number }> = {
     xl: { width: 110, height: 154 },
 };
 
-const TEXT_SIZES: Record<CardSize, { corner: string; center: string; cornerGap: string }> = {
+const TEXT_SIZES: Record<
+    CardSize,
+    { corner: string; center: string; cornerGap: string }
+> = {
     xs: { corner: "text-[8px]", center: "text-lg", cornerGap: "gap-0" },
     sm: { corner: "text-[10px]", center: "text-xl", cornerGap: "gap-0" },
     md: { corner: "text-xs", center: "text-2xl", cornerGap: "gap-0.5" },
@@ -78,20 +82,36 @@ function PlayingCard({
     onClick,
     layoutId,
 }: PlayingCardProps) {
+    const prefersReducedMotion = usePrefersReducedMotion();
     const showBack = card === null || hidden;
     const dimensions = SIZE_DIMENSIONS[size];
     const textSize = TEXT_SIZES[size];
 
+    // Animation props that respect reduced motion
+    const hoverAnimation =
+        interactive && !disabled && !prefersReducedMotion
+            ? { y: -8, scale: 1.02, transition: { duration: 0.15 } }
+            : undefined;
+
+    const tapAnimation =
+        interactive && !disabled && !prefersReducedMotion
+            ? { scale: 0.98 }
+            : undefined;
+
     const cardContent = (
         <motion.div
             layoutId={layoutId}
+            layout={!prefersReducedMotion}
             className={cn(
                 "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none touch-manipulation",
                 interactive && !disabled && "cursor-pointer",
                 selected && "ring-2 ring-blue-500 ring-offset-2",
                 highlighted && "ring-2 ring-yellow-400",
                 disabled && "opacity-50 cursor-not-allowed",
-                className
+                interactive &&
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                prefersReducedMotion && "transition-none",
+                className,
             )}
             style={{
                 width: dimensions.width,
@@ -99,12 +119,9 @@ function PlayingCard({
                 rotate: `${rotation}deg`,
                 ...style,
             }}
-            whileHover={
-                interactive && !disabled
-                    ? { y: -8, scale: 1.02, transition: { duration: 0.15 } }
-                    : undefined
-            }
-            whileTap={interactive && !disabled ? { scale: 0.98 } : undefined}
+            whileHover={hoverAnimation}
+            whileTap={tapAnimation}
+            transition={prefersReducedMotion ? { duration: 0 } : undefined}
             onClick={interactive && !disabled ? onClick : undefined}
             role={interactive ? "button" : "img"}
             aria-label={
@@ -127,7 +144,7 @@ function PlayingCard({
                                     "text-4xl font-bold",
                                     card.rank === "BJ"
                                         ? "bg-linear-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text text-transparent"
-                                        : "bg-linear-to-br from-gray-300 via-slate-400 to-gray-500 bg-clip-text text-transparent"
+                                        : "bg-linear-to-br from-gray-300 via-slate-400 to-gray-500 bg-clip-text text-transparent",
                                 )}
                             >
                                 🃏
@@ -138,7 +155,7 @@ function PlayingCard({
                                     "font-bold text-center",
                                     card.rank === "BJ"
                                         ? "text-amber-600"
-                                        : "text-slate-600"
+                                        : "text-slate-600",
                                 )}
                             >
                                 {JOKER_DISPLAY[card.rank]}
@@ -154,7 +171,7 @@ function PlayingCard({
                                     textSize.corner,
                                     textSize.cornerGap,
                                     "font-bold leading-none flex flex-col items-center",
-                                    SUIT_COLORS[card.suit]
+                                    SUIT_COLORS[card.suit],
                                 )}
                             >
                                 <span>{card.rank}</span>
@@ -166,7 +183,7 @@ function PlayingCard({
                                 className={cn(
                                     "absolute inset-0 flex items-center justify-center",
                                     textSize.center,
-                                    SUIT_COLORS[card.suit]
+                                    SUIT_COLORS[card.suit],
                                 )}
                             >
                                 {SUIT_MAP[card.suit]}
@@ -179,7 +196,7 @@ function PlayingCard({
                                     textSize.corner,
                                     textSize.cornerGap,
                                     "font-bold leading-none flex flex-col items-center",
-                                    SUIT_COLORS[card.suit]
+                                    SUIT_COLORS[card.suit],
                                 )}
                             >
                                 <span>{card.rank}</span>

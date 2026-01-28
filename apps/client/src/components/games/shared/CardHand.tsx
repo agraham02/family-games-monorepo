@@ -8,6 +8,7 @@ import { useGameTable } from "./GameTable";
 import { useEdgeRegion } from "./EdgeRegion";
 import { CardSize } from "./PlayingCard";
 import CardBadge from "./CardBadge";
+import { usePrefersReducedMotion, useKeyboardNavigation } from "@/hooks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -69,7 +70,7 @@ function getCardSpacing(
     cardCount: number,
     size: CardSize,
     isHorizontal: boolean,
-    availableWidth?: number
+    availableWidth?: number,
 ): number {
     const cardWidth = isHorizontal
         ? SIZE_DIMENSIONS[size].width
@@ -95,7 +96,7 @@ function getCardSpacing(
         const maxAllowedSpacing = cardWidth * 0.6;
         return Math.min(
             maxAllowedSpacing,
-            Math.max(baseSpacing, minSpacingToFit)
+            Math.max(baseSpacing, minSpacingToFit),
         );
     }
 
@@ -114,11 +115,13 @@ interface CardInHandProps {
     isSelected: boolean;
     isDisabled: boolean;
     isInteractive: boolean;
+    isFocused: boolean;
     isHorizontal: boolean;
     size: CardSize;
     spacing: number;
     playerId?: string;
     onClick?: () => void;
+    prefersReducedMotion: boolean;
 }
 
 const SUIT_MAP = {
@@ -143,21 +146,43 @@ function CardInHand({
     isSelected,
     isDisabled,
     isInteractive,
+    isFocused,
     isHorizontal,
     size,
     spacing,
     playerId,
     onClick,
+    prefersReducedMotion,
 }: CardInHandProps) {
     const dimensions = SIZE_DIMENSIONS[size];
     const showBack = card === null || isHidden;
 
-    // Calculate z-index: selected card on top, otherwise by position
-    const zIndex = isSelected ? 100 : index;
+    // Calculate z-index: selected card on top, focused next, otherwise by position
+    const zIndex = isSelected ? 100 : isFocused ? 99 : index;
 
     // Selection lift - different direction for vertical vs horizontal
     const yOffset = isHorizontal ? (isSelected ? -20 : 0) : 0;
     const xOffset = isHorizontal ? 0 : isSelected ? -20 : 0;
+
+    // Animation props that respect reduced motion
+    const hoverAnimation =
+        isInteractive && !isDisabled && !prefersReducedMotion
+            ? {
+                  y: isHorizontal ? yOffset - 15 : yOffset,
+                  x: isHorizontal ? xOffset : xOffset - 15,
+                  scale: 1.08,
+                  transition: {
+                      type: "spring" as const,
+                      stiffness: 400,
+                      damping: 20,
+                  },
+              }
+            : undefined;
+
+    const tapAnimation =
+        isInteractive && !isDisabled && !prefersReducedMotion
+            ? { scale: 0.95, transition: { duration: 0.1 } }
+            : undefined;
 
     return (
         <motion.div
@@ -168,6 +193,7 @@ function CardInHand({
                       }`
                     : undefined
             }
+            layout={!prefersReducedMotion}
             className="relative cursor-default"
             style={{
                 // Use marginLeft for horizontal, marginTop for vertical
@@ -175,48 +201,43 @@ function CardInHand({
                 marginTop: isHorizontal ? 0 : index === 0 ? 0 : -spacing,
                 zIndex,
             }}
-            initial={{
-                opacity: 0,
-                scale: 0.3,
-                y: isHorizontal ? -30 : 0,
-                x: 0,
-            }}
+            initial={
+                prefersReducedMotion
+                    ? false
+                    : {
+                          opacity: 0,
+                          scale: 0.3,
+                          y: isHorizontal ? -30 : 0,
+                          x: 0,
+                      }
+            }
             animate={{
                 opacity: 1,
                 scale: 1,
                 y: yOffset,
                 x: xOffset,
             }}
-            exit={{
-                opacity: 0,
-                scale: 0.5,
-                y: isHorizontal ? -50 : 0,
-                x: isHorizontal ? 0 : -50,
-            }}
-            transition={{
-                type: "spring",
-                stiffness: 400,
-                damping: 25,
-            }}
-            whileHover={
-                isInteractive && !isDisabled
-                    ? {
-                          y: isHorizontal ? yOffset - 15 : yOffset,
-                          x: isHorizontal ? xOffset : xOffset - 15,
-                          scale: 1.08,
-                          transition: {
-                              type: "spring",
-                              stiffness: 400,
-                              damping: 20,
-                          },
+            exit={
+                prefersReducedMotion
+                    ? { opacity: 0 }
+                    : {
+                          opacity: 0,
+                          scale: 0.5,
+                          y: isHorizontal ? -50 : 0,
+                          x: isHorizontal ? 0 : -50,
                       }
-                    : undefined
             }
-            whileTap={
-                isInteractive && !isDisabled
-                    ? { scale: 0.95, transition: { duration: 0.1 } }
-                    : undefined
+            transition={
+                prefersReducedMotion
+                    ? { duration: 0.1 }
+                    : {
+                          type: "spring" as const,
+                          stiffness: 400,
+                          damping: 25,
+                      }
             }
+            whileHover={hoverAnimation}
+            whileTap={tapAnimation}
             onClick={
                 isInteractive && !isDisabled
                     ? (e) => {
@@ -228,11 +249,17 @@ function CardInHand({
         >
             <div
                 className={cn(
-                    "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none duration-300",
+                    "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none",
+                    prefersReducedMotion ? "transition-none" : "duration-300",
                     isInteractive && !isDisabled && "cursor-pointer",
+                    isInteractive &&
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                     isSelected &&
                         "ring-2 ring-blue-500 ring-offset-2 ring-offset-transparent",
-                    isDisabled && "grayscale brightness-75 cursor-not-allowed"
+                    isFocused &&
+                        !isSelected &&
+                        "ring-2 ring-blue-400 ring-offset-1",
+                    isDisabled && "grayscale brightness-75 cursor-not-allowed",
                 )}
                 style={{
                     width: dimensions.width,
@@ -247,7 +274,7 @@ function CardInHand({
                             className={cn(
                                 "absolute top-0.5 left-0.5",
                                 "text-[10px] font-bold leading-none flex flex-col items-center",
-                                SUIT_COLORS[card.suit]
+                                SUIT_COLORS[card.suit],
                             )}
                         >
                             <span>{card.rank}</span>
@@ -258,7 +285,7 @@ function CardInHand({
                         <div
                             className={cn(
                                 "absolute inset-0 flex items-center justify-center text-xl",
-                                SUIT_COLORS[card.suit]
+                                SUIT_COLORS[card.suit],
                             )}
                         >
                             {SUIT_MAP[card.suit]}
@@ -269,7 +296,7 @@ function CardInHand({
                             className={cn(
                                 "absolute bottom-0.5 right-0.5 rotate-180",
                                 "text-[10px] font-bold leading-none flex flex-col items-center",
-                                SUIT_COLORS[card.suit]
+                                SUIT_COLORS[card.suit],
                             )}
                         >
                             <span>{card.rank}</span>
@@ -327,11 +354,15 @@ function CardHand({
 }: CardHandProps) {
     const { dimensions, layoutConfig } = useGameTable();
     const edgeContext = useEdgeRegion();
+    const prefersReducedMotion = usePrefersReducedMotion();
+
+    // Keyboard navigation state
+    const [focusedIndex, setFocusedIndex] = useState(-1);
 
     // Tap-to-spread state
     const [isSpreadInternal, setIsSpreadInternal] = useState(false);
     const [spreadTappedIndex, setSpreadTappedIndex] = useState<number | null>(
-        null
+        null,
     );
 
     // Use controlled state if provided, otherwise use internal
@@ -377,6 +408,31 @@ function CardHand({
         }
     }, [isSpread, spreadAutoCollapseMs, collapseSpread]);
 
+    // Keyboard navigation for card selection
+    const handleKeyboardConfirm = useCallback(
+        (index: number) => {
+            const card = cards[index];
+            if (card && !disabledIndices.includes(index)) {
+                onCardClick?.(index, card);
+            }
+        },
+        [cards, disabledIndices, onCardClick],
+    );
+
+    const handleKeyboardCancel = useCallback(() => {
+        setFocusedIndex(-1);
+    }, []);
+
+    useKeyboardNavigation({
+        items: cards,
+        selectedIndex: focusedIndex >= 0 ? focusedIndex : (selectedIndex ?? -1),
+        onSelect: setFocusedIndex,
+        onConfirm: handleKeyboardConfirm,
+        onCancel: handleKeyboardCancel,
+        enabled: isLocalPlayer && interactive && cards.length > 0,
+        wrap: true,
+    });
+
     // Handle tap on card area (for spread)
     const handleSpreadTap = useCallback(
         (index: number, card: PlayingCardType) => {
@@ -398,7 +454,7 @@ function CardHand({
                 onCardClick?.(index, card);
             }
         },
-        [shouldEnableTapToSpread, isSpread, onCardClick, expandSpread]
+        [shouldEnableTapToSpread, isSpread, onCardClick, expandSpread],
     );
 
     // For opponents in badge mode, render CardBadge instead
@@ -445,7 +501,7 @@ function CardHand({
         displayCards.length,
         responsiveSize,
         isHorizontal,
-        availableWidth
+        availableWidth,
     );
 
     // Spread spacing: minimal overlap to show most of each card
@@ -476,7 +532,7 @@ function CardHand({
             className={cn(
                 "flex items-center justify-center duration-300",
                 isLocalPlayer && !interactive && "brightness-60",
-                className
+                className,
             )}
             style={{
                 // Set explicit dimensions so the container centers properly
@@ -492,7 +548,7 @@ function CardHand({
                     "flex",
                     isHorizontal ? "flex-row" : "flex-col",
                     // Disable pointer events when not interactive (not player's turn)
-                    isLocalPlayer && !interactive && "pointer-events-none"
+                    isLocalPlayer && !interactive && "pointer-events-none",
                 )}
                 style={{
                     transform:
@@ -525,10 +581,12 @@ function CardHand({
                                 isInteractive={
                                     interactive && isLocalPlayer && !isDealing
                                 }
+                                isFocused={focusedIndex === index}
                                 size={responsiveSize}
                                 spacing={spacing}
                                 playerId={playerId}
                                 isHorizontal={isHorizontal}
+                                prefersReducedMotion={prefersReducedMotion}
                                 onClick={
                                     card
                                         ? () => handleSpreadTap(index, card)
