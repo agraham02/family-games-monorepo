@@ -71,11 +71,13 @@ export function useCircularLayout() {
  *
  * @param playerCount - Number of players
  * @param heroPlayerIndex - Index of the hero player in the player array
+ * @param radiusPercent - Radius as percentage of container (default 40)
  * @returns Array of player positions
  */
 function calculatePlayerPositions(
     playerCount: number,
     heroPlayerIndex: number,
+    radiusPercent: number = 40,
 ): PlayerPosition[] {
     const positions: PlayerPosition[] = [];
 
@@ -93,8 +95,9 @@ function calculatePlayerPositions(
 
         // Convert to x,y percentages (0-100)
         // sin gives us x offset, -cos gives us y offset (because y increases downward)
-        const x = 50 + Math.sin(angle) * 40; // 40% radius from center
-        const y = 50 - Math.cos(angle) * 40; // Negative because CSS y increases downward
+        // Use the dynamic radius instead of hardcoded 40
+        const x = 50 + Math.sin(angle) * radiusPercent;
+        const y = 50 - Math.cos(angle) * radiusPercent; // Negative because CSS y increases downward
 
         // Calculate neighbor indices (wrap around)
         const leftNeighborIndex = (i - 1 + playerCount) % playerCount;
@@ -119,6 +122,43 @@ function calculatePlayerPositions(
 function getIsCompact(width: number, height: number): boolean {
     const minDim = Math.min(width, height);
     return minDim < 500;
+}
+
+/**
+ * Calculate dynamic radius based on container dimensions and player count.
+ * Returns a percentage (0-50) that ensures players fit without overlapping.
+ */
+function calculateDynamicRadius(
+    width: number,
+    height: number,
+    playerCount: number,
+): number {
+    const minDim = Math.min(width, height);
+
+    // Base radius starts at 40% for optimal spacing
+    let radius = 40;
+
+    // Reduce radius for more players (prevents overlap)
+    const playerReduction = Math.max(0, (playerCount - 4) * 2);
+    radius -= playerReduction;
+
+    // Reduce radius for smaller containers
+    if (minDim < 400) {
+        radius -= 8;
+    } else if (minDim < 500) {
+        radius -= 5;
+    } else if (minDim < 600) {
+        radius -= 3;
+    }
+
+    // Reduce radius for very wide or very tall containers (aspect ratio issues)
+    const aspectRatio = width / height;
+    if (aspectRatio > 1.8 || aspectRatio < 0.55) {
+        radius -= 5;
+    }
+
+    // Clamp to valid range
+    return Math.max(25, Math.min(45, radius));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,18 +208,24 @@ export function CircularPlayerLayout({
 
     const isCompact = getIsCompact(dimensions.width, dimensions.height);
 
-    // Calculate radius as percentage - smaller for more players
+    // Calculate radius dynamically based on dimensions and player count
     const radiusPercent = useMemo(() => {
-        // Base radius, reduced for more players to avoid overlap
-        const baseRadius = 40;
-        const reduction = Math.max(0, (playerCount - 4) * 2);
-        return Math.max(30, baseRadius - reduction);
-    }, [playerCount]);
+        return calculateDynamicRadius(
+            dimensions.width,
+            dimensions.height,
+            playerCount,
+        );
+    }, [dimensions.width, dimensions.height, playerCount]);
 
-    // Calculate positions
+    // Calculate positions with the dynamic radius
     const positions = useMemo(
-        () => calculatePlayerPositions(playerCount, heroPlayerIndex),
-        [playerCount, heroPlayerIndex],
+        () =>
+            calculatePlayerPositions(
+                playerCount,
+                heroPlayerIndex,
+                radiusPercent,
+            ),
+        [playerCount, heroPlayerIndex, radiusPercent],
     );
 
     const contextValue: CircularLayoutContextValue = {

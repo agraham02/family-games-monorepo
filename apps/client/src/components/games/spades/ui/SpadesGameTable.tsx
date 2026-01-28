@@ -30,9 +30,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Zap, Ban } from "lucide-react";
 import { getUnplayableCardIndices } from "@/lib/spadesValidation";
-import { useTurnTimer } from "@/hooks";
+import { useTurnTimer, usePrefersReducedMotion } from "@/hooks";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { playTimerStartSound, initializeAudioOnInteraction } from "@/lib/audio";
+import { announceToScreenReader, gameAnnouncements } from "@/lib/accessibility";
 
 interface SpadesGameTableProps {
     gameData: SpadesData;
@@ -68,7 +69,7 @@ function SpadesGameTable({
     showHints = false,
 }: SpadesGameTableProps) {
     const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(
-        null
+        null,
     );
     const [isHeroHandSpread, setIsHeroHandSpread] = useState(false);
     const { clockOffset } = useWebSocket();
@@ -83,6 +84,12 @@ function SpadesGameTable({
     const hasDealtRef = useRef(false);
 
     const playerCount = playerData.localOrdering.length;
+    const prefersReducedMotion = usePrefersReducedMotion();
+
+    // Track previous state for announcements
+    const previousPhaseRef = useRef<string | null>(null);
+    const previousTrickCountRef = useRef<number>(0);
+    const previousSpadesBrokenRef = useRef<boolean>(false);
 
     // Initialize audio on first user interaction
     useEffect(() => {
@@ -112,7 +119,7 @@ function SpadesGameTable({
     const { isActive: timerIsActive } = useTurnTimer(
         gameData.turnTimer,
         clockOffset,
-        handleTimerStart
+        handleTimerStart,
     );
 
     // Memoize timer props to prevent unnecessary re-renders
@@ -149,9 +156,9 @@ function SpadesGameTable({
             getUnplayableCardIndices(
                 playerData.hand,
                 gameData.currentTrick,
-                gameData.spadesBroken
+                gameData.spadesBroken,
             ),
-        [playerData.hand, gameData.currentTrick, gameData.spadesBroken]
+        [playerData.hand, gameData.currentTrick, gameData.spadesBroken],
     );
 
     // Calculate which cards are unplayable when hints are enabled
@@ -174,7 +181,7 @@ function SpadesGameTable({
                 setSelectedCardIndex(index);
             }
         },
-        [selectedCardIndex, onCardPlay]
+        [selectedCardIndex, onCardPlay],
     );
 
     // Handle play button click
@@ -214,14 +221,22 @@ function SpadesGameTable({
         if (isNewRound || isFirstLoad) {
             hasDealtRef.current = true;
 
+            // Announce dealing for screen readers
+            announceToScreenReader(
+                gameAnnouncements.dealingCards(cardsPerPlayer),
+            );
+
             // Start deal animation
             const runDealAnimation = async () => {
                 setIsDealing(true);
                 setVisibleCardCounts({});
                 setDealingCards([]);
 
-                // Brief pause before dealing
-                await new Promise((resolve) => setTimeout(resolve, 300));
+                // Skip animation delay if user prefers reduced motion
+                const initialDelay = prefersReducedMotion ? 50 : 300;
+                await new Promise((resolve) =>
+                    setTimeout(resolve, initialDelay),
+                );
 
                 // Build deal sequence - cycle through players like a real dealer
                 const dealSequence: {
@@ -238,8 +253,8 @@ function SpadesGameTable({
                     }
                 }
 
-                // Deal cards with animation
-                const CARD_INTERVAL = 25; // Fast dealing
+                // Deal cards with animation (faster if reduced motion preferred)
+                const CARD_INTERVAL = prefersReducedMotion ? 5 : 25;
                 for (let i = 0; i < dealSequence.length; i++) {
                     const { playerId, position } = dealSequence[i];
                     const dealingCardId = `deal-${currentRound}-${i}`;
@@ -255,7 +270,7 @@ function SpadesGameTable({
 
                     // Wait for animation
                     await new Promise((resolve) =>
-                        setTimeout(resolve, CARD_INTERVAL - 8)
+                        setTimeout(resolve, CARD_INTERVAL - 8),
                     );
 
                     // Increment visible count for this player
@@ -281,6 +296,7 @@ function SpadesGameTable({
         playerData.hand.length,
         playerData.localOrdering,
         playerCount,
+        prefersReducedMotion,
     ]);
 
     // Reset selection and spread when turn changes or phase changes
@@ -288,6 +304,64 @@ function SpadesGameTable({
         setSelectedCardIndex(null);
         setIsHeroHandSpread(false);
     }, [gameData.currentTurnIndex, gameData.phase]);
+
+    // Screen reader announcements for game events
+    useEffect(() => {
+        // Announce phase changes
+        if (previousPhaseRef.current !== gameData.phase) {
+            if (
+                gameData.phase === "bidding" &&
+                previousPhaseRef.current !== null
+            ) {
+                announceToScreenReader(gameAnnouncements.biddingPhaseStart());
+            } else if (
+                gameData.phase === "playing" &&
+                previousPhaseRef.current === "bidding"
+            ) {
+                const leadPlayer =
+                    gameData.players[
+                        gameData.playOrder[gameData.currentTurnIndex]
+                    ];
+                announceToScreenReader(
+                    gameAnnouncements.playingPhaseStart(
+                        leadPlayer?.name || "Unknown",
+                    ),
+                );
+            }
+            previousPhaseRef.current = gameData.phase;
+        }
+
+        // Announce trick completion
+        const currentTrickCount = gameData.completedTricks.length;
+        if (
+            currentTrickCount > previousTrickCountRef.current &&
+            gameData.lastTrickWinnerId
+        ) {
+            const winnerName =
+                gameData.players[gameData.lastTrickWinnerId]?.name || "Unknown";
+            announceToScreenReader(
+                gameAnnouncements.trickWon(winnerName, currentTrickCount),
+            );
+        }
+        previousTrickCountRef.current = currentTrickCount;
+
+        // Announce spades broken
+        if (gameData.spadesBroken && !previousSpadesBrokenRef.current) {
+            announceToScreenReader(
+                gameAnnouncements.spadesBroken(),
+                "assertive",
+            );
+        }
+        previousSpadesBrokenRef.current = gameData.spadesBroken;
+    }, [
+        gameData.phase,
+        gameData.completedTricks.length,
+        gameData.lastTrickWinnerId,
+        gameData.spadesBroken,
+        gameData.players,
+        gameData.playOrder,
+        gameData.currentTurnIndex,
+    ]);
 
     // Show toast when it's the player's turn
     useEffect(() => {
@@ -297,6 +371,8 @@ function SpadesGameTable({
             turnToastShownRef.current !== gameData.currentTurnIndex
         ) {
             turnToastShownRef.current = gameData.currentTurnIndex;
+            // Announce turn change for screen readers
+            announceToScreenReader(gameAnnouncements.turnChange("", true));
             toast.info("Your turn! Select a card to play", {
                 id: "your-turn-toast",
                 duration: 4000,
@@ -323,7 +399,7 @@ function SpadesGameTable({
     // Calculate cards to show during dealing animation
     const getCardsToShow = (
         playerId: string,
-        isLocal: boolean
+        isLocal: boolean,
     ): PlayingCardType[] => {
         if (!isDealing) {
             return isLocal ? playerData.hand : [];
@@ -343,8 +419,37 @@ function SpadesGameTable({
         return visibleCardCounts[playerId] || 0;
     };
 
+    // Build aria-label for the game table
+    const gameTableAriaLabel = useMemo(() => {
+        const parts = [`Spades game, round ${gameData.round}`];
+        parts.push(`trick ${gameData.completedTricks.length + 1} of 13`);
+        if (gameData.phase === "bidding") {
+            parts.push("bidding phase");
+        } else if (gameData.phase === "playing") {
+            const currentPlayer =
+                gameData.players[gameData.playOrder[gameData.currentTurnIndex]];
+            parts.push(`${currentPlayer?.name || "Unknown"}'s turn to play`);
+        }
+        if (gameData.spadesBroken) {
+            parts.push("spades are broken");
+        }
+        return parts.join(". ");
+    }, [
+        gameData.round,
+        gameData.completedTricks.length,
+        gameData.phase,
+        gameData.players,
+        gameData.playOrder,
+        gameData.currentTurnIndex,
+        gameData.spadesBroken,
+    ]);
+
     return (
-        <div className="h-full w-full">
+        <div
+            className="h-full w-full"
+            role="region"
+            aria-label={gameTableAriaLabel}
+        >
             <LayoutGroup>
                 <GameTable
                     playerCount={playerCount}
@@ -366,7 +471,7 @@ function SpadesGameTable({
                             gameData.roundTrickCounts?.[playerId] ?? 0;
                         const edgePosition = getEdgePosition(
                             index,
-                            playerCount
+                            playerCount,
                         );
 
                         // Get team color
@@ -377,7 +482,7 @@ function SpadesGameTable({
                                     teamColor =
                                         teamId === "0" ? "#3b82f6" : "#ef4444";
                                 }
-                            }
+                            },
                         );
 
                         return (

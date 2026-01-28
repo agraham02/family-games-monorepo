@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import TileHand from "./TileHand";
 import Board from "./Board";
+import SnakingBoard from "./SnakingBoard";
 import DealingTile from "./DealingTile";
 import {
     GameTable,
@@ -27,7 +28,6 @@ import {
     EdgePosition,
     DealingItem,
     DealingOverlay,
-    useGameTable,
 } from "@/components/games/shared";
 import { useTurnTimer, useResponsiveTileSize } from "@/hooks";
 import { useWebSocket } from "@/contexts/WebSocketContext";
@@ -37,6 +37,8 @@ interface DominoesGameTableProps {
     playerData: DominoesPlayerData;
     isMyTurn: boolean;
     showHints?: boolean;
+    /** Use the dynamic snaking board layout instead of linear scroll */
+    useDynamicBoard?: boolean;
     onPlaceTile: (tile: TileType, side: "left" | "right") => void;
     onPass: () => void;
 }
@@ -103,6 +105,7 @@ function DominoesGameTable({
     playerData,
     isMyTurn,
     showHints = false,
+    useDynamicBoard = true,
     onPlaceTile,
     onPass,
 }: DominoesGameTableProps) {
@@ -189,22 +192,6 @@ function DominoesGameTable({
         () => isMyTurn && isPlaying && !hasLegalMove(hand, gameData.board),
         [isMyTurn, isPlaying, hand, gameData.board],
     );
-
-    // Can auto-place (only one valid side)
-    const canAutoPlace = useMemo(() => {
-        if (!selectedTile || !isMyTurn || !isPlaying) return false;
-        if (gameData.board.tiles.length === 0) return true;
-        return (
-            (canPlaceLeft && !canPlaceRight) || (canPlaceRight && !canPlaceLeft)
-        );
-    }, [
-        selectedTile,
-        isMyTurn,
-        isPlaying,
-        gameData.board.tiles.length,
-        canPlaceLeft,
-        canPlaceRight,
-    ]);
 
     // Handle placing a tile
     const handlePlaceTile = useCallback(
@@ -562,20 +549,38 @@ function DominoesGameTable({
                         </div>
 
                         {/* Dominoes Board */}
-                        <Board
-                            board={gameData.board}
-                            selectedTile={selectedTile}
-                            isMyTurn={isMyTurn && isPlaying}
-                            canPlaceLeft={canPlaceLeft}
-                            canPlaceRight={canPlaceRight}
-                            onPlaceTile={handlePlaceTile}
-                            onCancelSelection={handleCancelSelection}
-                            lastPlayedSide={lastPlayedSide}
-                            tileSize={boardTileSize}
-                            ghostTileSize={ghostTileSize}
-                            className="w-full"
-                            layoutIdPrefix="dominoes"
-                        />
+                        {useDynamicBoard ? (
+                            <SnakingBoard
+                                board={gameData.board}
+                                selectedTile={selectedTile}
+                                isMyTurn={isMyTurn && isPlaying}
+                                canPlaceLeft={canPlaceLeft}
+                                canPlaceRight={canPlaceRight}
+                                onPlaceTile={handlePlaceTile}
+                                onCancelSelection={handleCancelSelection}
+                                lastPlayedSide={lastPlayedSide}
+                                tileSize={boardTileSize}
+                                ghostTileSize={ghostTileSize}
+                                className="w-full"
+                                layoutIdPrefix="dominoes"
+                                enableSnaking={true}
+                            />
+                        ) : (
+                            <Board
+                                board={gameData.board}
+                                selectedTile={selectedTile}
+                                isMyTurn={isMyTurn && isPlaying}
+                                canPlaceLeft={canPlaceLeft}
+                                canPlaceRight={canPlaceRight}
+                                onPlaceTile={handlePlaceTile}
+                                onCancelSelection={handleCancelSelection}
+                                lastPlayedSide={lastPlayedSide}
+                                tileSize={boardTileSize}
+                                ghostTileSize={ghostTileSize}
+                                className="w-full"
+                                layoutIdPrefix="dominoes"
+                            />
+                        )}
 
                         {/* Pass button when must pass - enhanced visibility */}
                         <AnimatePresence>

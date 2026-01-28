@@ -95,7 +95,7 @@ function PipHalf({
                         cx={cx}
                         cy={cy}
                         r={pipSize / 2}
-                        className="fill-zinc-800 dark:fill-zinc-100"
+                        className="fill-zinc-800"
                     />
                 );
             })}

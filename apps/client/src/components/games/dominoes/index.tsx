@@ -15,7 +15,7 @@ import {
     GameSettingToggle,
     useGameSetting,
 } from "@/components/games/shared";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, LayoutGrid } from "lucide-react";
 
 interface DominoesProps {
     gameData: DominoesData;
@@ -57,6 +57,7 @@ export default function Dominoes({
     const isMyTurn = currentPlayerId === userId;
     const isLeader = userId === gameData.leaderId;
     const showHints = useGameSetting("dominoes.showHints", false);
+    const useDynamicBoard = useGameSetting("dominoes.dynamicBoard", true);
 
     // Handle placing a tile
     const handlePlaceTile = useCallback(
@@ -78,6 +79,7 @@ export default function Dominoes({
                 playerData={playerData}
                 isMyTurn={isMyTurn}
                 showHints={showHints}
+                useDynamicBoard={useDynamicBoard}
                 onPlaceTile={handlePlaceTile}
                 onPass={handlePass}
             />
@@ -89,6 +91,12 @@ export default function Dominoes({
                     label="Show Valid Moves"
                     icon={<Lightbulb className="h-4 w-4" />}
                     defaultValue={false}
+                />
+                <GameSettingToggle
+                    storageKey="dominoes.dynamicBoard"
+                    label="Dynamic Board Layout"
+                    icon={<LayoutGrid className="h-4 w-4" />}
+                    defaultValue={true}
                 />
             </GameMenu>
 

@@ -34,13 +34,16 @@ export default function Board({
     canPlaceLeft,
     canPlaceRight,
     onPlaceTile,
-    onCancelSelection,
+    // onCancelSelection is part of the interface for API consistency with SnakingBoard
+    // but not used in this linear board implementation
+    onCancelSelection: _onCancelSelection,
     lastPlayedSide,
     className,
     layoutIdPrefix,
     tileSize = "sm",
     ghostTileSize,
 }: BoardProps) {
+    // Note: _onCancelSelection intentionally unused - kept for interface parity with SnakingBoard
     // Use ghostTileSize if provided, otherwise fall back to tileSize
     const effectiveGhostSize = ghostTileSize ?? tileSize;
     const prefersReducedMotion = usePrefersReducedMotion();

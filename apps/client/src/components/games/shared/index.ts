@@ -49,3 +49,14 @@ export { Celebration, WinnerAnnouncement } from "./Celebration";
 
 // Game summary modal for end-of-game results
 export { GameSummaryModal } from "./GameSummaryModal";
+
+// Position indicators for directional awareness in stacked layouts
+export {
+    PositionIndicator,
+    TurnDirectionIndicator,
+    PositionLegend,
+} from "./PositionIndicator";
+export type {
+    RelativePosition,
+    PositionIndicatorProps,
+} from "./PositionIndicator";

@@ -17,12 +17,7 @@ import {
     GameSettingToggle,
     useGameSetting,
 } from "@/components/games/shared";
-import {
-    CircularPlayerLayout,
-    CircularPlayerSlot,
-    CircularCenter,
-    DirectionArrows,
-} from "@/components/games/shared/CircularPlayerLayout";
+import { LRCAdaptiveLayout } from "./layouts";
 import { DiceTray, RollButton } from "./ui/Die";
 import { ChipStack, ChipAnimationManager } from "./ui/ChipStack";
 import { CenterPot } from "./ui/CenterPot";
@@ -425,41 +420,54 @@ export default function LRC({
         );
     };
 
-    // Find hero index in the player array
-    const heroIndex = useMemo(() => {
-        return gameData.lrcPlayers.findIndex((p) => p.id === userId);
-    }, [gameData.lrcPlayers, userId]);
+    // Build connection status map
+    const connectionStatus = useMemo(() => {
+        const status: Record<string, boolean> = {};
+        gameData.lrcPlayers.forEach((player) => {
+            status[player.id] =
+                gameData.players[player.id]?.isConnected ?? true;
+        });
+        return status;
+    }, [gameData.lrcPlayers, gameData.players]);
+
+    // Render player slot for circular layout
+    const renderPlayerSlot = useCallback(
+        (player: LRCPlayer) => (
+            <PlayerSlot
+                player={player}
+                isConnected={connectionStatus[player.id] ?? true}
+                isCurrentTurn={player.id === currentPlayer?.id}
+                isHero={player.id === userId}
+                isWinner={player.id === gameData.winnerId}
+                chipValue={gameData.settings.chipValue}
+                showMoney={showMoney}
+            />
+        ),
+        [
+            connectionStatus,
+            currentPlayer?.id,
+            userId,
+            gameData.winnerId,
+            gameData.settings.chipValue,
+            showMoney,
+        ],
+    );
 
     return (
-        <div className="h-screen w-full overflow-hidden bg-linear-to-b from-emerald-900 to-emerald-950">
-            {/* Circular player layout */}
-            <CircularPlayerLayout
-                playerCount={gameData.lrcPlayers.length}
-                heroPlayerIndex={heroIndex >= 0 ? heroIndex : 0}
-            >
-                {/* Player slots */}
-                {gameData.lrcPlayers.map((player, idx) => (
-                    <CircularPlayerSlot key={player.id} playerIndex={idx}>
-                        <PlayerSlot
-                            player={player}
-                            isConnected={
-                                gameData.players[player.id]?.isConnected ?? true
-                            }
-                            isCurrentTurn={player.id === currentPlayer?.id}
-                            isHero={player.id === userId}
-                            isWinner={player.id === gameData.winnerId}
-                            chipValue={gameData.settings.chipValue}
-                            showMoney={showMoney}
-                        />
-                    </CircularPlayerSlot>
-                ))}
-
-                {/* Center content */}
-                <CircularCenter>{renderCenterContent()}</CircularCenter>
-
-                {/* Direction arrows during chip passing */}
-                <DirectionArrows show={gameData.phase === "passing-chips"} />
-            </CircularPlayerLayout>
+        <div className="h-screen w-full overflow-hidden">
+            {/* Adaptive player layout - automatically chooses best layout for screen size */}
+            <LRCAdaptiveLayout
+                players={gameData.lrcPlayers}
+                connectionStatus={connectionStatus}
+                currentPlayerId={currentPlayer?.id ?? null}
+                heroId={userId}
+                winnerId={gameData.winnerId}
+                chipValue={gameData.settings.chipValue}
+                showMoney={showMoney}
+                centerContent={renderCenterContent()}
+                renderPlayerSlot={renderPlayerSlot}
+                isPassingChips={gameData.phase === "passing-chips"}
+            />
 
             {/* Chip animations */}
             {gameData.chipMovements && gameData.phase === "passing-chips" && (
