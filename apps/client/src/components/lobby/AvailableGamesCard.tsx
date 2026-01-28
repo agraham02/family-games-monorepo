@@ -14,7 +14,6 @@ import {
     UsersIcon,
     CheckCircle2Icon,
     LockIcon,
-    ClockIcon,
 } from "lucide-react";
 
 // Map game types to icons
@@ -89,8 +88,6 @@ export default function AvailableGamesCard({
                 <AnimatePresence>
                     {availableGames.map((game) => {
                         const isSelected = selectedGame === game.type;
-                        const isComingSoon = game.comingSoon ?? false;
-                        const isDisabled = !isPartyLeader || isComingSoon;
                         const Icon = getGameIcon(game.type);
                         const gradient = getGameGradient(game.type, isSelected);
 
@@ -101,42 +98,27 @@ export default function AvailableGamesCard({
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                                whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                                whileHover={
+                                    isPartyLeader ? { scale: 1.02 } : {}
+                                }
+                                whileTap={isPartyLeader ? { scale: 0.98 } : {}}
                                 onClick={
-                                    !isDisabled
+                                    isPartyLeader
                                         ? () => handleSelectGame(game.type)
                                         : undefined
                                 }
-                                disabled={isDisabled}
+                                disabled={!isPartyLeader}
                                 className={cn(
                                     "w-full text-left p-4 rounded-xl border-2 transition-all duration-200 relative overflow-hidden",
-                                    isSelected && !isComingSoon
+                                    isSelected
                                         ? `bg-linear-to-r ${gradient} border-transparent text-white shadow-lg`
-                                        : isComingSoon
-                                          ? "bg-zinc-100/50 dark:bg-zinc-800/30 border-zinc-200/50 dark:border-zinc-700/50 opacity-60"
-                                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
-                                    isDisabled && "cursor-default"
+                                        : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
+                                    !isPartyLeader &&
+                                        "cursor-default opacity-80",
                                 )}
                             >
-                                {/* Coming Soon badge */}
-                                {isComingSoon && (
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        className="absolute top-3 right-3"
-                                    >
-                                        <Badge
-                                            variant="secondary"
-                                            className="text-xs gap-1 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-0"
-                                        >
-                                            <ClockIcon className="w-3 h-3" />
-                                            Coming Soon
-                                        </Badge>
-                                    </motion.div>
-                                )}
                                 {/* Selection indicator */}
-                                {isSelected && !isComingSoon && (
+                                {isSelected && (
                                     <motion.div
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
@@ -153,7 +135,7 @@ export default function AvailableGamesCard({
                                             "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center",
                                             isSelected
                                                 ? "bg-white/20"
-                                                : "bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-zinc-700 dark:to-zinc-800"
+                                                : "bg-linear-to-br from-zinc-100 to-zinc-200 dark:from-zinc-700 dark:to-zinc-800",
                                         )}
                                     >
                                         <Icon
@@ -161,7 +143,7 @@ export default function AvailableGamesCard({
                                                 "w-6 h-6",
                                                 isSelected
                                                     ? "text-white"
-                                                    : "text-zinc-600 dark:text-zinc-300"
+                                                    : "text-zinc-600 dark:text-zinc-300",
                                             )}
                                         />
                                     </div>
@@ -174,7 +156,7 @@ export default function AvailableGamesCard({
                                                     "font-semibold",
                                                     isSelected
                                                         ? "text-white"
-                                                        : "text-zinc-900 dark:text-white"
+                                                        : "text-zinc-900 dark:text-white",
                                                 )}
                                             >
                                                 {game.displayName}
@@ -185,7 +167,7 @@ export default function AvailableGamesCard({
                                                     "text-xs py-0",
                                                     isSelected
                                                         ? "bg-white/20 text-white border-0"
-                                                        : "bg-zinc-200 dark:bg-zinc-700"
+                                                        : "bg-zinc-200 dark:bg-zinc-700",
                                                 )}
                                             >
                                                 <UsersIcon className="w-3 h-3 mr-1" />
@@ -201,7 +183,7 @@ export default function AvailableGamesCard({
                                                     "text-sm line-clamp-2",
                                                     isSelected
                                                         ? "text-white/80"
-                                                        : "text-zinc-500 dark:text-zinc-400"
+                                                        : "text-zinc-500 dark:text-zinc-400",
                                                 )}
                                             >
                                                 {game.description}
