@@ -1,35 +1,30 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useEffect } from "react";
-import { motion, LayoutGroup } from "motion/react";
+/**
+ * Game UI Debug Page
+ *
+ * This page uses the ACTUAL game components (Spades, Dominoes, LRC) for debugging.
+ * Any changes to the real game UI are automatically reflected here.
+ *
+ * The debug page adds:
+ * - Game type selection
+ * - Mock data generation with configurable options
+ * - Debug action dispatcher to simulate game actions
+ * - Player count adjustment
+ * - Turn timer simulation
+ * - Game state manipulation helpers
+ */
+
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import {
-    GameTable,
-    TableCenter,
-    EdgeRegion,
-    CardHand,
-    CardDeck,
-    PlayerInfo,
-    TrickPile,
-    EdgePosition,
-    ActionConfirmationBar,
-    DealingOverlay,
-    DealingItem,
-    GameScoreboard,
-} from "@/components/games/shared";
-import {
+    getGameComponent,
     getRegisteredGameTypes,
     getGameDisplayName,
     getMockDataGenerator,
+    getDefaultMockOptions,
 } from "@/components/games/registry";
-import {
-    PlayingCard as PlayingCardType,
-    SpadesData,
-    SpadesPlayerData,
-    DominoesData,
-    DominoesPlayerData,
-    Tile as TileType,
-} from "@shared/types";
+import { GameData, PlayerData } from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,1124 +38,503 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-
-// Import game-specific UI components for display
-import Board from "@/components/games/dominoes/ui/Board";
-import TileHand from "@/components/games/dominoes/ui/TileHand";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+    ChevronDown,
+    ChevronUp,
+    RefreshCw,
+    Play,
+    Settings,
+} from "lucide-react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type GameType = "spades" | "dominoes";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper Functions
-// ─────────────────────────────────────────────────────────────────────────────
-
-const SUITS: PlayingCardType["suit"][] = [
-    "Spades",
-    "Hearts",
-    "Diamonds",
-    "Clubs",
-];
-const RANKS = [
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "J",
-    "Q",
-    "K",
-    "A",
-];
-
-// Generate a random hand of cards for opponents
-function generateOpponentHand(count: number): PlayingCardType[] {
-    const cards: PlayingCardType[] = [];
-    for (let i = 0; i < count; i++) {
-        const suit = SUITS[Math.floor(Math.random() * SUITS.length)];
-        const rank = RANKS[Math.floor(Math.random() * RANKS.length)];
-        cards.push({ suit, rank });
-    }
-    return cards;
-}
-
-function getEdgePosition(index: number, playerCount: number): EdgePosition {
-    if (playerCount === 2) {
-        return index === 0 ? "bottom" : "top";
-    }
-    if (playerCount === 3) {
-        if (index === 0) return "bottom";
-        if (index === 1) return "left";
-        return "right";
-    }
-    if (index === 0) return "bottom";
-    if (index === 1) return "left";
-    if (index === 2) return "top";
-    if (index === 3) return "right";
-    return "top";
+interface DebugAction {
+    type: string;
+    payload: unknown;
+    timestamp: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Spades Debug Panel
+// Debug Controls Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface SpadesDebugPanelProps {
-    gameData: SpadesData;
-    playerData: SpadesPlayerData;
-    activePlayerIndex: number;
-    selectedCardIndex: number | null;
-    onCardSelect: (index: number, card: PlayingCardType) => void;
-    onPlayCard: () => void;
-    onCancelSelection: () => void;
-    isDealing: boolean;
-    dealingItems: DealingItem[];
-    showDebugGrid: boolean;
-    // Timer testing props
-    timerEnabled: boolean;
-    timerDuration: number;
-    timerStartedAt: number | null;
+interface DebugControlsProps {
+    selectedGame: string;
+    onGameChange: (game: string) => void;
+    gameTypes: string[];
+    playerCount: number;
+    onPlayerCountChange: (count: number) => void;
+    minPlayers: number;
+    maxPlayers: number;
+    onReset: () => void;
+    onRegenerate: () => void;
+    isSpectator: boolean;
+    onSpectatorToggle: (value: boolean) => void;
+    actionLog: DebugAction[];
+    mockOptions: Record<string, unknown>;
+    onMockOptionsChange: (options: Record<string, unknown>) => void;
 }
 
-function SpadesDebugPanel({
-    gameData,
-    playerData,
-    activePlayerIndex,
-    selectedCardIndex,
-    onCardSelect,
-    onPlayCard,
-    onCancelSelection,
-    isDealing,
-    dealingItems,
-    showDebugGrid,
-    timerEnabled,
-    timerDuration,
-    timerStartedAt,
-}: SpadesDebugPanelProps) {
-    const playerCount = playerData.localOrdering.length;
-    const trickPlays =
-        gameData.currentTrick?.plays.map((play) => ({
-            playerId: play.playerId,
-            card: play.card,
-            playerName: gameData.players[play.playerId]?.name || "Unknown",
-        })) ?? [];
-
-    // Build team scores for scoreboard
-    const teamScores = Object.entries(gameData.teams).map(([teamId, team]) => ({
-        teamId,
-        teamName: `Team ${Number(teamId) + 1}`,
-        players: team.players.map((pid) => gameData.players[pid]?.name || pid),
-        score: team.score,
-        roundScore: gameData.roundTeamScores?.[Number(teamId)],
-    }));
-
-    // Build player bids for scoreboard
-    const playerBids = gameData.playOrder.map((playerId) => ({
-        playerId,
-        playerName: gameData.players[playerId]?.name || playerId,
-        bid: gameData.bids[playerId]?.amount ?? null,
-        tricksWon: gameData.roundTrickCounts?.[playerId] ?? 0,
-    }));
+function DebugControls({
+    selectedGame,
+    onGameChange,
+    gameTypes,
+    playerCount,
+    onPlayerCountChange,
+    minPlayers,
+    maxPlayers,
+    onReset,
+    onRegenerate,
+    isSpectator,
+    onSpectatorToggle,
+    actionLog,
+    mockOptions,
+    onMockOptionsChange,
+}: DebugControlsProps) {
+    const [isOpen, setIsOpen] = useState(true);
+    const [showActionLog, setShowActionLog] = useState(false);
 
     return (
-        <div className="h-screen w-full relative">
-            <LayoutGroup>
-                <GameTable
-                    playerCount={playerCount}
-                    isDealing={isDealing}
-                    showDebugGrid={showDebugGrid}
-                >
-                    {/* Player Edge Regions */}
-                    {playerData.localOrdering.map((playerId, index) => {
-                        const isLocal = index === 0;
-                        const player = gameData.players[playerId];
-                        const isCurrentTurn = activePlayerIndex === index;
-                        const bid = gameData.bids[playerId]?.amount ?? null;
-                        const tricksWon =
-                            gameData.roundTrickCounts?.[playerId] ?? 0;
-                        const edgePosition = getEdgePosition(
-                            index,
-                            playerCount
-                        );
-
-                        // Get team color
-                        let teamColor: string | undefined;
-                        Object.entries(gameData.teams).forEach(
-                            ([teamId, team]) => {
-                                if (team.players.includes(playerId)) {
-                                    teamColor =
-                                        teamId === "0" ? "#3b82f6" : "#ef4444";
-                                }
-                            }
-                        );
-
-                        return (
-                            <EdgeRegion
-                                key={playerId}
-                                position={edgePosition}
-                                isHero={isLocal}
-                                isDealing={isDealing}
-                            >
-                                <PlayerInfo
-                                    playerId={playerId}
-                                    playerName={player?.name || "Unknown"}
-                                    isCurrentTurn={isCurrentTurn && !isDealing}
-                                    isLocalPlayer={isLocal}
-                                    seatPosition={edgePosition}
-                                    bid={bid}
-                                    tricksWon={tricksWon}
-                                    teamColor={teamColor}
-                                    turnTimer={
-                                        timerEnabled &&
-                                        isCurrentTurn &&
-                                        timerStartedAt
-                                            ? {
-                                                  totalMs: timerDuration * 1000,
-                                                  startedAt: timerStartedAt,
-                                                  clockOffset: 0,
-                                              }
-                                            : undefined
-                                    }
-                                />
-                                <CardHand
-                                    cards={isLocal ? playerData.hand : []}
-                                    cardCount={
-                                        isLocal
-                                            ? playerData.hand.length
-                                            : (gameData.handsCounts[playerId] ??
-                                              0)
-                                    }
-                                    isLocalPlayer={isLocal}
-                                    interactive={
-                                        isLocal && isCurrentTurn && !isDealing
-                                    }
-                                    selectedIndex={
-                                        isLocal ? selectedCardIndex : null
-                                    }
-                                    onCardClick={
-                                        isLocal ? onCardSelect : undefined
-                                    }
-                                    playerId={playerId}
-                                    isDealing={isDealing}
-                                />
-                            </EdgeRegion>
-                        );
-                    })}
-
-                    {/* Center Area */}
-                    <TableCenter className="flex flex-col items-center gap-4">
-                        {/* Show deck when no cards dealt or during dealing */}
-                        {(playerData.hand.length === 0 || isDealing) && (
-                            <CardDeck
-                                cardCount={
-                                    isDealing
-                                        ? Math.max(
-                                              0,
-                                              52 - dealingItems.length * 4
-                                          )
-                                        : 52
-                                }
-                            />
-                        )}
-
-                        {/* Dealing animation */}
-                        {isDealing && dealingItems.length > 0 && (
-                            <DealingOverlay dealingItems={dealingItems} />
-                        )}
-
-                        {/* Round indicator */}
-                        {playerData.hand.length > 0 && !isDealing && (
-                            <>
-                                <motion.div
-                                    className="bg-black/40 backdrop-blur-sm rounded-full px-4 py-1"
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                >
-                                    <span className="text-white/80 text-sm font-medium">
-                                        Round {gameData.round} • Trick{" "}
-                                        {(gameData.completedTricks?.length ||
-                                            0) + 1}
-                                    </span>
-                                </motion.div>
-
-                                <TrickPile
-                                    plays={trickPlays}
-                                    winningCard={
-                                        trickPlays.length > 0
-                                            ? trickPlays[trickPlays.length - 1]
-                                                  .card
-                                            : undefined
-                                    }
-                                />
-                            </>
-                        )}
-                    </TableCenter>
-                </GameTable>
-            </LayoutGroup>
-
-            {/* Game Scoreboard (Spades-specific UI) */}
-            <GameScoreboard
-                teams={teamScores}
-                playerBids={playerBids}
-                round={gameData.round}
-                phase={gameData.phase}
-                winTarget={gameData.settings?.winTarget}
-            />
-
-            {/* Play card confirmation bar */}
-            <ActionConfirmationBar
-                isVisible={
-                    selectedCardIndex !== null && activePlayerIndex === 0
-                }
-                onConfirm={onPlayCard}
-                onCancel={onCancelSelection}
-                confirmLabel="Play Card"
-            />
-        </div>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dominoes Debug Panel
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface DominoesDebugPanelProps {
-    gameData: DominoesData;
-    playerData: DominoesPlayerData;
-    activePlayerIndex: number;
-    selectedTile: TileType | null;
-    onTileSelect: (tile: TileType | null) => void;
-    onPlaceTile: (side: "left" | "right") => void;
-    showDebugGrid: boolean;
-}
-
-function DominoesDebugPanel({
-    gameData,
-    playerData,
-    activePlayerIndex,
-    selectedTile,
-    onTileSelect,
-    onPlaceTile,
-    showDebugGrid,
-}: DominoesDebugPanelProps) {
-    const playerCount = playerData.localOrdering.length;
-
-    // Check if selected tile can be placed on each side
-    const canPlaceLeft = useMemo(() => {
-        if (!selectedTile || gameData.board.tiles.length === 0)
-            return selectedTile !== null;
-        const leftEnd = gameData.board.leftEnd?.value;
-        return (
-            leftEnd !== undefined &&
-            (selectedTile.left === leftEnd || selectedTile.right === leftEnd)
-        );
-    }, [selectedTile, gameData.board]);
-
-    const canPlaceRight = useMemo(() => {
-        if (!selectedTile || gameData.board.tiles.length === 0)
-            return selectedTile !== null;
-        const rightEnd = gameData.board.rightEnd?.value;
-        return (
-            rightEnd !== undefined &&
-            (selectedTile.left === rightEnd || selectedTile.right === rightEnd)
-        );
-    }, [selectedTile, gameData.board]);
-
-    // Can auto-place
-    const canAutoPlace =
-        selectedTile !== null &&
-        (gameData.board.tiles.length === 0 ||
-            (canPlaceLeft && !canPlaceRight) ||
-            (canPlaceRight && !canPlaceLeft));
-
-    const handleAutoPlace = () => {
-        if (
-            gameData.board.tiles.length === 0 ||
-            (canPlaceLeft && !canPlaceRight)
-        ) {
-            onPlaceTile("left");
-        } else if (canPlaceRight && !canPlaceLeft) {
-            onPlaceTile("right");
-        }
-    };
-
-    // Create customStats render function for dominoes
-    const createDominoesStats = (playerId: string) => {
-        const score = gameData.playerScores[playerId] ?? 0;
-        const tilesCount = gameData.handsCounts[playerId] ?? 0;
-        const winTarget = gameData.settings.winTarget;
-
-        function DominoesStatsDisplay() {
-            return (
-                <div className="flex gap-1 items-center flex-wrap">
-                    <Badge
-                        variant="outline"
-                        className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
-                    >
-                        Score: {score}/{winTarget}
-                    </Badge>
-                    <Badge
-                        variant="outline"
-                        className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
-                    >
-                        Tiles: {tilesCount}
-                    </Badge>
+        <div className="fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-700">
+            <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+                <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
+                    <div className="flex items-center gap-2">
+                        <Settings className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm font-medium text-white">
+                            Debug Controls
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                            {getGameDisplayName(selectedGame)}
+                        </Badge>
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-slate-400"
+                        >
+                            {isOpen ? (
+                                <ChevronUp className="w-4 h-4" />
+                            ) : (
+                                <ChevronDown className="w-4 h-4" />
+                            )}
+                        </Button>
+                    </CollapsibleTrigger>
                 </div>
-            );
-        }
-        return DominoesStatsDisplay;
-    };
 
-    return (
-        <div className="h-screen w-full relative">
-            <LayoutGroup>
-                <GameTable
-                    playerCount={playerCount}
-                    isDealing={false}
-                    showDebugGrid={showDebugGrid}
-                    feltGradient="from-green-800 via-green-700 to-emerald-800"
-                >
-                    {/* Player Edge Regions */}
-                    {playerData.localOrdering.map((playerId, index) => {
-                        const isLocal = index === 0;
-                        const player = gameData.players[playerId];
-                        const isCurrentTurn = activePlayerIndex === index;
-                        const edgePosition = getEdgePosition(
-                            index,
-                            playerCount
-                        );
+                <CollapsibleContent>
+                    <div className="p-4 space-y-4">
+                        <div className="flex flex-wrap gap-4">
+                            {/* Game Selector */}
+                            <Card className="flex-1 min-w-[200px] bg-slate-800 border-slate-700">
+                                <CardHeader className="py-2 px-4">
+                                    <CardTitle className="text-sm text-white">
+                                        Game Type
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="py-2 px-4">
+                                    <Select
+                                        value={selectedGame}
+                                        onValueChange={onGameChange}
+                                    >
+                                        <SelectTrigger className="w-full bg-slate-700 border-slate-600 text-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {gameTypes.map((type) => (
+                                                <SelectItem
+                                                    key={type}
+                                                    value={type}
+                                                >
+                                                    {getGameDisplayName(type)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </CardContent>
+                            </Card>
 
-                        return (
-                            <EdgeRegion
-                                key={playerId}
-                                position={edgePosition}
-                                isHero={isLocal}
-                            >
-                                <PlayerInfo
-                                    playerId={playerId}
-                                    playerName={player?.name || "Unknown"}
-                                    isCurrentTurn={isCurrentTurn}
-                                    isLocalPlayer={isLocal}
-                                    seatPosition={edgePosition}
-                                    connected={player?.isConnected !== false}
-                                    customStats={createDominoesStats(playerId)}
-                                />
+                            {/* Player Count */}
+                            <Card className="flex-1 min-w-[200px] bg-slate-800 border-slate-700">
+                                <CardHeader className="py-2 px-4">
+                                    <CardTitle className="text-sm text-white">
+                                        Players
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="py-2 px-4">
+                                    <div className="flex items-center gap-4">
+                                        <Slider
+                                            value={[playerCount]}
+                                            onValueChange={(value) =>
+                                                onPlayerCountChange(value[0])
+                                            }
+                                            min={minPlayers}
+                                            max={maxPlayers}
+                                            step={1}
+                                            className="flex-1"
+                                        />
+                                        <Badge
+                                            variant="secondary"
+                                            className="w-8 justify-center"
+                                        >
+                                            {playerCount}
+                                        </Badge>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                                {/* Only show hand for local player */}
-                                {isLocal && (
-                                    <TileHand
-                                        tiles={playerData.hand}
-                                        board={gameData.board}
-                                        selectedTile={selectedTile}
-                                        isMyTurn={isCurrentTurn}
-                                        onTileSelect={onTileSelect}
-                                        showHints={true}
-                                    />
-                                )}
-                            </EdgeRegion>
-                        );
-                    })}
+                            {/* Spectator Mode Toggle */}
+                            <Card className="flex-1 min-w-[180px] bg-slate-800 border-slate-700">
+                                <CardHeader className="py-2 px-4">
+                                    <CardTitle className="text-sm text-white flex items-center justify-between">
+                                        <span>Spectator Mode</span>
+                                        <Switch
+                                            checked={isSpectator}
+                                            onCheckedChange={onSpectatorToggle}
+                                        />
+                                    </CardTitle>
+                                </CardHeader>
+                            </Card>
 
-                    {/* Center Area - Dominoes Board */}
-                    <TableCenter className="flex flex-col items-center gap-4 w-full max-w-3xl">
-                        {/* Round indicator */}
-                        <div className="bg-black/30 backdrop-blur-sm rounded-full px-4 py-1">
-                            <span className="text-white/80 text-sm font-medium">
-                                Round {gameData.round}
-                            </span>
+                            {/* Actions */}
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    onClick={onRegenerate}
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Regenerate
+                                </Button>
+                                <Button
+                                    onClick={onReset}
+                                    variant="destructive"
+                                    size="sm"
+                                >
+                                    Reset All
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* Dominoes Board */}
-                        <Board
-                            board={gameData.board}
-                            selectedTile={selectedTile}
-                            isMyTurn={activePlayerIndex === 0}
-                            canPlaceLeft={canPlaceLeft}
-                            canPlaceRight={canPlaceRight}
-                            onPlaceTile={onPlaceTile}
-                            lastPlayedSide={null}
-                            className="w-full"
-                        />
-                    </TableCenter>
-                </GameTable>
-            </LayoutGroup>
+                        {/* Mock Options (game-specific) */}
+                        {Object.keys(mockOptions).length > 0 && (
+                            <Card className="bg-slate-800 border-slate-700">
+                                <CardHeader className="py-2 px-4">
+                                    <CardTitle className="text-sm text-white">
+                                        Mock Data Options
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="py-2 px-4">
+                                    <div className="flex flex-wrap gap-4 text-sm">
+                                        {Object.entries(mockOptions).map(
+                                            ([key, value]) => (
+                                                <div
+                                                    key={key}
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <Label className="text-slate-400 capitalize">
+                                                        {key
+                                                            .replace(
+                                                                /([A-Z])/g,
+                                                                " $1",
+                                                            )
+                                                            .trim()}
+                                                        :
+                                                    </Label>
+                                                    {typeof value ===
+                                                    "boolean" ? (
+                                                        <Switch
+                                                            checked={value}
+                                                            onCheckedChange={(
+                                                                v,
+                                                            ) =>
+                                                                onMockOptionsChange(
+                                                                    {
+                                                                        ...mockOptions,
+                                                                        [key]: v,
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                    ) : typeof value ===
+                                                      "number" ? (
+                                                        <input
+                                                            type="number"
+                                                            value={value}
+                                                            onChange={(e) =>
+                                                                onMockOptionsChange(
+                                                                    {
+                                                                        ...mockOptions,
+                                                                        [key]: Number(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
+                                                                    },
+                                                                )
+                                                            }
+                                                            className="w-20 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-white">
+                                                            {String(value)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ),
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
 
-            {/* Action confirmation bar */}
-            <ActionConfirmationBar
-                isVisible={canAutoPlace}
-                onConfirm={handleAutoPlace}
-                onCancel={() => onTileSelect(null)}
-                confirmLabel="Place Tile"
-            />
+                        {/* Action Log */}
+                        <Collapsible
+                            open={showActionLog}
+                            onOpenChange={setShowActionLog}
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-slate-400 gap-2"
+                                >
+                                    <Play className="w-4 h-4" />
+                                    Action Log ({actionLog.length})
+                                    {showActionLog ? (
+                                        <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                        <ChevronDown className="w-4 h-4" />
+                                    )}
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <div className="mt-2 max-h-32 overflow-auto bg-slate-950 rounded p-2 font-mono text-xs">
+                                    {actionLog.length === 0 ? (
+                                        <div className="text-slate-500">
+                                            No actions dispatched yet
+                                        </div>
+                                    ) : (
+                                        actionLog
+                                            .slice(-10)
+                                            .map((action, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="text-slate-300 py-0.5"
+                                                >
+                                                    <span className="text-blue-400">
+                                                        {action.type}
+                                                    </span>
+                                                    <span className="text-slate-500 ml-2">
+                                                        {JSON.stringify(
+                                                            action.payload,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            ))
+                                    )}
+                                </div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
         </div>
     );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main Debug Page
+// Main Debug Page Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function GameUIDebugPage() {
     // Game selection
-    const [selectedGame, setSelectedGame] = useState<GameType>("spades");
-    const gameTypes = getRegisteredGameTypes() as GameType[];
+    const [selectedGame, setSelectedGame] = useState<string>("spades");
+    const gameTypes = getRegisteredGameTypes();
 
-    // Common state
+    // Game state
+    const [gameData, setGameData] = useState<GameData | null>(null);
+    const [playerData, setPlayerData] = useState<PlayerData | null>(null);
+
+    // Debug options
     const [playerCount, setPlayerCount] = useState(4);
-    const [activePlayerIndex, setActivePlayerIndex] = useState(0);
-    const [showDebugGrid, setShowDebugGrid] = useState(false);
-    const [isDealing, setIsDealing] = useState(false);
-    const [, setHasDealt] = useState(false);
+    const [isSpectator, setIsSpectator] = useState(false);
+    const [mockOptions, setMockOptions] = useState<Record<string, unknown>>({});
+    const [actionLog, setActionLog] = useState<DebugAction[]>([]);
 
-    // Timer state for testing
-    const [timerEnabled, setTimerEnabled] = useState(false);
-    const [timerDuration, setTimerDuration] = useState(10);
-    const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null);
-    // Force re-render every second for timer countdown
-    const [, setTimerTick] = useState(0);
-
-    // Start/restart timer when active player changes (and timer is enabled)
-    useEffect(() => {
-        if (timerEnabled) {
-            setTimerStartedAt(Date.now());
-        } else {
-            setTimerStartedAt(null);
+    // Get player count constraints based on game type
+    const playerConstraints = useMemo(() => {
+        switch (selectedGame) {
+            case "spades":
+                return { min: 2, max: 4 };
+            case "dominoes":
+                return { min: 2, max: 6 };
+            case "lrc":
+                return { min: 3, max: 8 };
+            default:
+                return { min: 2, max: 8 };
         }
-    }, [activePlayerIndex, timerEnabled]);
+    }, [selectedGame]);
 
-    // Update timer display every second
+    // Initialize mock options when game changes
     useEffect(() => {
-        if (!timerEnabled || !timerStartedAt) return;
-        const interval = setInterval(() => {
-            setTimerTick((t) => t + 1);
-        }, 100); // 100ms for smooth visual
-        return () => clearInterval(interval);
-    }, [timerEnabled, timerStartedAt]);
+        const defaults = getDefaultMockOptions(selectedGame);
+        setMockOptions(defaults);
+        // Reset player count if out of bounds
+        const { min, max } = playerConstraints;
+        if (playerCount < min) setPlayerCount(min);
+        if (playerCount > max) setPlayerCount(max);
+    }, [selectedGame, playerConstraints, playerCount]);
 
-    // Spades-specific state
-    const [spadesGameData, setSpadesGameData] = useState<SpadesData | null>(
-        null
-    );
-    const [spadesPlayerData, setSpadesPlayerData] =
-        useState<SpadesPlayerData | null>(null);
-    const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(
-        null
-    );
-    // Dealing animation items
-    const [dealingItems, setDealingItems] = useState<DealingItem[]>([]);
-    // Track all players' hands for simulation (key: playerId, value: cards)
-    const [allHands, setAllHands] = useState<Record<string, PlayingCardType[]>>(
-        {}
-    );
-
-    // Dominoes-specific state
-    const [dominoesGameData, setDominoesGameData] =
-        useState<DominoesData | null>(null);
-    const [dominoesPlayerData, setDominoesPlayerData] =
-        useState<DominoesPlayerData | null>(null);
-    const [selectedTile, setSelectedTile] = useState<TileType | null>(null);
-
-    // Initialize with undealt state (show deck, empty hands)
-    const initializeUndealt = useCallback(() => {
-        setActivePlayerIndex(0);
-        setSelectedCardIndex(null);
-        setSelectedTile(null);
-        setIsDealing(false);
-        setHasDealt(false);
-        setAllHands({});
-
+    // Generate mock data
+    const generateData = useCallback(() => {
         const generator = getMockDataGenerator(selectedGame);
-        if (generator) {
-            const { gameData, playerData } = generator({ playerCount });
-            if (selectedGame === "spades") {
-                // Start with empty hands to show the deck
-                const emptyGameData = {
-                    ...(gameData as SpadesData),
-                    handsCounts: Object.fromEntries(
-                        (gameData as SpadesData).playOrder.map((id) => [id, 0])
-                    ),
-                };
-                const emptyPlayerData = {
-                    ...(playerData as SpadesPlayerData),
-                    hand: [],
-                };
-                setSpadesGameData(emptyGameData);
-                setSpadesPlayerData(emptyPlayerData);
-            } else if (selectedGame === "dominoes") {
-                setDominoesGameData(gameData as DominoesData);
-                setDominoesPlayerData(playerData as DominoesPlayerData);
-                setHasDealt(true); // Dominoes starts dealt for now
-            }
-        }
-    }, [selectedGame, playerCount]);
-
-    // Reset and regenerate mock data with dealt hands
-    const handleReset = useCallback(() => {
-        setActivePlayerIndex(0);
-        setSelectedCardIndex(null);
-        setSelectedTile(null);
-        setIsDealing(false);
-        setHasDealt(true);
-        setAllHands({});
-
-        const generator = getMockDataGenerator(selectedGame);
-        if (generator) {
-            const { gameData, playerData } = generator({ playerCount });
-            if (selectedGame === "spades") {
-                const spadesData = gameData as SpadesData;
-                const spadesPlayer = playerData as SpadesPlayerData;
-
-                // Build allHands from the hands array in mock data
-                const handsMap: Record<string, PlayingCardType[]> = {};
-                spadesData.playOrder.forEach((playerId, idx) => {
-                    // The mock data has `hands` as an array of string arrays
-                    // But we need PlayingCard objects. We'll regenerate.
-                    if (idx === 0) {
-                        handsMap[playerId] = spadesPlayer.hand;
-                    } else {
-                        // Generate cards for opponents based on handsCounts
-                        // Since mock data deals equally, we can infer
-                        handsMap[playerId] = generateOpponentHand(
-                            spadesData.handsCounts[playerId] || 0
-                        );
-                    }
-                });
-                setAllHands(handsMap);
-                setSpadesGameData(spadesData);
-                setSpadesPlayerData(spadesPlayer);
-            } else if (selectedGame === "dominoes") {
-                setDominoesGameData(gameData as DominoesData);
-                setDominoesPlayerData(playerData as DominoesPlayerData);
-            }
-        }
-    }, [selectedGame, playerCount]);
-
-    // Generate mock data on mount and game change
-    useEffect(() => {
-        initializeUndealt();
-    }, [selectedGame, playerCount, initializeUndealt]);
-
-    // Spades handlers
-    const handleCardSelect = useCallback(
-        (index: number, card: PlayingCardType) => {
-            if (selectedCardIndex === index) {
-                // Play the card
-                if (spadesPlayerData && spadesGameData) {
-                    const heroPlayerId = spadesPlayerData.localOrdering[0];
-                    const newHand = spadesPlayerData.hand.filter(
-                        (_, i) => i !== index
-                    );
-                    const newTrick = {
-                        plays: [
-                            ...(spadesGameData.currentTrick?.plays || []),
-                            {
-                                playerId: heroPlayerId,
-                                card,
-                            },
-                        ],
-                    };
-
-                    // Update allHands for hero player
-                    setAllHands((prev) => ({
-                        ...prev,
-                        [heroPlayerId]: newHand,
-                    }));
-
-                    // Update hands count
-                    const newHandsCounts = {
-                        ...spadesGameData.handsCounts,
-                        [heroPlayerId]: newHand.length,
-                    };
-
-                    setSpadesPlayerData({ ...spadesPlayerData, hand: newHand });
-                    setSpadesGameData({
-                        ...spadesGameData,
-                        currentTrick: newTrick,
-                        handsCounts: newHandsCounts,
-                    });
-                    setSelectedCardIndex(null);
-                    setActivePlayerIndex((prev) => (prev + 1) % playerCount);
-                }
-            } else {
-                setSelectedCardIndex(index);
-            }
-        },
-        [selectedCardIndex, spadesPlayerData, spadesGameData, playerCount]
-    );
-
-    const handlePlayCard = useCallback(() => {
-        if (
-            selectedCardIndex !== null &&
-            spadesPlayerData?.hand[selectedCardIndex]
-        ) {
-            const card = spadesPlayerData.hand[selectedCardIndex];
-            handleCardSelect(selectedCardIndex, card);
-        }
-    }, [selectedCardIndex, spadesPlayerData, handleCardSelect]);
-
-    const handleCancelSelection = useCallback(() => {
-        setSelectedCardIndex(null);
-    }, []);
-
-    const handleSimulateOpponentPlay = useCallback(() => {
-        if (!spadesGameData || !spadesPlayerData) return;
-
-        const currentPlayerIndex = activePlayerIndex;
-        const currentPlayerId =
-            spadesPlayerData.localOrdering[currentPlayerIndex];
-
-        // Get the current player's hand from allHands
-        const playerHand = allHands[currentPlayerId];
-        if (!playerHand || playerHand.length === 0) {
-            toast.error("No cards to play");
-            setActivePlayerIndex((prev) => (prev + 1) % playerCount);
+        if (!generator) {
+            toast.error(`No mock data generator for ${selectedGame}`);
             return;
         }
 
-        // Pick a random card to play
-        const cardIndex = Math.floor(Math.random() * playerHand.length);
-        const card = playerHand[cardIndex];
-
-        // Remove the card from the player's hand
-        const newPlayerHand = playerHand.filter((_, i) => i !== cardIndex);
-        setAllHands((prev) => ({
-            ...prev,
-            [currentPlayerId]: newPlayerHand,
-        }));
-
-        // Update hands count in game data
-        const newHandsCounts = {
-            ...spadesGameData.handsCounts,
-            [currentPlayerId]: newPlayerHand.length,
-        };
-
-        // Add card to trick
-        const newTrick = {
-            plays: [
-                ...(spadesGameData.currentTrick?.plays || []),
-                { playerId: currentPlayerId, card },
-            ],
-        };
-
-        setSpadesGameData({
-            ...spadesGameData,
-            currentTrick: newTrick,
-            handsCounts: newHandsCounts,
-        });
-
-        // Advance turn
-        setActivePlayerIndex((prev) => (prev + 1) % playerCount);
-    }, [
-        spadesGameData,
-        spadesPlayerData,
-        allHands,
-        activePlayerIndex,
-        playerCount,
-    ]);
-
-    const handleClearTrick = useCallback(() => {
-        if (spadesGameData) {
-            setSpadesGameData({ ...spadesGameData, currentTrick: null });
-        }
-    }, [spadesGameData]);
-
-    const handleDeal = useCallback(async () => {
-        if (!spadesGameData || !spadesPlayerData) return;
-
-        setIsDealing(true);
-        setDealingItems([]);
-
-        // Get the mock data that will be dealt
-        const generator = getMockDataGenerator("spades");
-        if (!generator) return;
-
         const { gameData: newGameData, playerData: newPlayerData } = generator({
+            ...mockOptions,
             playerCount,
         });
-        const spadesData = newGameData as SpadesData;
-        const spadesPlayer = newPlayerData as SpadesPlayerData;
-        const heroPlayerId = spadesPlayerData.localOrdering[0];
 
-        // Build deal sequence - cycle through players like a real dealer
-        const cardsPerPlayer = Math.floor(52 / playerCount);
-        const dealSequence: {
-            playerId: string;
-            position: EdgePosition;
-            cardIndex: number;
-        }[] = [];
-        const playerCardIndices: Record<string, number> = {};
-        spadesPlayerData.localOrdering.forEach((id) => {
-            playerCardIndices[id] = 0;
-        });
-
-        for (let round = 0; round < cardsPerPlayer; round++) {
-            for (let p = 0; p < playerCount; p++) {
-                const playerId = spadesPlayerData.localOrdering[p];
-                dealSequence.push({
-                    playerId,
-                    position: getEdgePosition(p, playerCount),
-                    cardIndex: playerCardIndices[playerId],
-                });
-                playerCardIndices[playerId]++;
-            }
+        // Validate that generated data matches expected game type
+        if (newGameData.type !== selectedGame) {
+            console.error(
+                `Mock data type mismatch: expected ${selectedGame}, got ${newGameData.type}`,
+            );
+            return;
         }
 
-        // Track visible cards per player during animation
-        const visibleCounts: Record<string, number> = {};
-        spadesPlayerData.localOrdering.forEach((id) => {
-            visibleCounts[id] = 0;
-        });
+        setGameData(newGameData);
+        setPlayerData(isSpectator ? null : newPlayerData);
+        setActionLog([]);
+    }, [selectedGame, mockOptions, playerCount, isSpectator]);
 
-        // Track hero's cards as they're dealt (face-up)
-        let heroCardsDealt: PlayingCardType[] = [];
+    // Initialize on mount and when game/options change
+    useEffect(() => {
+        generateData();
+    }, [generateData]);
 
-        // Deal cards with animation
-        const CARD_INTERVAL = 25; // Fast dealing
-        for (let i = 0; i < dealSequence.length; i++) {
-            const { playerId, position, cardIndex } = dealSequence[i];
-            const dealingCardId = `deal-${Date.now()}-${i}`;
-
-            // Show flying card
-            setDealingItems([
-                {
-                    id: dealingCardId,
-                    targetPosition: position,
-                    delay: 0,
-                },
-            ]);
-
-            // Wait for animation
-            await new Promise((resolve) =>
-                setTimeout(resolve, CARD_INTERVAL - 8)
-            );
-
-            // Increment visible count for this player
-            visibleCounts[playerId] = (visibleCounts[playerId] || 0) + 1;
-
-            // For hero player, add the actual card (face-up)
-            if (playerId === heroPlayerId) {
-                const card = spadesPlayer.hand[cardIndex];
-                if (card) {
-                    heroCardsDealt = [...heroCardsDealt, card];
-                    // Update hero's hand with actual cards during dealing
-                    setSpadesPlayerData((prev) =>
-                        prev
-                            ? {
-                                  ...prev,
-                                  hand: heroCardsDealt,
-                              }
-                            : prev
-                    );
-                }
-            }
-
-            // Update handsCounts to show cards appearing for opponents
-            setSpadesGameData((prev) =>
-                prev
-                    ? {
-                          ...prev,
-                          handsCounts: { ...visibleCounts },
-                      }
-                    : prev
-            );
-
-            setDealingItems([]);
-
-            // Small gap
-            await new Promise((resolve) => setTimeout(resolve, 8));
-        }
-
-        // Build allHands from the new data
-        const handsMap: Record<string, PlayingCardType[]> = {};
-        spadesData.playOrder.forEach((playerId, idx) => {
-            if (idx === 0) {
-                handsMap[playerId] = spadesPlayer.hand;
-            } else {
-                handsMap[playerId] = generateOpponentHand(
-                    spadesData.handsCounts[playerId] || 0
-                );
-            }
-        });
-
-        // Final state update
-        setAllHands(handsMap);
-        setSpadesGameData(spadesData);
-        setSpadesPlayerData(spadesPlayer);
-        setIsDealing(false);
-        setHasDealt(true);
-    }, [spadesGameData, spadesPlayerData, playerCount]);
-
-    // Dominoes handlers
-    const handleTileSelect = useCallback((tile: TileType | null) => {
-        setSelectedTile(tile);
-    }, []);
-
-    const handlePlaceTile = useCallback(
-        (side: "left" | "right") => {
-            if (!selectedTile || !dominoesGameData || !dominoesPlayerData)
-                return;
-
-            // Remove tile from hand
-            const newHand = dominoesPlayerData.hand.filter(
-                (t) => t.id !== selectedTile.id
-            );
-
-            // Add to board
-            const newTiles = [...dominoesGameData.board.tiles];
-            if (side === "left") {
-                newTiles.unshift(selectedTile);
-            } else {
-                newTiles.push(selectedTile);
-            }
-
-            const newBoard = {
-                tiles: newTiles,
-                leftEnd: { value: newTiles[0].left, tileId: newTiles[0].id },
-                rightEnd: {
-                    value: newTiles[newTiles.length - 1].right,
-                    tileId: newTiles[newTiles.length - 1].id,
-                },
+    // Mock action dispatcher - logs actions and applies them to game state
+    const dispatchOptimisticAction = useCallback(
+        (actionType: string, actionPayload: unknown) => {
+            const action: DebugAction = {
+                type: actionType,
+                payload: actionPayload,
+                timestamp: Date.now(),
             };
 
-            setDominoesPlayerData({ ...dominoesPlayerData, hand: newHand });
-            setDominoesGameData({ ...dominoesGameData, board: newBoard });
-            setSelectedTile(null);
-            setActivePlayerIndex((prev) => (prev + 1) % playerCount);
+            setActionLog((prev) => [...prev, action]);
+            toast.info(`Action: ${actionType}`, {
+                description: JSON.stringify(actionPayload),
+                duration: 2000,
+            });
+
+            // TODO: In future, could apply action to game state using a reducer
+            // For now, just log it
+            console.log("🎮 Debug action dispatched:", action);
         },
-        [selectedTile, dominoesGameData, dominoesPlayerData, playerCount]
+        [],
     );
 
-    const handlePass = useCallback(() => {
-        setActivePlayerIndex((prev) => (prev + 1) % playerCount);
-        toast.info("Passed turn");
-    }, [playerCount]);
+    // Handle game change
+    const handleGameChange = useCallback((game: string) => {
+        setSelectedGame(game);
+        setActionLog([]);
+        // Clear game data to prevent type mismatch during transition
+        setGameData(null);
+        setPlayerData(null);
+    }, []);
+
+    // Handle reset
+    const handleReset = useCallback(() => {
+        const defaults = getDefaultMockOptions(selectedGame);
+        setMockOptions(defaults);
+        setPlayerCount(4);
+        setIsSpectator(false);
+        setActionLog([]);
+        generateData();
+        toast.success("Reset to defaults");
+    }, [selectedGame, generateData]);
+
+    // Get the actual game component
+    const GameComponent = useMemo(
+        () => getGameComponent(selectedGame),
+        [selectedGame],
+    );
 
     return (
-        <div className="flex flex-col min-h-screen bg-slate-900">
-            {/* Control Panel */}
-            <div className="flex-shrink-0 p-4 bg-slate-800 border-b border-slate-700">
-                <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center">
-                    {/* Game Selector */}
-                    <Card className="flex-1 min-w-[200px] bg-slate-700 border-slate-600">
-                        <CardHeader className="py-2 px-4">
-                            <CardTitle className="text-sm text-white">
-                                Game Type
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="py-2 px-4">
-                            <Select
-                                value={selectedGame}
-                                onValueChange={(v: string) =>
-                                    setSelectedGame(v as GameType)
-                                }
-                            >
-                                <SelectTrigger className="w-full bg-slate-600 border-slate-500 text-white">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {gameTypes.map((type) => (
-                                        <SelectItem key={type} value={type}>
-                                            {getGameDisplayName(type)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </CardContent>
-                    </Card>
+        <div className="min-h-screen bg-slate-900">
+            {/* Debug Controls */}
+            <DebugControls
+                selectedGame={selectedGame}
+                onGameChange={handleGameChange}
+                gameTypes={gameTypes}
+                playerCount={playerCount}
+                onPlayerCountChange={setPlayerCount}
+                minPlayers={playerConstraints.min}
+                maxPlayers={playerConstraints.max}
+                onReset={handleReset}
+                onRegenerate={generateData}
+                isSpectator={isSpectator}
+                onSpectatorToggle={setIsSpectator}
+                actionLog={actionLog}
+                mockOptions={mockOptions}
+                onMockOptionsChange={setMockOptions}
+            />
 
-                    {/* Player Count */}
-                    <Card className="flex-1 min-w-[200px] bg-slate-700 border-slate-600">
-                        <CardHeader className="py-2 px-4">
-                            <CardTitle className="text-sm text-white">
-                                Players
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="py-2 px-4">
-                            <div className="flex items-center gap-4">
-                                <Slider
-                                    value={[playerCount]}
-                                    onValueChange={(value) =>
-                                        setPlayerCount(value[0])
-                                    }
-                                    min={2}
-                                    max={selectedGame === "spades" ? 4 : 6}
-                                    step={selectedGame === "spades" ? 2 : 1}
-                                    className="flex-1"
-                                />
-                                <Badge
-                                    variant="secondary"
-                                    className="w-8 justify-center"
-                                >
-                                    {playerCount}
-                                </Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Active Player */}
-                    <Card className="flex-1 min-w-[200px] bg-slate-700 border-slate-600">
-                        <CardHeader className="py-2 px-4">
-                            <CardTitle className="text-sm text-white">
-                                Active Player
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="py-2 px-4">
-                            <div className="flex items-center gap-4">
-                                <Slider
-                                    value={[activePlayerIndex]}
-                                    onValueChange={(value) =>
-                                        setActivePlayerIndex(value[0])
-                                    }
-                                    min={0}
-                                    max={playerCount - 1}
-                                    step={1}
-                                    className="flex-1"
-                                />
-                                <Badge
-                                    variant={
-                                        activePlayerIndex === 0
-                                            ? "default"
-                                            : "secondary"
-                                    }
-                                    className="w-16 justify-center"
-                                >
-                                    {activePlayerIndex === 0
-                                        ? "You"
-                                        : `P${activePlayerIndex + 1}`}
-                                </Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                        {selectedGame === "spades" && (
-                            <>
+            {/* Game Component - uses the ACTUAL component */}
+            <div className="pt-[60px]">
+                {GameComponent && gameData && gameData.type === selectedGame ? (
+                    <ErrorBoundary
+                        onReset={generateData}
+                        fallback={
+                            <div className="flex flex-col items-center justify-center h-[calc(100vh-60px)] gap-4 text-zinc-400">
+                                <p>Something went wrong loading the game UI.</p>
                                 <Button
-                                    onClick={handleDeal}
-                                    disabled={isDealing}
-                                    className="bg-emerald-600 hover:bg-emerald-700"
-                                >
-                                    {isDealing ? "Dealing..." : "Deal Cards"}
-                                </Button>
-                                <Button
-                                    onClick={handleSimulateOpponentPlay}
+                                    onClick={generateData}
                                     variant="outline"
                                 >
-                                    Simulate Play
+                                    Regenerate
                                 </Button>
-                                <Button
-                                    onClick={handleClearTrick}
-                                    variant="outline"
-                                >
-                                    Clear Trick
-                                </Button>
-                            </>
+                            </div>
+                        }
+                    >
+                        <GameComponent
+                            gameData={gameData}
+                            playerData={playerData}
+                            dispatchOptimisticAction={
+                                isSpectator
+                                    ? undefined
+                                    : dispatchOptimisticAction
+                            }
+                            isSpectator={isSpectator}
+                            roomCode="DEBUG"
+                        />
+                    </ErrorBoundary>
+                ) : (
+                    <div className="flex items-center justify-center h-[calc(100vh-60px)] text-zinc-400">
+                        {!GameComponent ? (
+                            <p>
+                                No component registered for &quot;{selectedGame}
+                                &quot;
+                            </p>
+                        ) : (
+                            <p>Loading...</p>
                         )}
-                        {selectedGame === "dominoes" && (
-                            <Button onClick={handlePass} variant="outline">
-                                Pass Turn
-                            </Button>
-                        )}
-                        <Button onClick={handleReset} variant="destructive">
-                            Reset
-                        </Button>
                     </div>
-
-                    {/* Debug Grid Toggle */}
-                    <div className="flex items-center gap-2">
-                        <Label
-                            htmlFor="debug-grid"
-                            className="text-white text-sm"
-                        >
-                            Debug Grid
-                        </Label>
-                        <input
-                            id="debug-grid"
-                            type="checkbox"
-                            checked={showDebugGrid}
-                            onChange={(e) => setShowDebugGrid(e.target.checked)}
-                            className="w-4 h-4"
-                        />
-                    </div>
-
-                    {/* Turn Timer Controls */}
-                    <Card className="flex-1 min-w-[250px] bg-slate-700 border-slate-600">
-                        <CardHeader className="py-2 px-4">
-                            <CardTitle className="text-sm text-white flex items-center justify-between">
-                                <span>Turn Timer</span>
-                                <Switch
-                                    checked={timerEnabled}
-                                    onCheckedChange={setTimerEnabled}
-                                />
-                            </CardTitle>
-                        </CardHeader>
-                        {timerEnabled && (
-                            <CardContent className="py-2 px-4">
-                                <div className="flex items-center gap-4">
-                                    <Slider
-                                        value={[timerDuration]}
-                                        onValueChange={(value) =>
-                                            setTimerDuration(value[0])
-                                        }
-                                        min={5}
-                                        max={60}
-                                        step={5}
-                                        className="flex-1"
-                                    />
-                                    <Badge
-                                        variant="secondary"
-                                        className="w-12 justify-center"
-                                    >
-                                        {timerDuration}s
-                                    </Badge>
-                                </div>
-                            </CardContent>
-                        )}
-                    </Card>
-                </div>
-            </div>
-
-            {/* Game Panel */}
-            <div className="flex-1">
-                {selectedGame === "spades" &&
-                    spadesGameData &&
-                    spadesPlayerData && (
-                        <SpadesDebugPanel
-                            gameData={spadesGameData}
-                            playerData={spadesPlayerData}
-                            activePlayerIndex={activePlayerIndex}
-                            selectedCardIndex={selectedCardIndex}
-                            onCardSelect={handleCardSelect}
-                            onPlayCard={handlePlayCard}
-                            onCancelSelection={handleCancelSelection}
-                            isDealing={isDealing}
-                            dealingItems={dealingItems}
-                            showDebugGrid={showDebugGrid}
-                            timerEnabled={timerEnabled}
-                            timerDuration={timerDuration}
-                            timerStartedAt={timerStartedAt}
-                        />
-                    )}
-                {selectedGame === "dominoes" &&
-                    dominoesGameData &&
-                    dominoesPlayerData && (
-                        <DominoesDebugPanel
-                            gameData={dominoesGameData}
-                            playerData={dominoesPlayerData}
-                            activePlayerIndex={activePlayerIndex}
-                            selectedTile={selectedTile}
-                            onTileSelect={handleTileSelect}
-                            onPlaceTile={handlePlaceTile}
-                            showDebugGrid={showDebugGrid}
-                        />
-                    )}
+                )}
             </div>
         </div>
     );

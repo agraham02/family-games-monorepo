@@ -1,21 +1,7 @@
 "use client";
 
-import React, { useCallback } from "react";
-import { useWebSocket } from "@/contexts/WebSocketContext";
-import { useSession } from "@/contexts/SessionContext";
-import {
-    DominoesData,
-    DominoesPlayerData,
-    Tile as TileType,
-} from "@shared/types";
-import DominoesGameTable from "./ui/DominoesGameTable";
-import RoundSummaryModal from "./ui/RoundSummaryModal";
-import {
-    GameMenu,
-    GameSettingToggle,
-    useGameSetting,
-} from "@/components/games/shared";
-import { Lightbulb, LayoutGrid } from "lucide-react";
+import React from "react";
+import { DominoesData, DominoesPlayerData } from "@shared/types";
 
 interface DominoesProps {
     gameData: DominoesData;
@@ -24,89 +10,16 @@ interface DominoesProps {
     roomCode?: string;
 }
 
-export default function Dominoes({
-    gameData,
-    playerData,
-    dispatchOptimisticAction,
-    roomCode,
-}: DominoesProps) {
-    const { socket, connected } = useWebSocket();
-    const { roomId, userId } = useSession();
-
-    const sendGameAction = useCallback(
-        (type: string, payload: unknown) => {
-            // Use optimistic action dispatcher if available, otherwise fallback to direct emit
-            if (dispatchOptimisticAction) {
-                dispatchOptimisticAction(type, payload);
-            } else {
-                // Fallback for backwards compatibility
-                if (!socket || !connected) return;
-                const action = {
-                    type,
-                    payload,
-                    userId,
-                };
-                socket.emit("game_action", { roomId, action });
-            }
-        },
-        [dispatchOptimisticAction, socket, connected, userId, roomId],
-    );
-
-    // Derived state
-    const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
-    const isMyTurn = currentPlayerId === userId;
-    const isLeader = userId === gameData.leaderId;
-    const showHints = useGameSetting("dominoes.showHints", false);
-    const useDynamicBoard = useGameSetting("dominoes.dynamicBoard", true);
-
-    // Handle placing a tile
-    const handlePlaceTile = useCallback(
-        (tile: TileType, side: "left" | "right") => {
-            sendGameAction("PLACE_TILE", { tile, side });
-        },
-        [sendGameAction],
-    );
-
-    // Handle pass
-    const handlePass = useCallback(() => {
-        sendGameAction("PASS", {});
-    }, [sendGameAction]);
-
+/**
+ * Dominoes game component - placeholder for future implementation.
+ */
+export default function Dominoes(_props: DominoesProps) {
     return (
-        <div className="h-screen w-full overflow-hidden">
-            <DominoesGameTable
-                gameData={gameData}
-                playerData={playerData}
-                isMyTurn={isMyTurn}
-                showHints={showHints}
-                useDynamicBoard={useDynamicBoard}
-                onPlaceTile={handlePlaceTile}
-                onPass={handlePass}
-            />
-
-            {/* Game Menu */}
-            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId}>
-                <GameSettingToggle
-                    storageKey="dominoes.showHints"
-                    label="Show Valid Moves"
-                    icon={<Lightbulb className="h-4 w-4" />}
-                    defaultValue={false}
-                />
-                <GameSettingToggle
-                    storageKey="dominoes.dynamicBoard"
-                    label="Dynamic Board Layout"
-                    icon={<LayoutGrid className="h-4 w-4" />}
-                    defaultValue={true}
-                />
-            </GameMenu>
-
-            {/* Round Summary Modal */}
-            <RoundSummaryModal
-                gameData={gameData}
-                sendGameAction={sendGameAction}
-            />
-
-            {/* Game Summary Modal is now handled by the game page via game_ended event */}
+        <div className="h-screen w-full flex items-center justify-center bg-green-900">
+            <div className="text-center text-white">
+                <h1 className="text-2xl font-bold mb-4">Dominoes</h1>
+                <p className="text-white/70">Coming soon...</p>
+            </div>
         </div>
     );
 }
