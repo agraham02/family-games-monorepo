@@ -1,5 +1,11 @@
 // apps/api/src/games/lrc/helpers/chips.ts
 // Chip movement and win condition helpers for LRC
+//
+// This module handles all chip-related operations:
+// - Calculating movements from dice rolls
+// - Applying movements to player state
+// - Win condition detection
+// - Wild mode target selection
 
 import { ChipMovement, DieRoll, LRCPlayer } from "@family-games/shared";
 
@@ -7,13 +13,23 @@ import { ChipMovement, DieRoll, LRCPlayer } from "@family-games/shared";
  * Calculate chip movements based on dice roll.
  * Uses player array order (seat indices) to determine left/right neighbors.
  *
- * Note: WILD dice are not processed here - they need target selection first.
+ * Seat arrangement (circular):
+ * ```
+ *        P1
+ *      /    \
+ *    P0      P2
+ *      \    /
+ *        P3
+ * ```
+ * Left = counter-clockwise, Right = clockwise
+ *
+ * Note: WILD dice require pre-selected targets passed via wildTargets array.
  *
  * @param players - Array of all players in seat order
  * @param rollerIndex - Index of the player who rolled
  * @param roll - Array of die roll results
  * @param wildTargets - Array of player IDs for WILD targets (in order of WILD dice)
- * @returns Array of chip movements
+ * @returns Array of chip movements to apply
  */
 export function calculateChipMovements(
     players: LRCPlayer[],
@@ -24,6 +40,11 @@ export function calculateChipMovements(
     const movements: ChipMovement[] = [];
     const roller = players[rollerIndex];
     const count = players.length;
+
+    // Edge case: no players
+    if (count === 0 || !roller) {
+        return movements;
+    }
 
     // Indices for neighbors (wrap around)
     const leftIndex = (rollerIndex - 1 + count) % count;

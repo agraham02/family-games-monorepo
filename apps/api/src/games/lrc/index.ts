@@ -114,8 +114,27 @@ function init(room: Room, customSettings?: Partial<LRCSettings>): LRCState {
 }
 
 /**
- * LRC game reducer - handles all game actions.
- * Uses immer for immutable state updates.
+ * LRC game reducer - handles all game actions using Immer for immutable updates.
+ *
+ * State Machine:
+ * - waiting-for-roll: Current player must roll dice
+ *   → ROLL_DICE → showing-results (or round-over for triple wild)
+ *
+ * - showing-results: Display roll results and chip movements
+ *   → CONFIRM_RESULTS → waiting-for-roll (next player) | last-chip-challenge | round-over
+ *
+ * - wild-target-selection: (Currently unused - auto-selects richest player)
+ *   → CHOOSE_WILD_TARGET → showing-results
+ *
+ * - last-chip-challenge: Winner must roll all dots to win
+ *   → LAST_CHIP_CHALLENGE_ROLL → round-over (success) | waiting-for-roll (failure)
+ *
+ * - round-over: Display winner, option to play again
+ *   → PLAY_AGAIN → waiting-for-roll (new round)
+ *
+ * @param state - Current LRC game state
+ * @param action - Game action to process
+ * @returns Updated game state
  */
 function reducer(state: LRCState, action: GameAction): LRCState {
     const { type, payload, userId } = action;
@@ -131,7 +150,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] ${userId} tried to roll but it's ${currentPlayer.id}'s turn`,
                     );
-                    return state; // Return original state on error
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 // Validate phase
@@ -139,7 +158,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Cannot roll in phase: ${draft.phase}`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 // Validate player has chips
@@ -147,7 +166,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] ${currentPlayer.name} has no chips to roll`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 // Roll dice
@@ -201,9 +220,18 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     );
 
                     if (autoTarget) {
+                        // Find the target player's name for logging
+                        const targetPlayer = draft.lrcPlayers.find(
+                            (p) => p.id === autoTarget,
+                        );
+                        const targetName = targetPlayer?.name ?? autoTarget;
+
                         // Auto-assign targets to richest player
                         draft.wildTargets = wildIndices.map(() => autoTarget);
                         draft.pendingWildTargets = [];
+                        draft.history.push(
+                            `WILD dice auto-targeted ${targetName} (${wildCount} chip${wildCount > 1 ? "s" : ""})`,
+                        );
 
                         // Calculate movements with auto-selected targets
                         const movements = calculateChipMovements(
@@ -217,6 +245,9 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                         // No valid targets (everyone else has 0 chips)
                         draft.wildTargets = [];
                         draft.pendingWildTargets = [];
+                        draft.history.push(
+                            `WILD dice had no valid targets (all other players have 0 chips)`,
+                        );
                         const movements = calculateChipMovements(
                             draft.lrcPlayers,
                             draft.currentPlayerIndex,
@@ -252,7 +283,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] No results to confirm in phase: ${draft.phase}`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 // Apply chip movements and update netChipsThisRound
@@ -332,7 +363,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Could not find next player with chips`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 draft.currentPlayerIndex = nextIndex;
@@ -348,7 +379,10 @@ function reducer(state: LRCState, action: GameAction): LRCState {
             case "CHOOSE_WILD_TARGET": {
                 // Handle manual wild target selection (if we add UI for it later)
                 if (draft.phase !== "wild-target-selection") {
-                    return state;
+                    draft.history.push(
+                        `[ERROR] Cannot choose wild target in phase: ${draft.phase}`,
+                    );
+                    return; // Exit producer without changes
                 }
 
                 // Validate payload
@@ -356,7 +390,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Invalid payload for CHOOSE_WILD_TARGET`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 const { targetPlayerId } = payload as {
@@ -368,7 +402,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Missing or invalid targetPlayerId`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 const validTargets = getValidWildTargets(
@@ -380,7 +414,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Invalid wild target: ${targetPlayerId}`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 draft.wildTargets.push(targetPlayerId);
@@ -408,12 +442,18 @@ function reducer(state: LRCState, action: GameAction): LRCState {
 
             case "LAST_CHIP_CHALLENGE_ROLL": {
                 if (draft.phase !== "last-chip-challenge") {
-                    return state;
+                    draft.history.push(
+                        `[ERROR] Cannot do challenge roll in phase: ${draft.phase}`,
+                    );
+                    return; // Exit producer without changes
                 }
 
                 const challenger = draft.lrcPlayers[draft.currentPlayerIndex];
                 if (userId !== challenger.id) {
-                    return state;
+                    draft.history.push(
+                        `[ERROR] ${userId} tried to roll challenge but it's ${challenger.id}'s turn`,
+                    );
+                    return; // Exit producer without changes
                 }
 
                 // Roll dice for challenge
@@ -505,7 +545,10 @@ function reducer(state: LRCState, action: GameAction): LRCState {
 
             case "PLAY_AGAIN": {
                 if (draft.phase !== "round-over") {
-                    return state;
+                    draft.history.push(
+                        `[ERROR] Cannot play again in phase: ${draft.phase}`,
+                    );
+                    return; // Exit producer without changes
                 }
 
                 // Only leader can start new round
@@ -513,7 +556,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
                     draft.history.push(
                         `[ERROR] Only the leader can start a new round`,
                     );
-                    return state;
+                    return; // Exit producer without changes (keeps history entry)
                 }
 
                 // Record round winner
@@ -550,7 +593,7 @@ function reducer(state: LRCState, action: GameAction): LRCState {
 
             default:
                 draft.history.push(`[WARN] Unknown action type: ${type}`);
-                return state;
+                return; // Exit producer without changes (keeps history entry)
         }
     });
 }
@@ -679,16 +722,142 @@ function handleReconnect(state: LRCState, odusId: string): LRCState {
 
 /**
  * Handle player disconnection.
+ * If the disconnected player is the current player, auto-skip their turn.
  * Connection status is managed in state.players by GameManager.
  */
 function handleDisconnect(state: LRCState, odusId: string): LRCState {
     const player = state.lrcPlayers.find((p) => p.id === odusId);
-    if (player) {
-        return produce(state, (draft) => {
-            draft.history.push(`${player.name} disconnected`);
-        });
+    if (!player) {
+        return state;
     }
-    return state;
+
+    return produce(state, (draft) => {
+        draft.history.push(`${player.name} disconnected`);
+
+        const currentPlayer = draft.lrcPlayers[draft.currentPlayerIndex];
+
+        // If the disconnected player is the current player and it's their turn to act
+        if (currentPlayer?.id === odusId) {
+            // Handle based on current phase
+            switch (draft.phase) {
+                case "waiting-for-roll": {
+                    // Auto-roll for disconnected player
+                    const diceCount = getDiceCount(currentPlayer.chips);
+                    if (diceCount > 0) {
+                        const roll = rollDice(
+                            diceCount,
+                            draft.settings.wildMode,
+                        );
+                        draft.currentRoll = roll;
+                        draft.history.push(
+                            `${player.name} (disconnected) auto-rolled: ${roll.map((d) => d.face).join(", ")}`,
+                        );
+
+                        // Calculate movements (auto-target for wild)
+                        const wildCount = countWildDice(roll);
+                        if (wildCount > 0 && draft.settings.wildMode) {
+                            const autoTarget = findPlayerWithMostChips(
+                                draft.lrcPlayers,
+                                currentPlayer.id,
+                            );
+                            draft.wildTargets = autoTarget
+                                ? roll
+                                      .filter((d) => d.face === "WILD")
+                                      .map(() => autoTarget)
+                                : [];
+                        }
+
+                        draft.chipMovements = calculateChipMovements(
+                            draft.lrcPlayers,
+                            draft.currentPlayerIndex,
+                            roll,
+                            draft.wildTargets,
+                        );
+                        draft.phase = "showing-results";
+                        draft.autoConfirmAt = new Date(
+                            Date.now() + LRC_AUTO_CONFIRM_DELAY * 1000,
+                        ).toISOString();
+                    }
+                    break;
+                }
+
+                case "last-chip-challenge": {
+                    // Auto-roll the challenge
+                    const challengeDiceCount = getDiceCount(
+                        currentPlayer.chips,
+                    );
+                    const challengeRoll = rollDice(challengeDiceCount, false);
+                    draft.lastChipChallengeRoll = challengeRoll;
+                    draft.history.push(
+                        `${player.name} (disconnected) auto-rolled challenge: ${challengeRoll.map((d) => d.face).join(", ")}`,
+                    );
+
+                    // Challenge always fails when auto-rolled (no dots likely)
+                    if (isAllDots(challengeRoll)) {
+                        draft.lastChipChallengeSuccess = true;
+                        draft.phase = "round-over";
+                        draft.winnerId = currentPlayer.id;
+                        currentPlayer.chips += draft.centerPot;
+                        currentPlayer.netChipsThisRound += draft.centerPot;
+                        draft.centerPot = 0;
+                    } else {
+                        draft.lastChipChallengeSuccess = false;
+                        draft.lastChipChallengeActive = false;
+
+                        const challengeMovements = calculateChipMovements(
+                            draft.lrcPlayers,
+                            draft.currentPlayerIndex,
+                            challengeRoll,
+                            [],
+                        );
+                        const challengeResult = applyChipMovements(
+                            draft.lrcPlayers,
+                            challengeMovements,
+                        );
+
+                        for (let i = 0; i < draft.lrcPlayers.length; i++) {
+                            const oldChips = draft.lrcPlayers[i].chips;
+                            const newChips = challengeResult.players[i].chips;
+                            draft.lrcPlayers[i].chips = newChips;
+                            draft.lrcPlayers[i].netChipsThisRound +=
+                                newChips - oldChips;
+                        }
+                        draft.centerPot += challengeResult.centerPotDelta;
+                        draft.lastChipChallengeRoll = null;
+
+                        const winner = checkWinCondition(draft.lrcPlayers);
+                        if (winner) {
+                            draft.phase = "round-over";
+                            draft.winnerId = winner.id;
+                            const winnerIdx = draft.lrcPlayers.findIndex(
+                                (p) => p.id === winner.id,
+                            );
+                            if (winnerIdx >= 0) {
+                                draft.lrcPlayers[winnerIdx].chips +=
+                                    draft.centerPot;
+                                draft.lrcPlayers[winnerIdx].netChipsThisRound +=
+                                    draft.centerPot;
+                                draft.centerPot = 0;
+                            }
+                        } else {
+                            const nextIdx = findNextPlayerIndex(
+                                draft.lrcPlayers,
+                                draft.currentPlayerIndex,
+                            );
+                            draft.currentPlayerIndex = nextIdx;
+                            draft.phase = "waiting-for-roll";
+                            draft.turnStartedAt = new Date().toISOString();
+                        }
+                    }
+                    break;
+                }
+
+                // For other phases, the auto-confirm timer will handle it
+                default:
+                    break;
+            }
+        }
+    });
 }
 
 export const lrcModule: GameModule = {

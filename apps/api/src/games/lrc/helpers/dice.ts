@@ -54,6 +54,16 @@ export function findNextPlayerIndex(
     currentIndex: number,
 ): number {
     const count = players.length;
+
+    // Edge case: no players or single player
+    if (count === 0) {
+        throw new Error("No players in game");
+    }
+    if (count === 1) {
+        // Single player edge case - if they have chips, they're next
+        return players[0].chips > 0 ? 0 : -1;
+    }
+
     let nextIndex = (currentIndex + 1) % count;
     let checked = 0;
 
@@ -75,13 +85,14 @@ export function findNextPlayerIndex(
 
 /**
  * Get the number of dice a player should roll.
- * Roll 1 die per chip, maximum 3.
+ * Roll 1 die per chip, maximum 3, minimum 0.
  *
  * @param chips - Number of chips the player has
  * @returns Number of dice to roll (0-3)
  */
 export function getDiceCount(chips: number): number {
-    return Math.min(chips, 3);
+    // Defensive: handle negative chips (shouldn't happen but be safe)
+    return Math.min(Math.max(chips, 0), 3);
 }
 
 /**

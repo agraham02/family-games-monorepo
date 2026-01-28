@@ -1,23 +1,29 @@
 // apps/api/src/games/lrc/helpers/autoAction.ts
 // Auto-action helpers for LRC turn timer timeout handling
+//
+// These functions are used by TurnTimerService to:
+// 1. Determine if a timer should be running
+// 2. Get the action to perform when timer expires
+// 3. Handle auto-confirm for showing-results phase
 
 import { LRCState, LRCAction, LRCPhase } from "@family-games/shared";
 
+/** Phases where the turn timer should be active */
+const ACTIVE_TIMER_PHASES: LRCPhase[] = [
+    "waiting-for-roll",
+    "wild-target-selection",
+    "last-chip-challenge",
+];
+
 /**
  * Determine if the turn timer should be active for the current game state.
- * Timer should run during phases where a player needs to take action.
+ * Timer runs during phases where a player needs to take action.
  *
  * @param state - Current LRC game state
  * @returns True if timer should be counting down
  */
 export function shouldTimerBeActive(state: LRCState): boolean {
-    const activePhases: LRCPhase[] = [
-        "waiting-for-roll",
-        "wild-target-selection",
-        "last-chip-challenge",
-    ];
-
-    return activePhases.includes(state.phase);
+    return ACTIVE_TIMER_PHASES.includes(state.phase);
 }
 
 /**

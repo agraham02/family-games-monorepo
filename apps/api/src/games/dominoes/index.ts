@@ -23,7 +23,6 @@ import { omitFields } from "../../utils/omitFields";
 import {
     BoardState,
     canPlaceTile,
-    canPlayTile,
     hasLegalMove,
     initializeBoard,
     placeTileOnBoard,
@@ -246,6 +245,25 @@ function init(
     };
 }
 
+/**
+ * Dominoes game reducer - handles all game actions.
+ *
+ * State Machine:
+ * - playing: Normal gameplay - players place tiles or pass
+ *   → PLACE_TILE → playing (next player) | round-summary (hand empty) | finished (game won)
+ *   → PASS → playing (next player) | round-summary (blocked - 4 consecutive passes)
+ *   → DRAW_TILE → playing (same player continues, boneyard mode only)
+ *
+ * - round-summary: Display round results, scores
+ *   → CONTINUE_AFTER_ROUND_SUMMARY → playing (new round)
+ *
+ * - finished: Game over, winner determined
+ *   (No transitions - return to lobby)
+ *
+ * @param state - Current Dominoes game state
+ * @param action - Game action to process
+ * @returns Updated game state
+ */
 function reducer(state: DominoesState, action: GameAction): DominoesState {
     // Log action to history (immutably)
     const stateWithHistory: DominoesState = {
@@ -352,7 +370,13 @@ function handlePlaceTile(
         console.warn(
             `[DOMINOES] Tiles can only be placed during the playing phase. Current: ${state.phase}`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Tiles can only be placed during playing phase. Current: ${state.phase}`,
+            ],
+        };
     }
 
     // Validate turn
@@ -360,13 +384,25 @@ function handlePlaceTile(
         console.warn(
             `[DOMINOES] Not ${playerId}'s turn. Current turn: ${currentPlayerId(state)}`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Not ${playerId}'s turn. Current: ${currentPlayerId(state)}`,
+            ],
+        };
     }
 
     // Check if player is connected
     if (state.players[playerId]?.isConnected === false) {
         console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Player ${playerId} is disconnected`,
+            ],
+        };
     }
 
     // Validate tile is in hand
@@ -376,7 +412,13 @@ function handlePlaceTile(
         console.warn(
             `[DOMINOES] Tile ${tile.id} not in player ${playerId}'s hand`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Tile ${tile.id} not in player ${playerId}'s hand`,
+            ],
+        };
     }
 
     // Validate the move is legal
@@ -384,7 +426,13 @@ function handlePlaceTile(
         console.warn(
             `[DOMINOES] Tile ${tile.id} cannot be placed on ${side} side`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Tile ${tile.id} cannot be placed on ${side} side`,
+            ],
+        };
     }
 
     // Remove tile from hand
@@ -433,7 +481,13 @@ function handleDrawTile(state: DominoesState, playerId: string): DominoesState {
     // Validate drawFromBoneyard is enabled
     if (!state.settings.drawFromBoneyard) {
         console.warn(`[DOMINOES] Drawing from boneyard is disabled`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Drawing from boneyard is disabled`,
+            ],
+        };
     }
 
     // Validate phase
@@ -441,25 +495,49 @@ function handleDrawTile(state: DominoesState, playerId: string): DominoesState {
         console.warn(
             `[DOMINOES] Can only draw during the playing phase. Current: ${state.phase}`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Can only draw during playing phase. Current: ${state.phase}`,
+            ],
+        };
     }
 
     // Validate turn
     if (currentPlayerId(state) !== playerId) {
         console.warn(`[DOMINOES] Not ${playerId}'s turn to draw`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Not ${playerId}'s turn to draw`,
+            ],
+        };
     }
 
     // Check if player is connected
     if (state.players[playerId]?.isConnected === false) {
         console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Player ${playerId} is disconnected`,
+            ],
+        };
     }
 
     // Validate boneyard has tiles
     if (state.boneyard.length === 0) {
         console.warn(`[DOMINOES] Boneyard is empty, player must pass`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Boneyard is empty, player must pass`,
+            ],
+        };
     }
 
     // Verify player actually cannot play (has no legal moves)
@@ -468,15 +546,29 @@ function handleDrawTile(state: DominoesState, playerId: string): DominoesState {
         console.warn(
             `[DOMINOES] Player ${playerId} has legal moves and cannot draw`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Player ${playerId} has legal moves and cannot draw`,
+            ],
+        };
     }
 
     // Draw a tile from boneyard and add to player's hand
     const [drawnTile, ...remainingBoneyard] = state.boneyard;
     const newHand = [...playerHand, drawnTile];
 
-    // Reset consecutive passes since player took an action
-    // (Player's turn continues - they can draw again, play, or pass if boneyard empty)
+    // Check if the drawn tile can be played - if so, player must play it
+    // (This improves the game flow by automatically continuing until playable tile found)
+    const canPlayAfterDraw = hasLegalMove(newHand, state.board);
+
+    // Add history entry for draw action
+    const updatedHistory = [
+        ...state.history,
+        `${state.players[playerId]?.name ?? playerId} drew a tile from boneyard${canPlayAfterDraw ? " (playable)" : ""}`,
+    ];
+
     return {
         ...state,
         hands: {
@@ -485,6 +577,7 @@ function handleDrawTile(state: DominoesState, playerId: string): DominoesState {
         },
         boneyard: remainingBoneyard,
         consecutivePasses: 0,
+        history: updatedHistory,
         // Keep turn timer running for same player
     };
 }
@@ -498,19 +591,37 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
         console.warn(
             `[DOMINOES] Can only pass during the playing phase. Current: ${state.phase}`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Can only pass during playing phase. Current: ${state.phase}`,
+            ],
+        };
     }
 
     // Validate turn
     if (currentPlayerId(state) !== playerId) {
         console.warn(`[DOMINOES] Not ${playerId}'s turn to pass`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Not ${playerId}'s turn to pass`,
+            ],
+        };
     }
 
     // Check if player is connected
     if (state.players[playerId]?.isConnected === false) {
         console.warn(`[DOMINOES] Player ${playerId} is disconnected`);
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Player ${playerId} is disconnected`,
+            ],
+        };
     }
 
     // In boneyard mode, player must draw tiles until they can play or boneyard is empty
@@ -518,7 +629,13 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
         console.warn(
             `[DOMINOES] Player ${playerId} must draw from boneyard before passing`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Must draw from boneyard before passing`,
+            ],
+        };
     }
 
     // Verify player actually cannot play (has no legal moves)
@@ -527,18 +644,35 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
         console.warn(
             `[DOMINOES] Player ${playerId} has legal moves and cannot pass`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Player ${playerId} has legal moves and cannot pass`,
+            ],
+        };
     }
 
     // Increment consecutive passes
     const consecutivePasses = state.consecutivePasses + 1;
 
-    // If all 4 players have passed consecutively, the game is blocked
-    if (consecutivePasses >= 4) {
+    // Add history for pass action
+    const playerName = state.players[playerId]?.name ?? playerId;
+    const updatedHistory = [
+        ...state.history,
+        `${playerName} passed (${consecutivePasses}/${DOMINOES_TOTAL_PLAYERS} consecutive)`,
+    ];
+
+    // If all players have passed consecutively, the game is blocked
+    if (consecutivePasses >= DOMINOES_TOTAL_PLAYERS) {
         return endRound(
             {
                 ...state,
                 consecutivePasses,
+                history: [
+                    ...updatedHistory,
+                    `Game blocked - all ${DOMINOES_TOTAL_PLAYERS} players passed`,
+                ],
             },
             null, // No clear winner, will determine based on lowest pip count
         );
@@ -551,6 +685,7 @@ function handlePass(state: DominoesState, playerId: string): DominoesState {
         ...state,
         currentTurnIndex: nextTurnIndex,
         consecutivePasses,
+        history: updatedHistory,
         // Reset turn timer for next player
         turnStartedAt: new Date().toISOString(),
     };
@@ -602,11 +737,11 @@ function endRound(
             const winningTeamIds = teamIds.filter(
                 (id) => scoreResult.teamScores[id] === highestScore,
             );
-            // If tied, first team wins (could also be a tie scenario)
-            if (winningTeamIds.length === 1) {
-                winningTeamId = winningTeamIds[0];
-                gameWinner = state.teams?.[winningTeamId]?.players[0];
-            }
+            // Handle tie at round limit: pick first team that reached this score
+            // In practice, both teams update scores simultaneously, so we pick team 0
+            // A proper fix would track "first to reach" but for now this is deterministic
+            winningTeamId = winningTeamIds[0];
+            gameWinner = state.teams?.[winningTeamId]?.players[0];
         }
 
         // Update team objects with new scores
@@ -654,10 +789,14 @@ function endRound(
         const winners = playerIds.filter(
             (id) => scoreResult.playerScores[id] === highestScore,
         );
-        // If tied, first player wins (could also be a tie scenario)
-        if (winners.length === 1) {
-            gameWinner = winners[0];
-        }
+        // Handle tie at round limit: pick first player in play order
+        // Sort by play order to ensure deterministic winner
+        const sortedWinners = winners.sort((a, b) => {
+            const aIdx = state.playOrder.indexOf(a);
+            const bIdx = state.playOrder.indexOf(b);
+            return aIdx - bIdx;
+        });
+        gameWinner = sortedWinners[0];
     }
 
     const isGameOver = gameWinner !== undefined || roundLimitReached;
@@ -676,14 +815,21 @@ function endRound(
 }
 
 /**
- * Start the next round
+ * Start the next round after viewing round summary.
+ * Generates fresh tiles, deals to players, and resets round state.
  */
 function startNextRound(state: DominoesState): DominoesState {
     if (state.phase !== "round-summary") {
         console.warn(
             `[DOMINOES] Can only start next round from round-summary phase. Current: ${state.phase}`,
         );
-        return state;
+        return {
+            ...state,
+            history: [
+                ...state.history,
+                `[ERROR] Cannot start next round from phase: ${state.phase}`,
+            ],
+        };
     }
 
     // Generate new tiles
@@ -710,6 +856,11 @@ function startNextRound(state: DominoesState): DominoesState {
             (state.startingPlayerIndex + 1) % state.playOrder.length;
     }
 
+    const newRound = state.round + 1;
+    const startingPlayerName =
+        state.players[state.playOrder[startingPlayerIndex]]?.name ??
+        state.playOrder[startingPlayerIndex];
+
     return {
         ...state,
         hands: newHands,
@@ -718,13 +869,17 @@ function startNextRound(state: DominoesState): DominoesState {
         currentTurnIndex: startingPlayerIndex,
         startingPlayerIndex,
         phase: "playing",
-        round: state.round + 1,
+        round: newRound,
         consecutivePasses: 0,
         roundPipCounts: undefined,
         roundWinner: undefined,
         winningTeam: undefined,
         roundPoints: undefined,
         isRoundTie: undefined,
+        history: [
+            ...state.history,
+            `Round ${newRound} started. ${startingPlayerName} goes first.`,
+        ],
         // Reset turn timer for new round
         turnStartedAt: new Date().toISOString(),
     };

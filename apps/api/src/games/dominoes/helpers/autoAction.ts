@@ -1,10 +1,18 @@
 // src/games/dominoes/helpers/autoAction.ts
 // Auto-action helpers for turn timer timeout handling
+//
+// These functions are used by TurnTimerService to:
+// 1. Determine if a timer should be running
+// 2. Get the action to perform when timer expires
 
 import { Tile, DominoesPhase } from "@family-games/shared";
 import { canPlaceTile, hasLegalMove } from "./board";
 import { BoardState } from "./board";
 
+/**
+ * Minimal state interface for auto-action checks.
+ * Avoids importing the full DominoesState to prevent circular dependencies.
+ */
 interface DominoesStateForAutoAction {
     phase: DominoesPhase;
     hands: Record<string, Tile[]>;
@@ -12,8 +20,11 @@ interface DominoesStateForAutoAction {
 }
 
 /**
- * Determines if the timer should be active for the current game state.
- * Timer is only active during the playing phase.
+ * Determines if the turn timer should be active for the current game state.
+ * Timer is only active during the playing phase when players need to act.
+ *
+ * @param state - Current game state
+ * @returns True if timer should be counting down
  */
 export function shouldTimerBeActive(
     state: DominoesStateForAutoAction,
@@ -22,10 +33,15 @@ export function shouldTimerBeActive(
 }
 
 /**
- * Gets the first legal tile a player can play, or null if they must pass.
- * Used for auto-action when turn timer expires.
+ * Gets the auto-play action for a player when their turn timer expires.
+ * Finds the first legal tile that can be played on either side.
  *
- * @returns Object with tile and side to play, or null if no legal move
+ * Strategy: Play the first playable tile found (no optimization).
+ * This is intentionally suboptimal as a "penalty" for timing out.
+ *
+ * @param state - Current game state
+ * @param playerId - ID of the player whose turn it is
+ * @returns Object with tile and side to play, or null if no legal move (must pass)
  */
 export function getAutoPlayTile(
     state: DominoesStateForAutoAction,
@@ -41,7 +57,7 @@ export function getAutoPlayTile(
         return null;
     }
 
-    // Find first playable tile
+    // Find first playable tile (prefer left side for consistency)
     for (const tile of hand) {
         if (canPlaceTile(tile, state.board, "left")) {
             return { tile, side: "left" };
