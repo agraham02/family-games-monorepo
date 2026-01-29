@@ -119,6 +119,8 @@ export interface SpadesMockOptions {
     round?: number;
     currentTurnIndex?: number;
     includeCurrentTrick?: boolean;
+    /** Start with clean slate (scores at 0, no tricks, no random data) */
+    cleanStart?: boolean;
 }
 
 export function generateSpadesMockData(options: SpadesMockOptions = {}): {
@@ -131,6 +133,7 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         round = 1,
         currentTurnIndex = 0,
         includeCurrentTrick = false,
+        cleanStart = true,
     } = options;
 
     const deck = shuffle(generateDeck());
@@ -146,35 +149,35 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
     if (playerCount === 4) {
         teams["0"] = {
             players: [playOrder[0], playOrder[2]],
-            score: Math.floor(Math.random() * 200),
-            accumulatedBags: Math.floor(Math.random() * 8),
+            score: cleanStart ? 0 : Math.floor(Math.random() * 200),
+            accumulatedBags: cleanStart ? 0 : Math.floor(Math.random() * 8),
         };
         teams["1"] = {
             players: [playOrder[1], playOrder[3]],
-            score: Math.floor(Math.random() * 200),
-            accumulatedBags: Math.floor(Math.random() * 8),
+            score: cleanStart ? 0 : Math.floor(Math.random() * 200),
+            accumulatedBags: cleanStart ? 0 : Math.floor(Math.random() * 8),
         };
     } else if (playerCount === 2) {
         teams["0"] = {
             players: [playOrder[0]],
-            score: Math.floor(Math.random() * 200),
-            accumulatedBags: Math.floor(Math.random() * 8),
+            score: cleanStart ? 0 : Math.floor(Math.random() * 200),
+            accumulatedBags: cleanStart ? 0 : Math.floor(Math.random() * 8),
         };
         teams["1"] = {
             players: [playOrder[1]],
-            score: Math.floor(Math.random() * 200),
-            accumulatedBags: Math.floor(Math.random() * 8),
+            score: cleanStart ? 0 : Math.floor(Math.random() * 200),
+            accumulatedBags: cleanStart ? 0 : Math.floor(Math.random() * 8),
         };
     }
 
-    // Generate random bids
+    // Generate bids (required for playing phase)
     const bids: Record<
         string,
         { amount: number; type: string; isBlind: boolean }
     > = {};
     playOrder.forEach((playerId) => {
         bids[playerId] = {
-            amount: Math.floor(Math.random() * 5) + 1,
+            amount: cleanStart ? 3 : Math.floor(Math.random() * 5) + 1,
             type: "normal",
             isBlind: false,
         };
@@ -186,15 +189,17 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         handsCounts[playerId] = hands[idx]?.length || 0;
     });
 
-    // Generate trick counts
+    // Generate trick counts (start at 0 for clean start)
     const roundTrickCounts: Record<string, number> = {};
     playOrder.forEach((playerId) => {
-        roundTrickCounts[playerId] = Math.floor(Math.random() * 4);
+        roundTrickCounts[playerId] = cleanStart
+            ? 0
+            : Math.floor(Math.random() * 4);
     });
 
-    // Optional current trick
+    // Optional current trick (only if explicitly requested and not clean start)
     let currentTrick: SpadesData["currentTrick"] = null;
-    if (includeCurrentTrick && phase === "playing") {
+    if (includeCurrentTrick && !cleanStart && phase === "playing") {
         const tricksPlayed = Math.floor(Math.random() * 3) + 1;
         currentTrick = {
             plays: playOrder.slice(0, tricksPlayed).map((playerId) => ({

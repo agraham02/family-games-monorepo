@@ -15,7 +15,15 @@ export default function RoundSummaryModal({
     gameData: SpadesData;
     sendGameAction: (type: string, payload: unknown) => void;
 }) {
-    const { userId } = useSession();
+    // Session context may not be available in debug mode
+    let userId: string | undefined;
+    try {
+        const sessionContext = useSession();
+        userId = sessionContext.userId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
     const isLeader = userId === gameData.leaderId;
     const isOpen = gameData.phase === "round-summary";
 

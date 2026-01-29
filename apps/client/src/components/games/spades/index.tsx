@@ -52,21 +52,61 @@ export default function Spades({
     gameData,
     playerData,
     dispatchOptimisticAction,
+    isSpectator = false,
     roomCode,
 }: {
     gameData: SpadesData;
-    playerData: SpadesPlayerData;
+    playerData: SpadesPlayerData | null;
     dispatchOptimisticAction?: (type: string, payload: unknown) => void;
+    isSpectator?: boolean;
     roomCode?: string;
 }) {
-    const { socket, connected } = useWebSocket();
-    const { roomId, userId } = useSession();
+    // Try to get socket and session, but they may not be available in debug mode
+    let socket: ReturnType<typeof useWebSocket>["socket"] | null = null;
+    let connected = false;
+    let roomId = "";
+    let sessionUserId = "";
 
-    // Enable WebSocket error handling with toasts
-    useWebSocketError();
+    try {
+        const wsContext = useWebSocket();
+        socket = wsContext.socket;
+        connected = wsContext.connected;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
+
+    try {
+        const sessionContext = useSession();
+        roomId = sessionContext.roomId;
+        sessionUserId = sessionContext.userId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
+    // Determine if we're in debug mode
+    const isDebugMode = !socket && !!dispatchOptimisticAction;
+
+    // In debug mode, ALWAYS derive userId from playerData to avoid stale session data
+    const userId = isDebugMode
+        ? playerData?.localOrdering?.[0] || ""
+        : sessionUserId || playerData?.localOrdering?.[0] || "";
+
+    // Enable WebSocket error handling with toasts (only in live mode)
+    // Note: This hook may throw in debug mode, so we wrap it
+    try {
+        useWebSocketError();
+    } catch {
+        // Hook not available in debug mode
+    }
 
     const sendGameAction = React.useCallback(
         (type: string, payload: unknown) => {
+            // In debug mode, just dispatch the action
+            if (isDebugMode && dispatchOptimisticAction) {
+                dispatchOptimisticAction(type, payload);
+                return;
+            }
+
             // Use optimistic action dispatcher if available, otherwise fallback to direct emit
             if (dispatchOptimisticAction) {
                 dispatchOptimisticAction(type, payload);
@@ -81,13 +121,26 @@ export default function Spades({
                 socket.emit("game_action", { roomId, action });
             }
         },
-        [dispatchOptimisticAction, socket, connected, userId, roomId],
+        [
+            isDebugMode,
+            dispatchOptimisticAction,
+            socket,
+            connected,
+            userId,
+            roomId,
+        ],
     );
 
     // For non-player system actions (CONTINUE_AFTER_TRICK_RESULT, CONTINUE_AFTER_ROUND_SUMMARY)
     // These don't need optimistic updates and shouldn't block player actions
     const sendSystemAction = React.useCallback(
         (type: string, payload: unknown) => {
+            // In debug mode, just dispatch the action
+            if (isDebugMode && dispatchOptimisticAction) {
+                dispatchOptimisticAction(type, payload);
+                return;
+            }
+
             if (!socket || !connected) return;
             const action = {
                 type,
@@ -96,14 +149,23 @@ export default function Spades({
             };
             socket.emit("game_action", { roomId, action });
         },
-        [socket, connected, userId, roomId],
+        [
+            isDebugMode,
+            dispatchOptimisticAction,
+            socket,
+            connected,
+            userId,
+            roomId,
+        ],
     );
 
     // Assume gameData has phase, players, currentIndex, and bids fields
     const isBiddingPhase = gameData.phase === "bidding";
-    const isMyTurn = gameData.playOrder[gameData.currentTurnIndex] === userId;
+    const currentTurnPlayerId = gameData.playOrder[gameData.currentTurnIndex];
+    const isMyTurn = !isSpectator && currentTurnPlayerId === userId;
     const isLeader = userId === gameData.leaderId;
     const showHints = useGameSetting("spades.showHints", false);
+
     const [bid, setBid] = useState<number>(1);
     const [bidModalOpen, setBidModalOpen] = useState(false);
     const [blindBidModalOpen, setBlindBidModalOpen] = useState(false);
@@ -308,14 +370,19 @@ export default function Spades({
         <div className="h-screen w-full overflow-hidden">
             <SpadesGameTable
                 gameData={gameData}
-                playerData={playerData}
+                playerData={
+                    playerData ?? {
+                        hand: [],
+                        localOrdering: gameData.playOrder,
+                    }
+                }
                 isMyTurn={isMyTurn}
                 onCardPlay={handleCardPlay}
                 showHints={showHints}
             />
 
             {/* Game Menu */}
-            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId}>
+            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId || ""}>
                 <GameSettingToggle
                     storageKey="spades.showHints"
                     label="Show Valid Moves"

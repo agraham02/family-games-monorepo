@@ -166,12 +166,45 @@ function PlayerSlot({
 
 export default function LRC({
     gameData,
-    playerData: _playerData,
+    playerData,
     dispatchOptimisticAction,
     roomCode,
-}: LRCProps) {
-    const { socket, connected, clockOffset } = useWebSocket();
-    const { roomId, userId } = useSession();
+    isSpectator = false,
+}: LRCProps & { isSpectator?: boolean }) {
+    // Context access - may not be available in debug mode
+    let socket: ReturnType<typeof useWebSocket>["socket"] = null;
+    let connected = false;
+    let clockOffset = 0;
+    let roomId: string | undefined;
+    let userId: string | undefined;
+
+    try {
+        const wsContext = useWebSocket();
+        socket = wsContext.socket;
+        connected = wsContext.connected;
+        clockOffset = wsContext.clockOffset;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
+
+    try {
+        const sessionContext = useSession();
+        roomId = sessionContext.roomId;
+        userId = sessionContext.userId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
+    // Determine if we're in debug mode
+    const isDebugMode = !socket && dispatchOptimisticAction !== undefined;
+
+    // In debug mode, ALWAYS derive userId from playerData to avoid stale session data
+    if (isDebugMode && playerData) {
+        userId = playerData.localOrdering[0];
+    } else if (!userId && playerData) {
+        // Fallback for non-debug mode when session isn't set
+        userId = playerData.localOrdering[0];
+    }
 
     // Local state for UI
     const [isRolling, setIsRolling] = useState(false);
@@ -186,7 +219,7 @@ export default function LRC({
 
     // Derived state
     const currentPlayer = gameData.lrcPlayers[gameData.currentPlayerIndex];
-    const isMyTurn = currentPlayer?.id === userId;
+    const isMyTurn = !isSpectator && currentPlayer?.id === userId;
     const isLeader = userId === gameData.lrcPlayers[0]?.id; // First player is leader
     const heroPlayer = gameData.lrcPlayers.find((p) => p.id === userId);
     const winner = gameData.winnerId
@@ -460,7 +493,7 @@ export default function LRC({
                 players={gameData.lrcPlayers}
                 connectionStatus={connectionStatus}
                 currentPlayerId={currentPlayer?.id ?? null}
-                heroId={userId}
+                heroId={userId ?? ""}
                 winnerId={gameData.winnerId}
                 chipValue={gameData.settings.chipValue}
                 showMoney={showMoney}
@@ -526,7 +559,7 @@ export default function LRC({
             />
 
             {/* Game Menu */}
-            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId}>
+            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId || ""}>
                 <GameSettingToggle
                     storageKey="lrc.soundEnabled"
                     label="Sound Effects"

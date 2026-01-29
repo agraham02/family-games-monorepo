@@ -7,31 +7,57 @@ import { DominoesGameTable } from "./ui";
 
 interface DominoesProps {
     gameData: DominoesData;
-    playerData: DominoesPlayerData;
+    playerData: DominoesPlayerData | null;
     dispatchOptimisticAction?: (type: string, payload: unknown) => void;
+    isSpectator?: boolean;
     roomCode?: string;
 }
 
 /**
  * Dominoes game component - Main entry point for the Dominoes game UI.
+ * Supports both live play (with socket) and debug mode (without socket).
  */
 export default function Dominoes({
     gameData,
     playerData,
     dispatchOptimisticAction,
+    isSpectator = false,
     roomCode,
 }: DominoesProps) {
-    const { socket } = useWebSocket();
+    // Try to get socket, but it may not be available in debug mode
+    let socket: ReturnType<typeof useWebSocket>["socket"] | null = null;
+    try {
+        const wsContext = useWebSocket();
+        socket = wsContext.socket;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
+
+    // Determine if we're in debug mode (no socket but have dispatchOptimisticAction)
+    const isDebugMode = !socket && !!dispatchOptimisticAction;
 
     // Get current player ID
     const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
-    const localPlayerId = playerData.localOrdering?.[0];
-    const isMyTurn = currentPlayerId === localPlayerId;
+    const localPlayerId = playerData?.localOrdering?.[0];
+    const isMyTurn = currentPlayerId === localPlayerId && !isSpectator;
 
     // Handle placing a tile
     const handlePlaceTile = useCallback(
         (tile: Tile, side: "left" | "right") => {
-            if (!socket || !isMyTurn) return;
+            if (!isMyTurn) return;
+
+            // In debug mode, just dispatch the action
+            if (isDebugMode && dispatchOptimisticAction) {
+                dispatchOptimisticAction("PLACE_TILE", {
+                    tile,
+                    side,
+                    playerId: localPlayerId,
+                });
+                return;
+            }
+
+            // Live mode - requires socket
+            if (!socket) return;
 
             // Dispatch optimistic update if available
             if (dispatchOptimisticAction) {
@@ -52,12 +78,30 @@ export default function Dominoes({
                 },
             });
         },
-        [socket, isMyTurn, dispatchOptimisticAction, localPlayerId, roomCode],
+        [
+            socket,
+            isMyTurn,
+            isDebugMode,
+            dispatchOptimisticAction,
+            localPlayerId,
+            roomCode,
+        ],
     );
 
     // Handle passing turn
     const handlePass = useCallback(() => {
-        if (!socket || !isMyTurn) return;
+        if (!isMyTurn) return;
+
+        // In debug mode, just dispatch the action
+        if (isDebugMode && dispatchOptimisticAction) {
+            dispatchOptimisticAction("PASS", {
+                playerId: localPlayerId,
+            });
+            return;
+        }
+
+        // Live mode - requires socket
+        if (!socket) return;
 
         // Dispatch optimistic update if available
         if (dispatchOptimisticAction) {
@@ -73,7 +117,28 @@ export default function Dominoes({
                 type: "PASS",
             },
         });
-    }, [socket, isMyTurn, dispatchOptimisticAction, localPlayerId, roomCode]);
+    }, [
+        socket,
+        isMyTurn,
+        isDebugMode,
+        dispatchOptimisticAction,
+        localPlayerId,
+        roomCode,
+    ]);
+
+    // If no player data (spectator), render with empty hand
+    if (!playerData) {
+        return (
+            <DominoesGameTable
+                gameData={gameData}
+                playerData={{ hand: [], localOrdering: gameData.playOrder }}
+                isMyTurn={false}
+                showHints={false}
+                onPlaceTile={() => {}}
+                onPass={() => {}}
+            />
+        );
+    }
 
     return (
         <DominoesGameTable

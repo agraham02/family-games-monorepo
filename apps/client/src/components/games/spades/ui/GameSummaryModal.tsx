@@ -16,7 +16,15 @@ export default function GameSummaryModal({
     gameData: SpadesData;
     onReturnToLobby: () => void;
 }) {
-    const { userId } = useSession();
+    // Session context may not be available in debug mode
+    let userId: string | undefined;
+    try {
+        const sessionContext = useSession();
+        userId = sessionContext.userId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
     const isLeader = userId === gameData.leaderId;
     const isOpen = gameData.phase === "finished";
 
@@ -26,9 +34,11 @@ export default function GameSummaryModal({
     const [winningTeamId, winningTeam] = sortedTeams[0] || [];
 
     // Check if current user is on winning team
-    const currentUserTeamId = Object.entries(gameData.teams).find(([_, team]) =>
-        team.players.includes(userId),
-    )?.[0];
+    const currentUserTeamId = userId
+        ? Object.entries(gameData.teams).find(([_, team]) =>
+              team.players.includes(userId),
+          )?.[0]
+        : undefined;
     const isWinner = currentUserTeamId === winningTeamId;
 
     return (

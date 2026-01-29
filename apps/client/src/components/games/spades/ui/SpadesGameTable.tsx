@@ -72,7 +72,15 @@ function SpadesGameTable({
         null,
     );
     const [isHeroHandSpread, setIsHeroHandSpread] = useState(false);
-    const { clockOffset } = useWebSocket();
+
+    // Clock offset for turn timer synchronization - may not be available in debug mode
+    let clockOffset = 0;
+    try {
+        const wsContext = useWebSocket();
+        clockOffset = wsContext.clockOffset;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
 
     // Deal animation state
     const [isDealing, setIsDealing] = useState(false);

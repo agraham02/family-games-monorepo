@@ -127,8 +127,14 @@ function DominoesGameTable({
     const previousRoundRef = useRef<number | null>(null);
     const hasDealtRef = useRef(false);
 
-    // Clock offset for turn timer synchronization
-    const { clockOffset } = useWebSocket();
+    // Clock offset for turn timer synchronization - may not be available in debug mode
+    let clockOffset = 0;
+    try {
+        const wsContext = useWebSocket();
+        clockOffset = wsContext.clockOffset;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
 
     const playerCount =
         playerData.localOrdering?.length || gameData.playOrder.length;

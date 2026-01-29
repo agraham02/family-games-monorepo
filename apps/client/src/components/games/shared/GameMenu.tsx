@@ -105,8 +105,28 @@ export default function GameMenu({
     className,
 }: GameMenuProps) {
     const router = useRouter();
-    const { socket } = useWebSocket();
-    const { roomId, userId, clearRoomSession } = useSession();
+
+    // Context access - may not be available in debug mode
+    let socket: ReturnType<typeof useWebSocket>["socket"] | null = null;
+    let roomId: string | undefined;
+    let userId: string | undefined;
+    let clearRoomSession: (() => void) | undefined;
+
+    try {
+        const wsContext = useWebSocket();
+        socket = wsContext.socket;
+    } catch {
+        // WebSocket context not available (debug mode)
+    }
+
+    try {
+        const sessionContext = useSession();
+        roomId = sessionContext.roomId;
+        userId = sessionContext.userId;
+        clearRoomSession = sessionContext.clearRoomSession;
+    } catch {
+        // Session context not available (debug mode)
+    }
 
     const [theme, setTheme] = useState<"light" | "dark">("light");
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -127,30 +147,30 @@ export default function GameMenu({
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener(
             "webkitfullscreenchange",
-            handleFullscreenChange
+            handleFullscreenChange,
         );
         document.addEventListener(
             "mozfullscreenchange",
-            handleFullscreenChange
+            handleFullscreenChange,
         );
         document.addEventListener("MSFullscreenChange", handleFullscreenChange);
 
         return () => {
             document.removeEventListener(
                 "fullscreenchange",
-                handleFullscreenChange
+                handleFullscreenChange,
             );
             document.removeEventListener(
                 "webkitfullscreenchange",
-                handleFullscreenChange
+                handleFullscreenChange,
             );
             document.removeEventListener(
                 "mozfullscreenchange",
-                handleFullscreenChange
+                handleFullscreenChange,
             );
             document.removeEventListener(
                 "MSFullscreenChange",
-                handleFullscreenChange
+                handleFullscreenChange,
             );
         };
     }, []);
@@ -178,7 +198,7 @@ export default function GameMenu({
             socket.emit("leave_game", { roomId, userId });
         }
         // Clear room session to force proper rejoin flow when returning
-        clearRoomSession();
+        clearRoomSession?.();
         // Navigate to lobby - player leaves game but can rejoin room
         router.push(`/lobby/${roomCode}`);
     }, [socket, roomId, userId, router, roomCode, clearRoomSession]);
@@ -268,7 +288,7 @@ export default function GameMenu({
             <div
                 className={cn(
                     "fixed top-4 left-4 z-50 hidden md:block",
-                    className
+                    className,
                 )}
             >
                 <DropdownMenu>
@@ -456,7 +476,7 @@ function MenuItemButton({
                 variant === "destructive" &&
                     "text-destructive hover:bg-destructive/10",
                 variant === "warning" &&
-                    "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                    "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10",
             )}
         >
             {icon}
@@ -506,7 +526,7 @@ export function GameSettingToggle({
         window.dispatchEvent(
             new CustomEvent("game-setting-change", {
                 detail: { key: storageKey, value: next },
-            })
+            }),
         );
         onChange?.(next);
     }, [storageKey, onChange, enabled]);
@@ -523,13 +543,13 @@ export function GameSettingToggle({
             <div
                 className={cn(
                     "w-9 h-5 rounded-full transition-colors relative",
-                    enabled ? "bg-primary" : "bg-muted"
+                    enabled ? "bg-primary" : "bg-muted",
                 )}
             >
                 <div
                     className={cn(
                         "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                        enabled ? "translate-x-4" : "translate-x-0.5"
+                        enabled ? "translate-x-4" : "translate-x-0.5",
                     )}
                 />
             </div>
@@ -543,7 +563,7 @@ export function GameSettingToggle({
 
 export function useGameSetting(
     storageKey: string,
-    defaultValue = false
+    defaultValue = false,
 ): boolean {
     const [value, setValue] = useState(defaultValue);
 
@@ -575,7 +595,7 @@ export function useGameSetting(
             window.removeEventListener("storage", handleStorage);
             window.removeEventListener(
                 "game-setting-change",
-                handleGameSettingChange
+                handleGameSettingChange,
             );
         };
     }, [storageKey, defaultValue]);

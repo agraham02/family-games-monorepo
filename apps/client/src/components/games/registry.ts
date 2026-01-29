@@ -78,6 +78,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             phase: "playing",
             round: 1,
             boardTileCount: 5,
+            currentTurnIndex: 0,
         },
     },
     spades: {
@@ -89,7 +90,9 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             playerCount: 4,
             phase: "playing",
             round: 1,
-            includeCurrentTrick: true,
+            currentTurnIndex: 0,
+            includeCurrentTrick: false,
+            cleanStart: true,
         },
     },
     lrc: {
@@ -101,6 +104,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             playerCount: 5,
             phase: "waiting-for-roll",
             centerPot: 5,
+            currentPlayerIndex: 0,
             startingChips: 3,
             chipValue: 0.25,
             wildMode: false,

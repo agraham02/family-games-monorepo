@@ -34,7 +34,15 @@ export function GameSummaryModal({
     onReturnToLobby,
     autoReturnSeconds = 15,
 }: GameSummaryModalProps) {
-    const { userId } = useSession();
+    // Session context may not be available in debug mode
+    let userId: string | undefined;
+    try {
+        const sessionContext = useSession();
+        userId = sessionContext.userId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
     const [countdown, setCountdown] = useState(autoReturnSeconds);
     // Track if we've already triggered return to prevent double-calls
     const hasReturnedRef = useRef(false);
