@@ -62,3 +62,5 @@ export { useOrientationChange } from "./useOrientationChange";
 export type { OrientationState, OrientationType } from "./useOrientationChange";
 
 export type { UseContainerDimensionsOptions } from "./useContainerDimensions";
+
+export { useDraggableViewport } from "./useDraggableViewport";

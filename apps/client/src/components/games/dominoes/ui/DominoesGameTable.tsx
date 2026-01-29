@@ -13,7 +13,7 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile as TileType,
-} from "@shared/types";
+} from "@family-games/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import TileHand from "./TileHand";
