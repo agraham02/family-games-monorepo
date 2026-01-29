@@ -3,6 +3,8 @@
 import React, { useCallback } from "react";
 import { DominoesData, DominoesPlayerData, Tile } from "@family-games/shared";
 import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useSession } from "@/contexts/SessionContext";
+import { GameMenu } from "@/components/games/shared";
 import { DominoesGameTable } from "./ui";
 
 interface DominoesProps {
@@ -33,8 +35,22 @@ export default function Dominoes({
         // WebSocket context not available (debug mode)
     }
 
+    // Try to get session context for user info
+    let userId: string | undefined;
+    let roomId: string | undefined;
+    try {
+        const sessionContext = useSession();
+        userId = sessionContext.userId;
+        roomId = sessionContext.roomId;
+    } catch {
+        // Session context not available (debug mode)
+    }
+
     // Determine if we're in debug mode (no socket but have dispatchOptimisticAction)
     const isDebugMode = !socket && !!dispatchOptimisticAction;
+
+    // Determine if current user is the room leader
+    const isLeader = userId === gameData.leaderId;
 
     // Get current player ID
     const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
@@ -129,25 +145,34 @@ export default function Dominoes({
     // If no player data (spectator), render with empty hand
     if (!playerData) {
         return (
-            <DominoesGameTable
-                gameData={gameData}
-                playerData={{ hand: [], localOrdering: gameData.playOrder }}
-                isMyTurn={false}
-                showHints={false}
-                onPlaceTile={() => {}}
-                onPass={() => {}}
-            />
+            <>
+                <GameMenu
+                    isLeader={isLeader}
+                    roomCode={roomCode || roomId || ""}
+                />
+                <DominoesGameTable
+                    gameData={gameData}
+                    playerData={{ hand: [], localOrdering: gameData.playOrder }}
+                    isMyTurn={false}
+                    showHints={false}
+                    onPlaceTile={() => {}}
+                    onPass={() => {}}
+                />
+            </>
         );
     }
 
     return (
-        <DominoesGameTable
-            gameData={gameData}
-            playerData={playerData}
-            isMyTurn={isMyTurn}
-            showHints={true}
-            onPlaceTile={handlePlaceTile}
-            onPass={handlePass}
-        />
+        <>
+            <GameMenu isLeader={isLeader} roomCode={roomCode || roomId || ""} />
+            <DominoesGameTable
+                gameData={gameData}
+                playerData={playerData}
+                isMyTurn={isMyTurn}
+                showHints={true}
+                onPlaceTile={handlePlaceTile}
+                onPass={handlePass}
+            />
+        </>
     );
 }

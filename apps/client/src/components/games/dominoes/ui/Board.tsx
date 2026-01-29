@@ -198,8 +198,8 @@ function Board({
                 }}
             >
                 <DominoTile
-                    left={tile.left}
-                    right={tile.right}
+                    left={tile.pips[0]}
+                    right={tile.pips[1]}
                     size={tileSize}
                     isSelected={isLastPlayed ?? false}
                     layoutId={`${layoutIdPrefix}-tile-${tile.id}`}
