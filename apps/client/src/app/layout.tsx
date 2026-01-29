@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import HealthCheckGate from "@/components/HealthCheckGate";
-import AddToHomeScreenPrompt from "@/components/AddToHomeScreenPrompt";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -50,8 +48,7 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <AddToHomeScreenPrompt />
-                <HealthCheckGate>{children}</HealthCheckGate>
+                {children}
             </body>
         </html>
     );
