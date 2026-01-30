@@ -322,7 +322,7 @@ export function createChainFromDominoes(
             chain = result.chain;
         } else {
             console.warn(
-                `Failed to place domino ${domino.id}: ${result.reason}`,
+                `Failed to place domino ${domino.id}: ${(result as { success: false; reason: string }).reason}`,
             );
         }
     }

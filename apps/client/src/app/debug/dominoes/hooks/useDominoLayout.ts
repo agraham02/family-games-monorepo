@@ -121,7 +121,9 @@ function reducer(
             );
 
             if (!result.success) {
-                console.warn(`Failed to place domino: ${result.reason}`);
+                console.warn(
+                    `Failed to place domino: ${(result as { success: false; reason: string }).reason}`,
+                );
                 return state;
             }
 
