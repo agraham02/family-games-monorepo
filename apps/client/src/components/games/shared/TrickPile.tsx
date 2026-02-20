@@ -35,6 +35,7 @@ interface TrickPileProps {
     plays: TrickPlay[];
     winningPlayerId?: string;
     winningCard?: PlayingCardType;
+    winnerEdgePosition?: "top" | "bottom" | "left" | "right";
     className?: string;
 }
 
@@ -94,7 +95,12 @@ const SUIT_COLORS = {
 // TrickPile Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TrickPile({ plays, winningCard, className }: TrickPileProps) {
+function TrickPile({
+    plays,
+    winningCard,
+    winnerEdgePosition,
+    className,
+}: TrickPileProps) {
     const { layoutConfig } = useGameTable();
     const prefersReducedMotion = usePrefersReducedMotion();
 
@@ -111,6 +117,33 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
     const minSizeClasses = isCompact
         ? "min-h-[80px] min-w-[100px]" // Smaller container on mobile
         : "min-h-[120px] min-w-[180px] md:min-h-[160px] md:min-w-[240px]";
+
+    // Calculate exit animation based on winner's edge position
+    const getExitAnimation = () => {
+        if (!winnerEdgePosition) {
+            return {
+                scale: 0.3,
+                opacity: 0,
+                transition: { duration: 0.15, ease: "easeIn" as const },
+            };
+        }
+
+        const distance = 600; // Distance to fly off screen
+        const transition = { duration: 0.5, ease: "easeIn" as const };
+
+        switch (winnerEdgePosition) {
+            case "top":
+                return { y: -distance, opacity: 0, scale: 0.5, transition };
+            case "bottom":
+                return { y: distance, opacity: 0, scale: 0.5, transition };
+            case "left":
+                return { x: -distance, opacity: 0, scale: 0.5, transition };
+            case "right":
+                return { x: distance, opacity: 0, scale: 0.5, transition };
+            default:
+                return { scale: 0.3, opacity: 0, transition };
+        }
+    };
 
     return (
         <div
@@ -168,8 +201,8 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                         "border border-gray-200 overflow-hidden",
                                         isWinning &&
                                             (isCompact
-                                                ? "ring-2 ring-amber-400 shadow-amber-400/50"
-                                                : "ring-4 ring-amber-400 shadow-amber-400/50"),
+                                                ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.8)]"
+                                                : "ring-4 ring-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.8)]"),
                                     )}
                                     initial={
                                         prefersReducedMotion
@@ -180,14 +213,7 @@ function TrickPile({ plays, winningCard, className }: TrickPileProps) {
                                     exit={
                                         prefersReducedMotion
                                             ? { opacity: 0 }
-                                            : {
-                                                  scale: 0.3,
-                                                  opacity: 0,
-                                                  transition: {
-                                                      duration: 0.15,
-                                                      ease: "easeIn",
-                                                  },
-                                              }
+                                            : getExitAnimation()
                                     }
                                     transition={
                                         prefersReducedMotion

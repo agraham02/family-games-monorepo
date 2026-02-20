@@ -110,7 +110,6 @@ function getCardSpacing(
 interface CardInHandProps {
     card: PlayingCardType | null;
     index: number;
-    totalCards: number;
     isHidden: boolean;
     isSelected: boolean;
     isDisabled: boolean;
@@ -141,7 +140,6 @@ const SUIT_COLORS = {
 function CardInHand({
     card,
     index,
-    totalCards: _totalCards,
     isHidden,
     isSelected,
     isDisabled,
@@ -574,7 +572,6 @@ function CardHand({
                                 }
                                 card={card}
                                 index={index}
-                                totalCards={displayCards.length}
                                 isHidden={!isLocalPlayer}
                                 isSelected={effectivelySelected}
                                 isDisabled={disabledIndices.includes(index)}

@@ -68,7 +68,7 @@ function SpadesGameTable({
     showHints = false,
 }: SpadesGameTableProps) {
     const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(
-        null
+        null,
     );
     const [isHeroHandSpread, setIsHeroHandSpread] = useState(false);
     const { clockOffset } = useWebSocket();
@@ -112,7 +112,7 @@ function SpadesGameTable({
     const { isActive: timerIsActive } = useTurnTimer(
         gameData.turnTimer,
         clockOffset,
-        handleTimerStart
+        handleTimerStart,
     );
 
     // Memoize timer props to prevent unnecessary re-renders
@@ -149,9 +149,9 @@ function SpadesGameTable({
             getUnplayableCardIndices(
                 playerData.hand,
                 gameData.currentTrick,
-                gameData.spadesBroken
+                gameData.spadesBroken,
             ),
-        [playerData.hand, gameData.currentTrick, gameData.spadesBroken]
+        [playerData.hand, gameData.currentTrick, gameData.spadesBroken],
     );
 
     // Calculate which cards are unplayable when hints are enabled
@@ -174,7 +174,7 @@ function SpadesGameTable({
                 setSelectedCardIndex(index);
             }
         },
-        [selectedCardIndex, onCardPlay]
+        [selectedCardIndex, onCardPlay],
     );
 
     // Handle play button click
@@ -255,7 +255,7 @@ function SpadesGameTable({
 
                     // Wait for animation
                     await new Promise((resolve) =>
-                        setTimeout(resolve, CARD_INTERVAL - 8)
+                        setTimeout(resolve, CARD_INTERVAL - 8),
                     );
 
                     // Increment visible count for this player
@@ -320,10 +320,19 @@ function SpadesGameTable({
             playerName: gameData.players[play.playerId]?.name,
         })) ?? [];
 
+    // Calculate winner's edge position for trick sweep animation
+    const winnerIndex = gameData.lastTrickWinnerId
+        ? playerData.localOrdering.indexOf(gameData.lastTrickWinnerId)
+        : -1;
+    const winnerEdgePosition =
+        winnerIndex !== -1
+            ? getEdgePosition(winnerIndex, playerCount)
+            : undefined;
+
     // Calculate cards to show during dealing animation
     const getCardsToShow = (
         playerId: string,
-        isLocal: boolean
+        isLocal: boolean,
     ): PlayingCardType[] => {
         if (!isDealing) {
             return isLocal ? playerData.hand : [];
@@ -366,7 +375,7 @@ function SpadesGameTable({
                             gameData.roundTrickCounts?.[playerId] ?? 0;
                         const edgePosition = getEdgePosition(
                             index,
-                            playerCount
+                            playerCount,
                         );
 
                         // Get team color
@@ -377,7 +386,7 @@ function SpadesGameTable({
                                     teamColor =
                                         teamId === "0" ? "#3b82f6" : "#ef4444";
                                 }
-                            }
+                            },
                         );
 
                         return (
@@ -513,6 +522,11 @@ function SpadesGameTable({
                                 winningCard={
                                     gameData.phase === "trick-result"
                                         ? gameData.lastTrickWinningCard
+                                        : undefined
+                                }
+                                winnerEdgePosition={
+                                    gameData.phase === "trick-result"
+                                        ? winnerEdgePosition
                                         : undefined
                                 }
                             />

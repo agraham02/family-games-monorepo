@@ -112,18 +112,19 @@ function TurnIndicator({ isActive }: { isActive: boolean }) {
             className="absolute inset-0 rounded-full pointer-events-none"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{
-                opacity: [0.5, 0.9, 0.5],
-                scale: [1, 1.3, 1],
+                opacity: [0.4, 0.8, 0.4],
+                scale: [1, 1.4, 1],
             }}
             transition={{
-                duration: 1.5,
+                duration: 2,
                 repeat: Infinity,
                 ease: "easeInOut",
             }}
             style={{
                 background:
-                    "radial-gradient(circle, rgba(251, 191, 36, 0.6) 0%, transparent 70%)",
-                boxShadow: "0 0 20px 5px rgba(251, 191, 36, 0.4)",
+                    "radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, transparent 70%)",
+                boxShadow:
+                    "0 0 25px 8px rgba(251, 191, 36, 0.6), inset 0 0 15px 2px rgba(251, 191, 36, 0.5)",
             }}
         />
     );
@@ -170,7 +171,7 @@ function PlayerInfo({
             className={cn(
                 "flex gap-2 items-center",
                 !connected && "opacity-50",
-                className
+                className,
             )}
             style={{ flexDirection: layout.direction }}
             initial={{ opacity: 0, scale: 0.9 }}
@@ -199,7 +200,7 @@ function PlayerInfo({
                             className={cn(
                                 avatarSize,
                                 "border-2 shadow-md transition-all duration-200",
-                                "border-amber-400"
+                                "border-amber-400",
                             )}
                             style={{
                                 borderColor: teamColor || undefined,
@@ -213,7 +214,7 @@ function PlayerInfo({
                                     "text-sm font-bold",
                                     isLocalPlayer
                                         ? "bg-blue-600 text-white"
-                                        : "bg-slate-700 text-slate-200"
+                                        : "bg-slate-700 text-slate-200",
                                 )}
                             >
                                 {initials}
@@ -227,7 +228,7 @@ function PlayerInfo({
                             "border-2 shadow-md transition-all duration-200",
                             isCurrentTurn
                                 ? "border-amber-400"
-                                : "border-white/30"
+                                : "border-white/30",
                         )}
                         style={{
                             borderColor: teamColor || undefined,
@@ -241,7 +242,7 @@ function PlayerInfo({
                                 "text-sm font-bold",
                                 isLocalPlayer
                                     ? "bg-blue-600 text-white"
-                                    : "bg-slate-700 text-slate-200"
+                                    : "bg-slate-700 text-slate-200",
                             )}
                         >
                             {initials}
@@ -263,7 +264,7 @@ function PlayerInfo({
             <div
                 className={cn(
                     "flex flex-col min-w-0",
-                    layout.textAlign === "right" && "items-end"
+                    layout.textAlign === "right" && "items-end",
                 )}
                 style={{ textAlign: layout.textAlign }}
             >
@@ -271,7 +272,7 @@ function PlayerInfo({
                 <span
                     className={cn(
                         "text-white font-medium truncate max-w-25 text-sm",
-                        isCurrentTurn && "text-amber-300"
+                        isCurrentTurn && "text-amber-300",
                     )}
                 >
                     {playerName}
@@ -297,7 +298,7 @@ function PlayerInfo({
                                     "text-[10px] px-1.5 py-0 border-white/20",
                                     tricksWon >= bid
                                         ? "bg-green-500/30 text-green-300"
-                                        : "bg-black/30 text-white/80"
+                                        : "bg-black/30 text-white/80",
                                 )}
                             >
                                 Won: {tricksWon}
