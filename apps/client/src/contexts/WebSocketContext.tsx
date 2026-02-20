@@ -28,7 +28,7 @@ interface WebSocketContextValue {
     emit: <T>(event: string, payload: T) => void;
 }
 
-const WebSocketContext = createContext<WebSocketContextValue | undefined>(
+export const WebSocketContext = createContext<WebSocketContextValue | undefined>(
     undefined
 );
 
@@ -50,14 +50,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     const [clockOffset, setClockOffset] = useState(0);
     const clockSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const { roomId, userId } = useSession();
-
-    /** Send a clock sync request to the server */
-    const performClockSync = useCallback(() => {
-        const socket = getSocket();
-        if (socket.connected) {
-            socket.emit("clock_sync", { clientTime: Date.now() });
-        }
-    }, []);
 
     useEffect(() => {
         // Don't connect until we have both roomId and userId

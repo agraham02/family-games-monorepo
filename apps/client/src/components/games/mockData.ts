@@ -124,6 +124,7 @@ export interface SpadesMockOptions {
 export function generateSpadesMockData(options: SpadesMockOptions = {}): {
     gameData: SpadesData;
     playerData: SpadesPlayerData;
+    playerDataMap: Record<string, SpadesPlayerData>;
 } {
     const {
         playerCount = 4,
@@ -241,12 +242,17 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         teamEligibleForBlind: { 0: false, 1: false },
     };
 
-    const playerData: SpadesPlayerData = {
-        localOrdering: playOrder,
-        hand: hands[0] || [],
-    };
+    const playerDataMap: Record<string, SpadesPlayerData> = {};
+    playOrder.forEach((playerId, idx) => {
+        playerDataMap[playerId] = {
+            localOrdering: playOrder,
+            hand: hands[idx] || [],
+        };
+    });
 
-    return { gameData, playerData };
+    const playerData = playerDataMap[localPlayerId];
+
+    return { gameData, playerData, playerDataMap };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,6 +292,7 @@ export interface DominoesMockOptions {
 export function generateDominoesMockData(options: DominoesMockOptions = {}): {
     gameData: DominoesData;
     playerData: DominoesPlayerData;
+    playerDataMap: Record<string, DominoesPlayerData>;
 } {
     const {
         playerCount = 4,
@@ -361,12 +368,17 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         },
     };
 
-    const playerData: DominoesPlayerData = {
-        hand: hands[0] || [],
-        localOrdering: playOrder,
-    };
+    const playerDataMap: Record<string, DominoesPlayerData> = {};
+    playOrder.forEach((playerId, idx) => {
+        playerDataMap[playerId] = {
+            hand: hands[idx] || [],
+            localOrdering: playOrder,
+        };
+    });
 
-    return { gameData, playerData };
+    const playerData = playerDataMap[localPlayerId];
+
+    return { gameData, playerData, playerDataMap };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -402,6 +414,7 @@ export interface LRCMockOptions {
 export function generateLRCMockData(options: LRCMockOptions = {}): {
     gameData: LRCData;
     playerData: LRCPlayerData;
+    playerDataMap: Record<string, LRCPlayerData>;
 } {
     const {
         playerCount = 4,
@@ -497,13 +510,18 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
         },
     };
 
-    const playerData: LRCPlayerData = {
-        localOrdering: lrcPlayers.map((p) => p.id),
-        odusId: localPlayerId,
-        isMyTurn: currentPlayerIndex === 0,
-        myChips: lrcPlayers[0].chips,
-        netWinningsCents: 0,
-    };
+    const playerDataMap: Record<string, LRCPlayerData> = {};
+    lrcPlayers.forEach((p, idx) => {
+        playerDataMap[p.id] = {
+            localOrdering: lrcPlayers.map((p) => p.id),
+            odusId: p.id,
+            isMyTurn: currentPlayerIndex === idx,
+            myChips: p.chips,
+            netWinningsCents: 0,
+        };
+    });
 
-    return { gameData, playerData };
+    const playerData = playerDataMap[localPlayerId];
+
+    return { gameData, playerData, playerDataMap };
 }

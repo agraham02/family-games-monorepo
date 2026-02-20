@@ -82,7 +82,7 @@ export default function Spades({
                 socket.emit("game_action", { roomId, action });
             }
         },
-        [dispatchOptimisticAction, socket, connected, userId, roomId]
+        [dispatchOptimisticAction, socket, connected, userId, roomId],
     );
 
     // For non-player system actions (CONTINUE_AFTER_TRICK_RESULT, CONTINUE_AFTER_ROUND_SUMMARY)
@@ -97,12 +97,14 @@ export default function Spades({
             };
             socket.emit("game_action", { roomId, action });
         },
-        [socket, connected, userId, roomId]
+        [socket, connected, userId, roomId],
     );
 
     // Assume gameData has phase, players, currentIndex, and bids fields
     const isBiddingPhase = gameData.phase === "bidding";
-    const isMyTurn = gameData.playOrder[gameData.currentTurnIndex] === userId;
+    const isMyTurn =
+        gameData.playOrder[gameData.currentTurnIndex] ===
+        playerData.localOrdering[0];
     const isLeader = userId === gameData.leaderId;
     const showHints = useGameSetting("spades.showHints", false);
     const [bid, setBid] = useState<number>(1);
@@ -126,7 +128,7 @@ export default function Spades({
 
         const maxScore = Math.max(
             ...Object.values(gameData.teams).map((t) => t.score),
-            0
+            0,
         );
         const teamScoreDeficit =
             playerTeamId !== undefined
@@ -257,7 +259,7 @@ export default function Spades({
             if (!isMyTurn) return;
             sendGameAction("PLAY_CARD", { card });
         },
-        [isMyTurn, sendGameAction]
+        [isMyTurn, sendGameAction],
     );
 
     // Build team scores for scoreboard

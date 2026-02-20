@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { SessionProvider } from "@/contexts/SessionContext";
 import { DarkModeToggle } from "@/components/dark-mode-toggle";
 import { SoundToggle } from "@/components/sound-toggle";
@@ -13,8 +14,15 @@ export default function HealthCheckGate({
     children: React.ReactNode;
 }) {
     const [serverUp, setServerUp] = useState<boolean | null>(null);
+    const pathname = usePathname();
+    const isDebugPage = pathname?.startsWith("/debug");
 
     useEffect(() => {
+        if (isDebugPage) {
+            setServerUp(true);
+            return;
+        }
+
         fetch(`${API_BASE}/api/healthz`)
             .then((res) => {
                 if (res.ok) {
@@ -24,7 +32,7 @@ export default function HealthCheckGate({
                 }
             })
             .catch(() => setServerUp(false));
-    }, []);
+    }, [isDebugPage]);
 
     return (
         <SessionProvider>

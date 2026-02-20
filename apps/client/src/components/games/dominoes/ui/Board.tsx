@@ -34,7 +34,6 @@ export default function Board({
     canPlaceLeft,
     canPlaceRight,
     onPlaceTile,
-    onCancelSelection,
     lastPlayedSide,
     className,
     layoutIdPrefix,

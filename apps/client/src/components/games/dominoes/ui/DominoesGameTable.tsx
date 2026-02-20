@@ -27,7 +27,6 @@ import {
     EdgePosition,
     DealingItem,
     DealingOverlay,
-    useGameTable,
 } from "@/components/games/shared";
 import { useTurnTimer, useResponsiveTileSize } from "@/hooks";
 import { useWebSocket } from "@/contexts/WebSocketContext";
@@ -189,22 +188,6 @@ function DominoesGameTable({
         () => isMyTurn && isPlaying && !hasLegalMove(hand, gameData.board),
         [isMyTurn, isPlaying, hand, gameData.board],
     );
-
-    // Can auto-place (only one valid side)
-    const canAutoPlace = useMemo(() => {
-        if (!selectedTile || !isMyTurn || !isPlaying) return false;
-        if (gameData.board.tiles.length === 0) return true;
-        return (
-            (canPlaceLeft && !canPlaceRight) || (canPlaceRight && !canPlaceLeft)
-        );
-    }, [
-        selectedTile,
-        isMyTurn,
-        isPlaying,
-        gameData.board.tiles.length,
-        canPlaceLeft,
-        canPlaceRight,
-    ]);
 
     // Handle placing a tile
     const handlePlaceTile = useCallback(

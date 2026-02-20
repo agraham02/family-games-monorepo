@@ -26,8 +26,8 @@ interface SessionContextValue {
     clearUserSession: () => void;
 }
 
-const SessionContext = createContext<SessionContextValue | undefined>(
-    undefined
+export const SessionContext = createContext<SessionContextValue | undefined>(
+    undefined,
 );
 
 export function useSession() {
