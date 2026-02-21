@@ -4,12 +4,15 @@
 import { ComponentType } from "react";
 import Dominoes from "./dominoes";
 import Spades from "./spades";
+import LRC from "./lrc";
 import { GameData, PlayerData } from "@shared/types";
 import {
     generateSpadesMockData,
     generateDominoesMockData,
+    generateLRCMockData,
     SpadesMockOptions,
     DominoesMockOptions,
+    LRCMockOptions,
 } from "./mockData";
 
 /**
@@ -87,6 +90,18 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             phase: "playing",
             round: 1,
             includeCurrentTrick: true,
+        },
+    },
+    lrc: {
+        component: LRC,
+        displayName: "Left Right Center",
+        generateMockData:
+            generateLRCMockData as MockDataGenerator<LRCMockOptions>,
+        defaultMockOptions: {
+            playerCount: 4,
+            phase: "rolling",
+            startingChips: 3,
+            chipValue: 0.25,
         },
     },
 };

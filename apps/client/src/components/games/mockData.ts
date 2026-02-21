@@ -8,6 +8,9 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    LRCData,
+    LRCPlayerData,
+    LRCDiceFace,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,6 +355,75 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
 
     const playerData: DominoesPlayerData = {
         hand: hands[0] || [],
+        localOrdering: playOrder,
+    };
+
+    return { gameData, playerData };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LRC Mock Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LRCMockOptions {
+    playerCount?: number;
+    phase?: "rolling" | "finished";
+    startingChips?: number;
+    chipValue?: number;
+}
+
+export function generateLRCMockData(
+    options: LRCMockOptions = {}
+): { gameData: LRCData; playerData: LRCPlayerData } {
+    const {
+        playerCount = 4,
+        phase = "rolling",
+        startingChips = 3,
+        chipValue = 0.25,
+    } = options;
+
+    const players = generatePlayers(playerCount);
+    const playOrder = Object.keys(players);
+    const localPlayerId = playOrder[0];
+
+    const chips: Record<string, number> = {};
+    playOrder.forEach((pid) => {
+        chips[pid] = startingChips;
+    });
+
+    const lastRollDice: LRCDiceFace[] = ["L", "R", "*"];
+
+    const gameData: LRCData = {
+        id: "mock-lrc-game",
+        roomId: "mock-room",
+        type: "lrc",
+        players,
+        leaderId: localPlayerId,
+        playOrder,
+        currentTurnIndex: 0,
+        chips,
+        centerPot: 2,
+        phase,
+        round: 3,
+        lastRoll: {
+            playerId: playOrder[playerCount - 1],
+            dice: lastRollDice,
+            lefts: 1,
+            rights: 1,
+            centers: 0,
+            dots: 1,
+        },
+        winnerId: phase === "finished" ? localPlayerId : undefined,
+        settings: {
+            startingChips,
+            chipValue,
+            winTarget: 1,
+            roundLimit: null,
+            turnTimeLimit: null,
+        },
+    };
+
+    const playerData: LRCPlayerData = {
         localOrdering: playOrder,
     };
 
