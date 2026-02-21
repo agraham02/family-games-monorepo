@@ -357,6 +357,9 @@ export function optimisticGameReducer(
                 // No optimistic update for this action
                 return null;
         }
+    } else if (gameData.type === "lrc") {
+        // LRC dice rolling requires server-side randomness, so no optimistic updates
+        return null;
     }
 
     return null;

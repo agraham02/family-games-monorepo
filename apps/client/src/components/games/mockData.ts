@@ -8,6 +8,9 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    LRCData,
+    LRCPlayerData,
+    LRCDiceFace,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,6 +355,89 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
 
     const playerData: DominoesPlayerData = {
         hand: hands[0] || [],
+        localOrdering: playOrder,
+    };
+
+    return { gameData, playerData };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LRC Mock Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LRCMockOptions {
+    playerCount?: number;
+    phase?: LRCData["phase"];
+    startingChips?: number;
+    chipValue?: number;
+    currentTurnIndex?: number;
+    includeLastRoll?: boolean;
+}
+
+export function generateLRCMockData(options: LRCMockOptions = {}): {
+    gameData: LRCData;
+    playerData: LRCPlayerData;
+} {
+    const {
+        playerCount = 4,
+        phase = "playing",
+        startingChips = 3,
+        chipValue = 0.25,
+        currentTurnIndex = 0,
+        includeLastRoll = true,
+    } = options;
+
+    const playOrder = Array.from({ length: playerCount }, (_, i) =>
+        generatePlayerId(i)
+    );
+    const players = generatePlayers(playerCount);
+    const localPlayerId = generatePlayerId(0);
+
+    // Generate chip counts (random but summing to total)
+    const totalChips = playerCount * startingChips;
+    const chips: Record<string, number> = {};
+    let remaining = totalChips - Math.floor(totalChips * 0.1);
+    playOrder.forEach((id, idx) => {
+        if (idx === playOrder.length - 1) {
+            chips[id] = Math.max(0, remaining);
+        } else {
+            const c = Math.floor(Math.random() * startingChips) + 1;
+            chips[id] = c;
+            remaining -= c;
+        }
+    });
+    const pot = totalChips - Object.values(chips).reduce((s, c) => s + c, 0);
+
+    // Optional last roll
+    const diceFaces: LRCDiceFace[] = ["L", "R", "C", "dot", "dot", "dot"];
+    const lastRoll =
+        includeLastRoll && phase === "playing"
+            ? {
+                  playerId: playOrder[(currentTurnIndex - 1 + playerCount) % playerCount],
+                  dice: Array.from({ length: 3 }, () => diceFaces[Math.floor(Math.random() * diceFaces.length)]) as LRCDiceFace[],
+              }
+            : undefined;
+
+    const gameData: LRCData = {
+        id: "mock-game-id",
+        roomId: "mock-room",
+        type: "lrc",
+        players,
+        leaderId: localPlayerId,
+        playOrder,
+        currentTurnIndex,
+        chips,
+        pot: Math.max(0, pot),
+        phase,
+        lastRoll,
+        gameWinner: phase === "finished" ? playOrder[0] : undefined,
+        settings: {
+            startingChips,
+            chipValue,
+        },
+    };
+
+    const playerData: LRCPlayerData = {
         localOrdering: playOrder,
     };
 

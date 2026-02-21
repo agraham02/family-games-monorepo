@@ -9,6 +9,7 @@ import {
     BaseGameSettings,
     SpadesSettings,
     DominoesSettings,
+    LRCSettings,
     SettingDefinition,
 } from "./settings";
 
@@ -19,6 +20,7 @@ import {
 // Re-export lobby-specific settings with alternate names for backwards compatibility
 export type LobbySpadesSettings = SpadesSettings;
 export type LobbyDominoesSettings = DominoesSettings;
+export type LobbyLRCSettings = LRCSettings;
 
 // ============================================================================
 // Game Settings Type System (Client-Side)
@@ -31,6 +33,7 @@ export type LobbyDominoesSettings = DominoesSettings;
 export type TypedGameSettings =
     | { gameType: "spades"; settings: Partial<SpadesSettings> }
     | { gameType: "dominoes"; settings: Partial<DominoesSettings> }
+    | { gameType: "lrc"; settings: Partial<LRCSettings> }
     | { gameType: null; settings: Record<string, never> }; // No game selected
 
 /**
@@ -69,6 +72,11 @@ export function toTypedSettings(
         return {
             gameType: "dominoes",
             settings: settings as Partial<DominoesSettings>,
+        };
+    } else if (gameType === "lrc") {
+        return {
+            gameType: "lrc",
+            settings: settings as Partial<LRCSettings>,
         };
     }
     return { gameType: null, settings: {} };
