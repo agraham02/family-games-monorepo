@@ -14,8 +14,8 @@ interface TileProps {
     className?: string;
 }
 
-// Pip positions for each value (0-6)
-// Positions are relative to a 3x3 grid within each half
+// Pip positions for each value (0-6) in a 3×3 logical grid.
+// [row, col] where row=0 is top, row=2 is bottom; col=0 is left, col=2 is right.
 const PIP_POSITIONS: Record<number, [number, number][]> = {
     0: [],
     1: [[1, 1]], // center
@@ -51,43 +51,47 @@ const PIP_POSITIONS: Record<number, [number, number][]> = {
     ], // two columns of 3
 };
 
+// width = short dimension (tile width for vertical orientation)
+// height = long dimension (tile height for vertical orientation, ≈ 2×width)
 const SIZE_CONFIG = {
     sm: { width: 28, height: 56, pipSize: 4, gap: 2 },
     md: { width: 40, height: 80, pipSize: 6, gap: 3 },
     lg: { width: 56, height: 112, pipSize: 8, gap: 4 },
 };
 
-function PipHalf({
+/**
+ * Render pips centered within a square section of the tile.
+ * The pip grid is a 3×3 logical grid that fits within a `size × size` area
+ * starting at (x, y).
+ */
+function PipSection({
     value,
-    halfHeight,
+    x,
+    y,
+    size,
     pipSize,
-    offsetY,
 }: {
     value: number;
-    halfWidth: number;
-    halfHeight: number;
+    x: number;
+    y: number;
+    size: number;
     pipSize: number;
-    offsetY: number;
 }) {
     const positions = PIP_POSITIONS[value] || [];
-    const padding = pipSize * 0.8;
-    const gridSize = (halfHeight - 2 * padding) / 2;
+    const padding = pipSize * 0.85;
+    const gridStep = (size - 2 * padding) / 2;
 
     return (
         <>
-            {positions.map(([row, col], idx) => {
-                const cx = padding + col * gridSize;
-                const cy = offsetY + padding + row * gridSize;
-                return (
-                    <circle
-                        key={idx}
-                        cx={cx}
-                        cy={cy}
-                        r={pipSize / 2}
-                        className="fill-zinc-800 dark:fill-zinc-100"
-                    />
-                );
-            })}
+            {positions.map(([row, col], idx) => (
+                <circle
+                    key={idx}
+                    cx={x + padding + col * gridStep}
+                    cy={y + padding + row * gridStep}
+                    r={pipSize / 2}
+                    className="fill-zinc-800 dark:fill-zinc-100"
+                />
+            ))}
         </>
     );
 }
@@ -101,14 +105,39 @@ export default function Tile({
     onClick,
     className,
 }: TileProps) {
-    const config = SIZE_CONFIG[size];
-    const { width, height, pipSize, gap } = config;
+    const { width, height, pipSize, gap } = SIZE_CONFIG[size];
 
-    // For horizontal display, swap dimensions
+    // SVG dimensions depend on orientation:
+    // Vertical:   width × height  (portrait)
+    // Horizontal: height × width  (landscape)
     const svgWidth = isHorizontal ? height : width;
     const svgHeight = isHorizontal ? width : height;
 
-    const halfHeight = (height - gap) / 2;
+    // Long half dimension (each half along the main axis, minus the gap)
+    const halfLong = (height - gap) / 2;
+
+    // Each half's bounding box dimensions
+    // Vertical:   halfW=width, halfH=halfLong
+    // Horizontal: halfW=halfLong, halfH=width
+    const halfW = isHorizontal ? halfLong : width;
+    const halfH = isHorizontal ? width : halfLong;
+
+    // Second half's top-left offset
+    const halfBX = isHorizontal ? halfLong + gap : 0;
+    const halfBY = isHorizontal ? 0 : halfLong + gap;
+
+    // Use the smaller half-dimension as the square pip-grid size, then center it
+    const sectionSize = Math.min(halfW, halfH);
+    const pipAX = (halfW - sectionSize) / 2;
+    const pipAY = (halfH - sectionSize) / 2;
+    const pipBX = halfBX + (halfW - sectionSize) / 2;
+    const pipBY = halfBY + (halfH - sectionSize) / 2;
+
+    // Divider line between the two halves
+    const divX1 = isHorizontal ? halfLong + gap / 2 : 2;
+    const divY1 = isHorizontal ? 2 : halfLong + gap / 2;
+    const divX2 = isHorizontal ? halfLong + gap / 2 : svgWidth - 2;
+    const divY2 = isHorizontal ? svgHeight - 2 : halfLong + gap / 2;
 
     const isDouble = tile.left === tile.right;
 
@@ -127,14 +156,11 @@ export default function Tile({
                 isSelected && "ring-2 ring-yellow-400 scale-110 z-10",
                 className
             )}
-            style={{
-                transform: isHorizontal ? "rotate(90deg)" : undefined,
-            }}
         >
             <svg
                 width={svgWidth}
                 height={svgHeight}
-                viewBox={`0 0 ${width} ${height}`}
+                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
                 className={cn(
                     "drop-shadow-md",
                     isDouble && "ring-1 ring-amber-500/50 rounded"
@@ -144,40 +170,40 @@ export default function Tile({
                 <rect
                     x="0"
                     y="0"
-                    width={width}
-                    height={height}
+                    width={svgWidth}
+                    height={svgHeight}
                     rx="4"
                     ry="4"
                     className="fill-white dark:fill-zinc-200 stroke-zinc-300 dark:stroke-zinc-600"
                     strokeWidth="1"
                 />
 
-                {/* Divider line */}
+                {/* Divider line between the two halves */}
                 <line
-                    x1="2"
-                    y1={halfHeight + gap / 2}
-                    x2={width - 2}
-                    y2={halfHeight + gap / 2}
+                    x1={divX1}
+                    y1={divY1}
+                    x2={divX2}
+                    y2={divY2}
                     className="stroke-zinc-400 dark:stroke-zinc-500"
                     strokeWidth="1.5"
                 />
 
-                {/* Top half pips (left value) */}
-                <PipHalf
+                {/* First half pips (left value) */}
+                <PipSection
                     value={tile.left}
-                    halfWidth={width}
-                    halfHeight={halfHeight}
+                    x={pipAX}
+                    y={pipAY}
+                    size={sectionSize}
                     pipSize={pipSize}
-                    offsetY={0}
                 />
 
-                {/* Bottom half pips (right value) */}
-                <PipHalf
+                {/* Second half pips (right value) */}
+                <PipSection
                     value={tile.right}
-                    halfWidth={width}
-                    halfHeight={halfHeight}
+                    x={pipBX}
+                    y={pipBY}
+                    size={sectionSize}
                     pipSize={pipSize}
-                    offsetY={halfHeight + gap}
                 />
             </svg>
         </button>

@@ -91,6 +91,17 @@ function generateOpponentHand(count: number): PlayingCardType[] {
     return cards;
 }
 
+// Generate a placeholder domino hand for opponents (random tiles)
+function generateDominoHand(count: number): TileType[] {
+    const tiles: TileType[] = [];
+    for (let i = 0; i < count; i++) {
+        const left = Math.floor(Math.random() * 7);
+        const right = Math.floor(Math.random() * 7);
+        tiles.push({ left, right, id: `opp-tile-${i}-${Date.now()}` });
+    }
+    return tiles;
+}
+
 function getEdgePosition(index: number, playerCount: number): EdgePosition {
     if (playerCount === 2) {
         return index === 0 ? "bottom" : "top";
@@ -565,6 +576,10 @@ export default function GameUIDebugPage() {
     const [dominoesPlayerData, setDominoesPlayerData] =
         useState<DominoesPlayerData | null>(null);
     const [selectedTile, setSelectedTile] = useState<TileType | null>(null);
+    // All player hands for dominoes (needed for opponent simulation)
+    const [dominoesAllHands, setDominoesAllHands] = useState<
+        Record<string, TileType[]>
+    >({});
 
     // Initialize with undealt state (show deck, empty hands)
     const initializeUndealt = useCallback(() => {
@@ -574,6 +589,7 @@ export default function GameUIDebugPage() {
         setIsDealing(false);
         setHasDealt(false);
         setAllHands({});
+        setDominoesAllHands({});
 
         const generator = getMockDataGenerator(selectedGame);
         if (generator) {
@@ -593,8 +609,21 @@ export default function GameUIDebugPage() {
                 setSpadesGameData(emptyGameData);
                 setSpadesPlayerData(emptyPlayerData);
             } else if (selectedGame === "dominoes") {
-                setDominoesGameData(gameData as DominoesData);
-                setDominoesPlayerData(playerData as DominoesPlayerData);
+                const dominoesData = gameData as DominoesData;
+                const dominoesPlayer = playerData as DominoesPlayerData;
+                setDominoesGameData(dominoesData);
+                setDominoesPlayerData(dominoesPlayer);
+                // Build all hands from mock data
+                const handsMap: Record<string, TileType[]> = {};
+                dominoesPlayer.localOrdering.forEach((pid, idx) => {
+                    handsMap[pid] =
+                        idx === 0
+                            ? dominoesPlayer.hand
+                            : generateDominoHand(
+                                  dominoesData.handsCounts[pid] || 0
+                              );
+                });
+                setDominoesAllHands(handsMap);
                 setHasDealt(true); // Dominoes starts dealt for now
             }
         }
@@ -608,6 +637,7 @@ export default function GameUIDebugPage() {
         setIsDealing(false);
         setHasDealt(true);
         setAllHands({});
+        setDominoesAllHands({});
 
         const generator = getMockDataGenerator(selectedGame);
         if (generator) {
@@ -635,8 +665,20 @@ export default function GameUIDebugPage() {
                 setSpadesGameData(spadesData);
                 setSpadesPlayerData(spadesPlayer);
             } else if (selectedGame === "dominoes") {
-                setDominoesGameData(gameData as DominoesData);
-                setDominoesPlayerData(playerData as DominoesPlayerData);
+                const dominoesData = gameData as DominoesData;
+                const dominoesPlayer = playerData as DominoesPlayerData;
+                setDominoesGameData(dominoesData);
+                setDominoesPlayerData(dominoesPlayer);
+                const handsMap: Record<string, TileType[]> = {};
+                dominoesPlayer.localOrdering.forEach((pid, idx) => {
+                    handsMap[pid] =
+                        idx === 0
+                            ? dominoesPlayer.hand
+                            : generateDominoHand(
+                                  dominoesData.handsCounts[pid] || 0
+                              );
+                });
+                setDominoesAllHands(handsMap);
             }
         }
     }, [selectedGame, playerCount]);
@@ -901,40 +943,198 @@ export default function GameUIDebugPage() {
         setSelectedTile(tile);
     }, []);
 
+    /**
+     * Place a tile on the board, properly handling tile orientation (flipping)
+     * so the connecting side faces the board and the new pip value faces outward.
+     * This mirrors the logic in the API's `placeTileOnBoard` helper.
+     */
     const handlePlaceTile = useCallback(
         (side: "left" | "right") => {
             if (!selectedTile || !dominoesGameData || !dominoesPlayerData)
                 return;
 
-            // Remove tile from hand
+            const board = dominoesGameData.board;
+            const heroId = dominoesPlayerData.localOrdering[0];
+
+            // Determine oriented tile and new end value
+            let orientedTile = selectedTile;
+            let newEndValue: number;
+
+            if (board.tiles.length === 0) {
+                // First tile — no orientation needed
+                newEndValue =
+                    side === "left" ? selectedTile.right : selectedTile.right;
+            } else {
+                const endValue =
+                    side === "left"
+                        ? board.leftEnd!.value
+                        : board.rightEnd!.value;
+
+                if (selectedTile.left === endValue) {
+                    // Left side connects → right side is the new outward end
+                    newEndValue = selectedTile.right;
+                } else {
+                    // Right side connects → flip tile so left becomes outward end
+                    orientedTile = {
+                        ...selectedTile,
+                        left: selectedTile.right,
+                        right: selectedTile.left,
+                    };
+                    newEndValue = selectedTile.left;
+                }
+            }
+
+            // Update tile list
+            const newTiles = [...board.tiles];
+            if (side === "left") {
+                newTiles.unshift(orientedTile);
+            } else {
+                newTiles.push(orientedTile);
+            }
+
+            // Compute new board state
+            const newBoard = {
+                tiles: newTiles,
+                leftEnd:
+                    side === "left"
+                        ? { value: newEndValue, tileId: orientedTile.id }
+                        : board.leftEnd,
+                rightEnd:
+                    side === "right"
+                        ? { value: newEndValue, tileId: orientedTile.id }
+                        : board.rightEnd,
+            };
+
+            // Remove tile from local player's hand
             const newHand = dominoesPlayerData.hand.filter(
                 (t) => t.id !== selectedTile.id
             );
 
-            // Add to board
-            const newTiles = [...dominoesGameData.board.tiles];
-            if (side === "left") {
-                newTiles.unshift(selectedTile);
-            } else {
-                newTiles.push(selectedTile);
-            }
-
-            const newBoard = {
-                tiles: newTiles,
-                leftEnd: { value: newTiles[0].left, tileId: newTiles[0].id },
-                rightEnd: {
-                    value: newTiles[newTiles.length - 1].right,
-                    tileId: newTiles[newTiles.length - 1].id,
-                },
-            };
-
             setDominoesPlayerData({ ...dominoesPlayerData, hand: newHand });
-            setDominoesGameData({ ...dominoesGameData, board: newBoard });
+            setDominoesAllHands((prev) => ({ ...prev, [heroId]: newHand }));
+            setDominoesGameData({
+                ...dominoesGameData,
+                board: newBoard,
+                handsCounts: {
+                    ...dominoesGameData.handsCounts,
+                    [heroId]: newHand.length,
+                },
+            });
             setSelectedTile(null);
             setActivePlayerIndex((prev) => (prev + 1) % playerCount);
         },
-        [selectedTile, dominoesGameData, dominoesPlayerData, playerCount]
+        [
+            selectedTile,
+            dominoesGameData,
+            dominoesPlayerData,
+            playerCount,
+        ]
     );
+
+    /**
+     * Simulate the current opponent's turn: find a playable tile and place it,
+     * or pass if no moves are available.
+     */
+    const handleSimulateDominoesOpponent = useCallback(() => {
+        if (!dominoesGameData || !dominoesPlayerData) return;
+        if (activePlayerIndex === 0) return; // Already local player's turn
+
+        const currentPlayerId =
+            dominoesPlayerData.localOrdering[activePlayerIndex];
+        const opponentHand = dominoesAllHands[currentPlayerId] || [];
+        const board = dominoesGameData.board;
+
+        // Find a tile the opponent can play
+        let played = false;
+        for (const tile of opponentHand) {
+            let side: "left" | "right" | null = null;
+            let orientedTile = tile;
+            let newEndValue = 0;
+
+            if (board.tiles.length === 0) {
+                side = "left";
+                newEndValue = tile.right;
+            } else if (
+                tile.left === board.leftEnd?.value ||
+                tile.right === board.leftEnd?.value
+            ) {
+                side = "left";
+                if (tile.left === board.leftEnd!.value) {
+                    newEndValue = tile.right;
+                } else {
+                    orientedTile = { ...tile, left: tile.right, right: tile.left };
+                    newEndValue = tile.left;
+                }
+            } else if (
+                tile.left === board.rightEnd?.value ||
+                tile.right === board.rightEnd?.value
+            ) {
+                side = "right";
+                if (tile.left === board.rightEnd!.value) {
+                    newEndValue = tile.right;
+                } else {
+                    orientedTile = { ...tile, left: tile.right, right: tile.left };
+                    newEndValue = tile.left;
+                }
+            }
+
+            if (side !== null) {
+                const newTiles = [...board.tiles];
+                if (side === "left") {
+                    newTiles.unshift(orientedTile);
+                } else {
+                    newTiles.push(orientedTile);
+                }
+
+                const newBoard = {
+                    tiles: newTiles,
+                    leftEnd:
+                        side === "left"
+                            ? { value: newEndValue, tileId: orientedTile.id }
+                            : board.leftEnd,
+                    rightEnd:
+                        side === "right"
+                            ? { value: newEndValue, tileId: orientedTile.id }
+                            : board.rightEnd,
+                };
+
+                const newOpponentHand = opponentHand.filter(
+                    (t) => t.id !== tile.id
+                );
+                setDominoesAllHands((prev) => ({
+                    ...prev,
+                    [currentPlayerId]: newOpponentHand,
+                }));
+                setDominoesGameData({
+                    ...dominoesGameData,
+                    board: newBoard,
+                    handsCounts: {
+                        ...dominoesGameData.handsCounts,
+                        [currentPlayerId]: newOpponentHand.length,
+                    },
+                });
+                toast.info(
+                    `${dominoesGameData.players[currentPlayerId]?.name || "Opponent"} played [${orientedTile.left}|${orientedTile.right}] on the ${side}`
+                );
+                played = true;
+                break;
+            }
+        }
+
+        if (!played) {
+            toast.info(
+                `${dominoesGameData.players[currentPlayerId]?.name || "Opponent"} passed`
+            );
+        }
+
+        setActivePlayerIndex((prev) => (prev + 1) % playerCount);
+    }, [
+        dominoesGameData,
+        dominoesPlayerData,
+        dominoesAllHands,
+        activePlayerIndex,
+        playerCount,
+    ]);
 
     const handlePass = useCallback(() => {
         setActivePlayerIndex((prev) => (prev + 1) % playerCount);
@@ -1064,9 +1264,21 @@ export default function GameUIDebugPage() {
                             </>
                         )}
                         {selectedGame === "dominoes" && (
-                            <Button onClick={handlePass} variant="outline">
-                                Pass Turn
-                            </Button>
+                            <>
+                                <Button
+                                    onClick={handleSimulateDominoesOpponent}
+                                    variant="outline"
+                                    disabled={activePlayerIndex === 0}
+                                >
+                                    Simulate Opponent
+                                </Button>
+                                <Button
+                                    onClick={handlePass}
+                                    variant="outline"
+                                >
+                                    Pass Turn
+                                </Button>
+                            </>
                         )}
                         <Button onClick={handleReset} variant="destructive">
                             Reset
