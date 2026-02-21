@@ -67,8 +67,8 @@ export default function RoundSummaryModal({
     }, [isOpen, gameData.round]);
 
     // Sort players by score (descending)
-    const sortedPlayers = Object.keys(playerScores).sort(
-        (a, b) => playerScores[b] - playerScores[a],
+    const sortedPlayers = Object.keys(playerScores || {}).sort(
+        (a, b) => (playerScores?.[b] || 0) - (playerScores?.[a] || 0),
     );
 
     return (

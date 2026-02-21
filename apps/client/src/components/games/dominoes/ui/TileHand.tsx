@@ -143,10 +143,12 @@ export default function TileHand({
                     const isPlayable = !showHints || canPlayTile(tile, board);
                     const isSelected = selectedTile?.id === tile.id;
                     const isFocused = focusedIndex === index;
+                    // Ensure we have a unique key even if tile.id is somehow missing
+                    const key = tile.id || `tile-${index}-${tile.left}-${tile.right}`;
 
                     return (
                         <motion.div
-                            key={tile.id}
+                            key={key}
                             className="shrink-0"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}

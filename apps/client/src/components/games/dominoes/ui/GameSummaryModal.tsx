@@ -39,8 +39,8 @@ export default function GameSummaryModal({
         : gameWinner === userId;
 
     // Sort players by score for individual mode
-    const sortedPlayers = Object.keys(playerScores).sort(
-        (a, b) => playerScores[b] - playerScores[a],
+    const sortedPlayers = Object.keys(playerScores || {}).sort(
+        (a, b) => (playerScores?.[b] || 0) - (playerScores?.[a] || 0),
     );
 
     // Convert teams record to array for iteration

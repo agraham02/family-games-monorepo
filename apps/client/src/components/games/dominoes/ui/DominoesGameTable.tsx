@@ -134,8 +134,11 @@ function DominoesGameTable({
         playerData.localOrdering?.length || gameData.playOrder.length;
     const localOrdering = playerData.localOrdering || gameData.playOrder;
     const hand = useMemo(() => playerData.hand || [], [playerData.hand]);
-    const board =
-        gameData.board ?? { tiles: [], leftEnd: null, rightEnd: null };
+    const board = gameData.board ?? {
+        tiles: [],
+        leftEnd: null,
+        rightEnd: null,
+    };
     const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
     const isPlaying = gameData.phase === "playing";
 
@@ -216,11 +219,7 @@ function DominoesGameTable({
             }
 
             const leftValid = canPlaceTileOnSide(tile, board, "left");
-            const rightValid = canPlaceTileOnSide(
-                tile,
-                board,
-                "right",
-            );
+            const rightValid = canPlaceTileOnSide(tile, board, "right");
 
             // Empty board - auto place on left
             if (board.tiles.length === 0) {
@@ -376,9 +375,9 @@ function DominoesGameTable({
 
     // Create customStats render function for dominoes
     const createDominoesStats = (playerId: string) => {
-        const score = gameData.playerScores[playerId] ?? 0;
-        const tilesCount = gameData.handsCounts[playerId] ?? 0;
-        const winTarget = gameData.settings.winTarget;
+        const score = gameData?.playerScores?.[playerId] ?? 0;
+        const tilesCount = gameData?.handsCounts?.[playerId] ?? 0;
+        const winTarget = gameData?.settings?.winTarget ?? 150;
 
         function DominoesStatsDisplay() {
             return (
@@ -439,9 +438,9 @@ function DominoesGameTable({
                     feltGradient="from-green-800 via-green-700 to-emerald-800"
                 >
                     {/* Player Edge Regions */}
-                    {localOrdering.map((playerId, index) => {
+                    {localOrdering?.map((playerId, index) => {
                         const isLocal = index === 0;
-                        const player = gameData.players[playerId];
+                        const player = gameData?.players?.[playerId];
                         const isCurrentTurn = currentPlayerId === playerId;
                         const edgePosition = getEdgePosition(
                             index,

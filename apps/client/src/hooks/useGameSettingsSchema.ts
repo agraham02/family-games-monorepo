@@ -94,10 +94,11 @@ export function useGameSettingsSchema(
             setDefinitions(schema.definitions);
             setDefaults(schema.defaults);
         } catch (err) {
-            console.error(`Failed to fetch settings schema for ${type}:`, err);
-            setError(
-                err instanceof Error ? err.message : "Failed to load settings",
+            console.warn(
+                `Failed to fetch settings schema for ${type}, using local fallbacks:`,
+                err,
             );
+            // Don't set error state if we have fallbacks, so the UI doesn't break
 
             // Fallback to local definitions if API fails
             if (type === "spades") {
@@ -110,6 +111,11 @@ export function useGameSettingsSchema(
                 setDefinitions(LRC_SETTINGS_DEFINITIONS);
                 setDefaults(DEFAULT_LRC_SETTINGS);
             } else {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to load settings",
+                );
                 setDefinitions([]);
                 setDefaults(null);
             }
