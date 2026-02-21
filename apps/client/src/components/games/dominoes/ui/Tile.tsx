@@ -104,14 +104,13 @@ export default function Tile({
     const config = SIZE_CONFIG[size];
     const { width, height, pipSize, gap } = config;
 
-    // For horizontal display, swap dimensions
-    const svgWidth = isHorizontal ? height : width;
-    const svgHeight = isHorizontal ? width : height;
-
     const halfHeight = (height - gap) / 2;
 
     const isDouble = tile.left === tile.right;
 
+    // For horizontal tiles the SVG stays in portrait orientation and is rotated
+    // via CSS. The button gets explicit landscape dimensions so the flex layout
+    // sees the correct (rotated) size instead of the unrotated portrait box.
     return (
         <button
             type="button"
@@ -127,18 +126,34 @@ export default function Tile({
                 isSelected && "ring-2 ring-yellow-400 scale-110 z-10",
                 className
             )}
-            style={{
-                transform: isHorizontal ? "rotate(90deg)" : undefined,
-            }}
+            style={
+                isHorizontal
+                    ? {
+                          width: `${height}px`,
+                          height: `${width}px`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                      }
+                    : undefined
+            }
         >
             <svg
-                width={svgWidth}
-                height={svgHeight}
+                width={width}
+                height={height}
                 viewBox={`0 0 ${width} ${height}`}
                 className={cn(
                     "drop-shadow-md",
                     isDouble && "ring-1 ring-amber-500/50 rounded"
                 )}
+                style={
+                    isHorizontal
+                        ? {
+                              transform: "rotate(90deg)",
+                              flexShrink: 0,
+                          }
+                        : undefined
+                }
             >
                 {/* Background */}
                 <rect

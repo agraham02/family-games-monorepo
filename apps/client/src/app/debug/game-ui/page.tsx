@@ -911,29 +911,71 @@ export default function GameUIDebugPage() {
                 (t) => t.id !== selectedTile.id
             );
 
-            // Add to board
-            const newTiles = [...dominoesGameData.board.tiles];
-            if (side === "left") {
-                newTiles.unshift(selectedTile);
-            } else {
+            const board = dominoesGameData.board;
+            const newTiles = [...board.tiles];
+            let newLeftEnd = board.leftEnd;
+            let newRightEnd = board.rightEnd;
+
+            if (board.tiles.length === 0) {
+                // First tile – any tile can go on the empty board
                 newTiles.push(selectedTile);
+                newLeftEnd = {
+                    value: selectedTile.left,
+                    tileId: selectedTile.id,
+                };
+                newRightEnd = {
+                    value: selectedTile.right,
+                    tileId: selectedTile.id,
+                };
+            } else if (side === "left") {
+                const endValue = board.leftEnd!.value;
+                // Orient so the connecting pip faces the board (becomes .left).
+                // After orientation .right is always the new exposed end.
+                const orientedTile =
+                    selectedTile.right === endValue
+                        ? {
+                              ...selectedTile,
+                              left: selectedTile.right,
+                              right: selectedTile.left,
+                          }
+                        : selectedTile;
+                newTiles.unshift(orientedTile);
+                newLeftEnd = {
+                    value: orientedTile.right,
+                    tileId: selectedTile.id,
+                };
+            } else {
+                const endValue = board.rightEnd!.value;
+                // Same orientation logic for the right end.
+                const orientedTile =
+                    selectedTile.right === endValue
+                        ? {
+                              ...selectedTile,
+                              left: selectedTile.right,
+                              right: selectedTile.left,
+                          }
+                        : selectedTile;
+                newTiles.push(orientedTile);
+                newRightEnd = {
+                    value: orientedTile.right,
+                    tileId: selectedTile.id,
+                };
             }
 
             const newBoard = {
                 tiles: newTiles,
-                leftEnd: { value: newTiles[0].left, tileId: newTiles[0].id },
-                rightEnd: {
-                    value: newTiles[newTiles.length - 1].right,
-                    tileId: newTiles[newTiles.length - 1].id,
-                },
+                leftEnd: newLeftEnd,
+                rightEnd: newRightEnd,
             };
 
             setDominoesPlayerData({ ...dominoesPlayerData, hand: newHand });
             setDominoesGameData({ ...dominoesGameData, board: newBoard });
             setSelectedTile(null);
-            setActivePlayerIndex((prev) => (prev + 1) % playerCount);
+            // In debug mode keep the turn at the local player so the hand
+            // remains interactive without having to simulate opponents.
+            // The "Pass Turn" button can still be used to cycle through players.
         },
-        [selectedTile, dominoesGameData, dominoesPlayerData, playerCount]
+        [selectedTile, dominoesGameData, dominoesPlayerData]
     );
 
     const handlePass = useCallback(() => {
