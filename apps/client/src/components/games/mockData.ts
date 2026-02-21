@@ -8,6 +8,8 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    LRCData,
+    LRCPlayerData,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,6 +354,67 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
 
     const playerData: DominoesPlayerData = {
         hand: hands[0] || [],
+        localOrdering: playOrder,
+    };
+
+    return { gameData, playerData };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LRC Mock Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LRCMockOptions {
+    playerCount?: number;
+    phase?: LRCData["phase"];
+    round?: number;
+    currentTurnIndex?: number;
+    startingChips?: number;
+}
+
+export function generateLRCMockData(options: LRCMockOptions = {}): {
+    gameData: LRCData;
+    playerData: LRCPlayerData;
+} {
+    const {
+        playerCount = 4,
+        phase = "playing",
+        round = 1,
+        currentTurnIndex = 0,
+        startingChips = 3,
+    } = options;
+
+    const playOrder = Array.from({ length: playerCount }, (_, i) =>
+        generatePlayerId(i)
+    );
+    const players = generatePlayers(playerCount);
+    const localPlayerId = generatePlayerId(0);
+
+    // Generate chips for each player
+    const chips: Record<string, number> = {};
+    playOrder.forEach((playerId) => {
+        chips[playerId] = startingChips;
+    });
+
+    const gameData: LRCData = {
+        id: "mock-game-id",
+        roomId: "mock-room",
+        type: "lrc",
+        players,
+        leaderId: localPlayerId,
+        playOrder,
+        currentTurnIndex,
+        chips,
+        pot: 0,
+        phase,
+        round,
+        settings: {
+            startingChips,
+            chipValue: 0.25,
+        },
+    };
+
+    const playerData: LRCPlayerData = {
         localOrdering: playOrder,
     };
 

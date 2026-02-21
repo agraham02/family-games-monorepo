@@ -7,6 +7,7 @@ export * from "./base";
 // Game-specific types
 export * from "./spades";
 export * from "./dominoes";
+export * from "./lrc";
 
 // ============================================================================
 // Union Types for Multi-Game Support
@@ -14,15 +15,16 @@ export * from "./dominoes";
 
 import { SpadesData, SpadesPlayerData } from "./spades";
 import { DominoesData, DominoesPlayerData } from "./dominoes";
+import { LRCData, LRCPlayerData } from "./lrc";
 
 /**
  * Union type for all game data types (public state).
  * Use this when handling game state generically.
  */
-export type GameData = SpadesData | DominoesData;
+export type GameData = SpadesData | DominoesData | LRCData;
 
 /**
  * Union type for all player data types (private state).
  * Use this when handling player-specific state generically.
  */
-export type PlayerData = SpadesPlayerData | DominoesPlayerData;
+export type PlayerData = SpadesPlayerData | DominoesPlayerData | LRCPlayerData;

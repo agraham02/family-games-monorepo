@@ -7,6 +7,8 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    LRCData,
+    LRCPlayerData,
 } from "@shared/types";
 
 /**
@@ -282,6 +284,38 @@ function optimisticDominoesPass(
 }
 
 // =====================
+// LRC REDUCERS
+// =====================
+
+/**
+ * Optimistically handle ROLL_DICE action for LRC.
+ * We advance the turn index; actual dice results come from server.
+ */
+function optimisticLRCRollDice(
+    gameData: LRCData,
+    _playerData: LRCPlayerData,
+    action: { type: string; payload: unknown; userId: string }
+): OptimisticUpdateResult | null {
+    const { userId } = action;
+
+    // Validate it's the player's turn
+    const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
+    if (currentPlayerId !== userId) {
+        return null;
+    }
+
+    // Advance turn index (server will confirm and compute actual dice/chip changes)
+    const newTurnIndex =
+        (gameData.currentTurnIndex + 1) % gameData.playOrder.length;
+
+    return {
+        gameData: {
+            currentTurnIndex: newTurnIndex,
+        } as Partial<LRCData>,
+    };
+}
+
+// =====================
 // MAIN REDUCER ROUTER
 // =====================
 
@@ -355,6 +389,18 @@ export function optimisticGameReducer(
                 );
             default:
                 // No optimistic update for this action
+                return null;
+        }
+    }
+
+    } else if (gameData.type === "lrc") {
+        const lrcData = gameData as LRCData;
+        const lrcPlayerData = playerData as LRCPlayerData;
+
+        switch (action.type) {
+            case "ROLL_DICE":
+                return optimisticLRCRollDice(lrcData, lrcPlayerData, action);
+            default:
                 return null;
         }
     }

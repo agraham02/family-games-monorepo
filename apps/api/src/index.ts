@@ -31,6 +31,7 @@ import {
 import { GameAction, gameManager } from "./services/GameManager";
 import { spadesModule } from "./games/spades";
 import { dominoesModule } from "./games/dominoes";
+import { lrcModule } from "./games/lrc";
 import {
     emitGameEvent,
     emitPlayerGameEvent,
@@ -54,6 +55,7 @@ const PORT = process.env.PORT || DEFAULT_PORT;
 
 gameManager.registerGameModule("spades", spadesModule);
 gameManager.registerGameModule("dominoes", dominoesModule);
+gameManager.registerGameModule("lrc", lrcModule);
 
 function handleSocketError(socket: Socket, err: any) {
     console.error(err);
