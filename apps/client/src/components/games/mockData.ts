@@ -280,6 +280,7 @@ export interface DominoesMockOptions {
 export function generateDominoesMockData(options: DominoesMockOptions = {}): {
     gameData: DominoesData;
     playerData: DominoesPlayerData;
+    allHands: Record<string, Tile[]>;
 } {
     const {
         playerCount = 4,
@@ -355,7 +356,12 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         localOrdering: playOrder,
     };
 
-    return { gameData, playerData };
+    const allHands: Record<string, Tile[]> = {};
+    playOrder.forEach((playerId, idx) => {
+        allHands[playerId] = hands[idx] || [];
+    });
+
+    return { gameData, playerData, allHands };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
