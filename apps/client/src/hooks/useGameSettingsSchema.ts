@@ -8,6 +8,14 @@ import type {
     SettingDefinition,
     BaseGameSettings,
 } from "@shared/types";
+import {
+    SPADES_SETTINGS_DEFINITIONS,
+    DEFAULT_SPADES_SETTINGS,
+    DOMINOES_SETTINGS_DEFINITIONS,
+    DEFAULT_DOMINOES_SETTINGS,
+    LRC_SETTINGS_DEFINITIONS,
+    DEFAULT_LRC_SETTINGS,
+} from "@shared/types";
 
 interface UseGameSettingsSchemaResult {
     definitions: SettingDefinition[];
@@ -19,7 +27,7 @@ interface UseGameSettingsSchemaResult {
 
 // LocalStorage key prefix for settings schemas
 // Increment version when schema structure changes to bust cache
-const SCHEMA_CACHE_VERSION = 2;
+const SCHEMA_CACHE_VERSION = 3;
 const STORAGE_KEY_PREFIX = `gameSettingsSchema_v${SCHEMA_CACHE_VERSION}_`;
 
 /**
@@ -46,7 +54,7 @@ function setCachedSchema(gameType: string, schema: GameSettingsSchema): void {
     try {
         localStorage.setItem(
             `${STORAGE_KEY_PREFIX}${gameType}`,
-            JSON.stringify(schema)
+            JSON.stringify(schema),
         );
     } catch (e) {
         console.warn("Failed to cache schema:", e);
@@ -58,7 +66,7 @@ function setCachedSchema(gameType: string, schema: GameSettingsSchema): void {
  * Caches results in localStorage for persistence across sessions.
  */
 export function useGameSettingsSchema(
-    gameType: string | null
+    gameType: string | null,
 ): UseGameSettingsSchemaResult {
     const [definitions, setDefinitions] = useState<SettingDefinition[]>([]);
     const [defaults, setDefaults] = useState<BaseGameSettings | null>(null);
@@ -88,10 +96,23 @@ export function useGameSettingsSchema(
         } catch (err) {
             console.error(`Failed to fetch settings schema for ${type}:`, err);
             setError(
-                err instanceof Error ? err.message : "Failed to load settings"
+                err instanceof Error ? err.message : "Failed to load settings",
             );
-            setDefinitions([]);
-            setDefaults(null);
+
+            // Fallback to local definitions if API fails
+            if (type === "spades") {
+                setDefinitions(SPADES_SETTINGS_DEFINITIONS);
+                setDefaults(DEFAULT_SPADES_SETTINGS);
+            } else if (type === "dominoes") {
+                setDefinitions(DOMINOES_SETTINGS_DEFINITIONS);
+                setDefaults(DEFAULT_DOMINOES_SETTINGS);
+            } else if (type === "lrc") {
+                setDefinitions(LRC_SETTINGS_DEFINITIONS);
+                setDefaults(DEFAULT_LRC_SETTINGS);
+            } else {
+                setDefinitions([]);
+                setDefaults(null);
+            }
         } finally {
             setIsLoading(false);
         }

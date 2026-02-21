@@ -8,6 +8,7 @@ import { GameData, PlayerData } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { useOptimisticGameAction } from "@/hooks/useOptimisticGameAction";
+import { useGameSettingsSchema } from "@/hooks/useGameSettingsSchema";
 import { optimisticGameReducer } from "@/lib/gameReducers";
 import { toast } from "sonner";
 
@@ -118,20 +119,77 @@ export function DebugEngine() {
     const [simulateError, setSimulateError] = useState<boolean>(false);
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
 
+    const { definitions: settingsSchema, defaults: defaultSettings } =
+        useGameSettingsSchema(selectedGameId);
+    const [currentSettings, setCurrentSettings] = useState<
+        Record<string, unknown>
+    >({});
+    const [settingsGameId, setSettingsGameId] =
+        useState<string>(selectedGameId);
+    const [regenerateTrigger, setRegenerateTrigger] = useState<number>(0);
+
+    // Initialize settings when defaults change or game changes
+    useEffect(() => {
+        if (defaultSettings) {
+            setCurrentSettings(
+                defaultSettings as unknown as Record<string, unknown>,
+            );
+            setSettingsGameId(selectedGameId);
+            setRegenerateTrigger((prev) => prev + 1);
+        }
+    }, [defaultSettings, selectedGameId]);
+
+    const handleUpdateSetting = useCallback((key: string, value: unknown) => {
+        setCurrentSettings((prev) => {
+            const newSettings = { ...prev, [key]: value };
+
+            // Also update the master game state so the game component sees the new settings
+            setMasterGameState((prevState) => {
+                if (!prevState.gameData) return prevState;
+                return {
+                    ...prevState,
+                    gameData: {
+                        ...prevState.gameData,
+                        settings: newSettings,
+                    } as unknown as GameData,
+                };
+            });
+
+            return newSettings;
+        });
+    }, []);
+
     // Load game and scenario
     useEffect(() => {
         const gameEntry = GAME_REGISTRY[selectedGameId];
         if (!gameEntry || !gameEntry.generateMockData) return;
 
+        const shouldUseCurrentSettings =
+            Object.keys(currentSettings).length > 0 &&
+            settingsGameId === selectedGameId;
+
         // For now, we just use default options. We could expand this to have predefined scenarios.
-        const options = gameEntry.defaultMockOptions || {};
+        const options = {
+            ...(gameEntry.defaultMockOptions || {}),
+            settings: shouldUseCurrentSettings ? currentSettings : undefined,
+        };
+
         const mockData = gameEntry.generateMockData(options) as unknown as {
             gameData: GameData;
             playerDataMap: Record<string, PlayerData>;
         };
 
+        // Apply current settings if we have them and they belong to the current game,
+        // otherwise use the mock data's settings
+        const gameDataWithSettings = {
+            ...mockData.gameData,
+            settings: shouldUseCurrentSettings
+                ? currentSettings
+                : mockData.gameData.settings,
+        } as GameData;
+
         setMasterGameState({
-            gameData: mockData.gameData,
+            gameData: gameDataWithSettings,
             playerDataMap: mockData.playerDataMap || {},
         });
 
@@ -139,7 +197,8 @@ export function DebugEngine() {
         if (mockData.gameData?.playOrder?.length > 0) {
             setSelectedPlayerId(mockData.gameData.playOrder[0]);
         }
-    }, [selectedGameId, selectedScenarioId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedGameId, selectedScenarioId, regenerateTrigger]);
 
     const handleEmit = useCallback(
         (event: string, payload: unknown) => {
@@ -556,6 +615,12 @@ export function DebugEngine() {
                 onSimulateErrorChange={setSimulateError}
                 autoPlay={autoPlay}
                 onAutoPlayChange={setAutoPlay}
+                settingsSchema={settingsSchema}
+                currentSettings={currentSettings}
+                onUpdateSetting={handleUpdateSetting}
+                onRegenerateGame={() =>
+                    setRegenerateTrigger((prev) => prev + 1)
+                }
             />
         </div>
     );

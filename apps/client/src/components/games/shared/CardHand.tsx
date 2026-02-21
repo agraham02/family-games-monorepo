@@ -7,6 +7,7 @@ import { PlayingCard as PlayingCardType } from "@shared/types";
 import { useGameTable } from "./GameTable";
 import { useEdgeRegion } from "./EdgeRegion";
 import { CardSize } from "./PlayingCard";
+import { CardFace } from "./CardFace";
 import CardBadge from "./CardBadge";
 import { usePrefersReducedMotion, useKeyboardNavigation } from "@/hooks";
 
@@ -123,20 +124,6 @@ interface CardInHandProps {
     prefersReducedMotion: boolean;
 }
 
-const SUIT_MAP = {
-    Spades: "♠",
-    Hearts: "♥",
-    Diamonds: "♦",
-    Clubs: "♣",
-};
-
-const SUIT_COLORS = {
-    Spades: "text-slate-900",
-    Hearts: "text-red-500",
-    Diamonds: "text-red-500",
-    Clubs: "text-slate-900",
-};
-
 function CardInHand({
     card,
     index,
@@ -247,7 +234,7 @@ function CardInHand({
         >
             <div
                 className={cn(
-                    "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none",
+                    "relative rounded-lg shadow-lg bg-linear-to-br from-white to-gray-50 border border-gray-200 overflow-hidden select-none",
                     prefersReducedMotion ? "transition-none" : "duration-300",
                     isInteractive && !isDisabled && "cursor-pointer",
                     isInteractive &&
@@ -266,41 +253,11 @@ function CardInHand({
             >
                 {/* Card Face */}
                 {!showBack && card && (
-                    <div className="absolute inset-0">
-                        {/* Top-left corner */}
-                        <div
-                            className={cn(
-                                "absolute top-0.5 left-0.5",
-                                "text-[10px] font-bold leading-none flex flex-col items-center",
-                                SUIT_COLORS[card.suit],
-                            )}
-                        >
-                            <span>{card.rank}</span>
-                            <span>{SUIT_MAP[card.suit]}</span>
-                        </div>
-
-                        {/* Center suit */}
-                        <div
-                            className={cn(
-                                "absolute inset-0 flex items-center justify-center text-xl",
-                                SUIT_COLORS[card.suit],
-                            )}
-                        >
-                            {SUIT_MAP[card.suit]}
-                        </div>
-
-                        {/* Bottom-right corner (rotated) */}
-                        <div
-                            className={cn(
-                                "absolute bottom-0.5 right-0.5 rotate-180",
-                                "text-[10px] font-bold leading-none flex flex-col items-center",
-                                SUIT_COLORS[card.suit],
-                            )}
-                        >
-                            <span>{card.rank}</span>
-                            <span>{SUIT_MAP[card.suit]}</span>
-                        </div>
-                    </div>
+                    <CardFace
+                        card={card}
+                        cornerTextSizeClass="text-[10px]"
+                        centerTextSizeClass="text-xl"
+                    />
                 )}
 
                 {/* Card Back */}

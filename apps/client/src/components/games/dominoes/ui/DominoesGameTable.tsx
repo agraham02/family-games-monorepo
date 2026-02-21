@@ -63,10 +63,10 @@ function getEdgePosition(index: number, playerCount: number): EdgePosition {
  */
 function canPlaceTileOnSide(
     tile: TileType,
-    board: DominoesData["board"],
+    board: DominoesData["board"] | undefined,
     side: "left" | "right",
 ): boolean {
-    if (board.tiles.length === 0) {
+    if (!board || board.tiles.length === 0) {
         return true;
     }
 
@@ -81,9 +81,9 @@ function canPlaceTileOnSide(
  */
 function hasLegalMove(
     tiles: TileType[],
-    board: DominoesData["board"],
+    board: DominoesData["board"] | undefined,
 ): boolean {
-    if (board.tiles.length === 0) return tiles.length > 0;
+    if (!board || board.tiles.length === 0) return tiles.length > 0;
 
     return tiles.some(
         (tile) =>
@@ -134,6 +134,8 @@ function DominoesGameTable({
         playerData.localOrdering?.length || gameData.playOrder.length;
     const localOrdering = playerData.localOrdering || gameData.playOrder;
     const hand = useMemo(() => playerData.hand || [], [playerData.hand]);
+    const board =
+        gameData.board ?? { tiles: [], leftEnd: null, rightEnd: null };
     const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
     const isPlaying = gameData.phase === "playing";
 
@@ -172,21 +174,21 @@ function DominoesGameTable({
     const canPlaceLeft = useMemo(
         () =>
             selectedTile !== null &&
-            canPlaceTileOnSide(selectedTile, gameData.board, "left"),
-        [selectedTile, gameData.board],
+            canPlaceTileOnSide(selectedTile, board, "left"),
+        [selectedTile, board],
     );
 
     const canPlaceRight = useMemo(
         () =>
             selectedTile !== null &&
-            canPlaceTileOnSide(selectedTile, gameData.board, "right"),
-        [selectedTile, gameData.board],
+            canPlaceTileOnSide(selectedTile, board, "right"),
+        [selectedTile, board],
     );
 
     // Check if player must pass
     const mustPass = useMemo(
-        () => isMyTurn && isPlaying && !hasLegalMove(hand, gameData.board),
-        [isMyTurn, isPlaying, hand, gameData.board],
+        () => isMyTurn && isPlaying && !hasLegalMove(hand, board),
+        [isMyTurn, isPlaying, hand, board],
     );
 
     // Handle placing a tile
@@ -213,15 +215,15 @@ function DominoesGameTable({
                 return;
             }
 
-            const leftValid = canPlaceTileOnSide(tile, gameData.board, "left");
+            const leftValid = canPlaceTileOnSide(tile, board, "left");
             const rightValid = canPlaceTileOnSide(
                 tile,
-                gameData.board,
+                board,
                 "right",
             );
 
             // Empty board - auto place on left
-            if (gameData.board.tiles.length === 0) {
+            if (board.tiles.length === 0) {
                 onPlaceTile(tile, "left");
                 setLastPlayedSide("left");
                 setSelectedTile(null);
@@ -252,7 +254,7 @@ function DominoesGameTable({
             // Tile not playable (shouldn't happen with hints enabled)
             toast.error("This tile cannot be played");
         },
-        [isMyTurn, isPlaying, gameData.board, onPlaceTile],
+        [isMyTurn, isPlaying, board, onPlaceTile],
     );
 
     // Handle pass with animation
@@ -514,7 +516,7 @@ function DominoesGameTable({
                                                   )
                                                 : hand
                                         }
-                                        board={gameData.board}
+                                        board={board}
                                         selectedTile={selectedTile}
                                         isMyTurn={
                                             isMyTurn && isPlaying && !isDealing
@@ -546,7 +548,7 @@ function DominoesGameTable({
 
                         {/* Dominoes Board */}
                         <Board
-                            board={gameData.board}
+                            board={board}
                             selectedTile={selectedTile}
                             isMyTurn={isMyTurn && isPlaying}
                             canPlaceLeft={canPlaceLeft}

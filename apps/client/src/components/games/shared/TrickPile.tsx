@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { PlayingCard as PlayingCardType } from "@shared/types";
 import { useGameTable } from "./GameTable";
+import { CardFace } from "./CardFace";
 import { usePrefersReducedMotion } from "@/hooks";
 
 // Hash cache to avoid recalculating on every render
@@ -72,24 +73,6 @@ function getCardPosition(
         rotation: randomRotation,
     };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Suit map for rendering
-// ─────────────────────────────────────────────────────────────────────────────
-
-const SUIT_MAP = {
-    Spades: "♠",
-    Hearts: "♥",
-    Diamonds: "♦",
-    Clubs: "♣",
-};
-
-const SUIT_COLORS = {
-    Spades: "text-slate-900",
-    Hearts: "text-red-500",
-    Diamonds: "text-red-500",
-    Clubs: "text-slate-900",
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TrickPile Component
@@ -196,7 +179,7 @@ function TrickPile({
                                 {/* Card */}
                                 <motion.div
                                     className={cn(
-                                        "relative bg-white shadow-xl",
+                                        "relative bg-linear-to-br from-white to-gray-50 shadow-xl",
                                         cardSizeClasses,
                                         "border border-gray-200 overflow-hidden",
                                         isWinning &&
@@ -225,54 +208,19 @@ function TrickPile({
                                     }
                                 >
                                     {/* Card content - corner layout like real playing cards */}
-                                    <div className="absolute inset-0">
-                                        {/* Top-left corner */}
-                                        <div
-                                            className={cn(
-                                                "absolute top-0.5 left-0.5",
-                                                isCompact
-                                                    ? "text-[8px]"
-                                                    : "text-[10px] md:text-xs",
-                                                "font-bold flex flex-col items-center leading-none",
-                                                SUIT_COLORS[play.card.suit],
-                                            )}
-                                        >
-                                            <span>{play.card.rank}</span>
-                                            <span>
-                                                {SUIT_MAP[play.card.suit]}
-                                            </span>
-                                        </div>
-
-                                        {/* Center suit */}
-                                        <div
-                                            className={cn(
-                                                "absolute inset-0 flex items-center justify-center",
-                                                isCompact
-                                                    ? "text-base"
-                                                    : "text-xl md:text-2xl",
-                                                SUIT_COLORS[play.card.suit],
-                                            )}
-                                        >
-                                            {SUIT_MAP[play.card.suit]}
-                                        </div>
-
-                                        {/* Bottom-right corner (rotated) */}
-                                        <div
-                                            className={cn(
-                                                "absolute bottom-0.5 right-0.5 rotate-180",
-                                                isCompact
-                                                    ? "text-[8px]"
-                                                    : "text-[10px] md:text-xs",
-                                                "font-bold flex flex-col items-center leading-none",
-                                                SUIT_COLORS[play.card.suit],
-                                            )}
-                                        >
-                                            <span>{play.card.rank}</span>
-                                            <span>
-                                                {SUIT_MAP[play.card.suit]}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <CardFace
+                                        card={play.card}
+                                        cornerTextSizeClass={
+                                            isCompact
+                                                ? "text-[8px]"
+                                                : "text-[10px] md:text-xs"
+                                        }
+                                        centerTextSizeClass={
+                                            isCompact
+                                                ? "text-base"
+                                                : "text-xl md:text-2xl"
+                                        }
+                                    />
                                 </motion.div>
 
                                 {/* Winning indicator */}

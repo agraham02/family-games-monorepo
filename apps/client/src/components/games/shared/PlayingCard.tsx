@@ -6,31 +6,7 @@ import Image from "next/image";
 import { motion } from "motion/react";
 import { PlayingCard as PlayingCardType } from "@shared/types";
 import { usePrefersReducedMotion } from "@/hooks";
-
-const SUIT_MAP = {
-    Spades: "♠",
-    Hearts: "♥",
-    Diamonds: "♦",
-    Clubs: "♣",
-};
-
-const SUIT_COLORS = {
-    Spades: "text-slate-900",
-    Hearts: "text-red-500",
-    Diamonds: "text-red-500",
-    Clubs: "text-slate-900",
-};
-
-// Joker display names
-const JOKER_DISPLAY: Record<string, string> = {
-    LJ: "Little Joker",
-    BJ: "Big Joker",
-};
-
-// Check if a card is a joker
-function isJoker(rank: string): boolean {
-    return rank === "LJ" || rank === "BJ";
-}
+import { CardFace } from "./CardFace";
 
 export type CardSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -103,7 +79,7 @@ function PlayingCard({
             layoutId={layoutId}
             layout={!prefersReducedMotion}
             className={cn(
-                "relative rounded-lg shadow-lg bg-white border border-gray-200 overflow-hidden select-none touch-manipulation",
+                "relative rounded-lg shadow-lg bg-linear-to-br from-white to-gray-50 border border-gray-200 overflow-hidden select-none touch-manipulation",
                 interactive && !disabled && "cursor-pointer",
                 selected && "ring-2 ring-blue-500 ring-offset-2",
                 highlighted && "ring-2 ring-yellow-400",
@@ -135,76 +111,14 @@ function PlayingCard({
         >
             {/* Card Face */}
             {!showBack && card && (
-                <div className="absolute inset-0">
-                    {isJoker(card.rank) ? (
-                        /* Joker card - special full-card design */
-                        <div className="h-full flex flex-col items-center justify-center gap-1 p-1">
-                            <div
-                                className={cn(
-                                    "text-4xl font-bold",
-                                    card.rank === "BJ"
-                                        ? "bg-linear-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text text-transparent"
-                                        : "bg-linear-to-br from-gray-300 via-slate-400 to-gray-500 bg-clip-text text-transparent",
-                                )}
-                            >
-                                🃏
-                            </div>
-                            <div
-                                className={cn(
-                                    textSize.corner,
-                                    "font-bold text-center",
-                                    card.rank === "BJ"
-                                        ? "text-amber-600"
-                                        : "text-slate-600",
-                                )}
-                            >
-                                {JOKER_DISPLAY[card.rank]}
-                            </div>
-                        </div>
-                    ) : (
-                        /* Standard card layout - corners positioned like real playing cards */
-                        <>
-                            {/* Top-left corner */}
-                            <div
-                                className={cn(
-                                    "absolute top-0.5 left-0.5",
-                                    textSize.corner,
-                                    textSize.cornerGap,
-                                    "font-bold leading-none flex flex-col items-center",
-                                    SUIT_COLORS[card.suit],
-                                )}
-                            >
-                                <span>{card.rank}</span>
-                                <span>{SUIT_MAP[card.suit]}</span>
-                            </div>
-
-                            {/* Center suit - larger decorative suit symbol */}
-                            <div
-                                className={cn(
-                                    "absolute inset-0 flex items-center justify-center",
-                                    textSize.center,
-                                    SUIT_COLORS[card.suit],
-                                )}
-                            >
-                                {SUIT_MAP[card.suit]}
-                            </div>
-
-                            {/* Bottom-right corner (rotated 180°) */}
-                            <div
-                                className={cn(
-                                    "absolute bottom-0.5 right-0.5 rotate-180",
-                                    textSize.corner,
-                                    textSize.cornerGap,
-                                    "font-bold leading-none flex flex-col items-center",
-                                    SUIT_COLORS[card.suit],
-                                )}
-                            >
-                                <span>{card.rank}</span>
-                                <span>{SUIT_MAP[card.suit]}</span>
-                            </div>
-                        </>
+                <CardFace
+                    card={card}
+                    cornerTextSizeClass={cn(
+                        textSize.corner,
+                        textSize.cornerGap,
                     )}
-                </div>
+                    centerTextSizeClass={textSize.center}
+                />
             )}
 
             {/* Card Back */}

@@ -5,6 +5,7 @@ import {
     SpadesData,
     SpadesPlayerData,
     PlayingCard,
+    SpadesClientSettings,
     DominoesData,
     DominoesPlayerData,
     Tile,
@@ -14,6 +15,9 @@ import {
     LRCPhase,
     DieRoll,
     DieFace,
+    DEFAULT_SPADES_SETTINGS,
+    DEFAULT_DOMINOES_SETTINGS,
+    DEFAULT_LRC_SETTINGS,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,12 +87,24 @@ const RANKS = [
     "A",
 ];
 
-function generateDeck(): PlayingCard[] {
+function generateDeck(jokersEnabled: boolean = false): PlayingCard[] {
     const deck: PlayingCard[] = [];
     for (const suit of SUITS) {
         for (const rank of RANKS) {
+            // If jokers are enabled, we typically remove the 2 of Clubs and 2 of Diamonds
+            if (
+                jokersEnabled &&
+                rank === "2" &&
+                (suit === "Clubs" || suit === "Diamonds")
+            ) {
+                continue;
+            }
             deck.push({ suit, rank });
         }
+    }
+    if (jokersEnabled) {
+        deck.push({ suit: "Spades", rank: "LJ" });
+        deck.push({ suit: "Spades", rank: "BJ" });
     }
     return deck;
 }
@@ -119,6 +135,7 @@ export interface SpadesMockOptions {
     round?: number;
     currentTurnIndex?: number;
     includeCurrentTrick?: boolean;
+    settings?: Partial<typeof DEFAULT_SPADES_SETTINGS>;
 }
 
 export function generateSpadesMockData(options: SpadesMockOptions = {}): {
@@ -132,9 +149,15 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         round = 1,
         currentTurnIndex = 0,
         includeCurrentTrick = false,
+        settings = {},
     } = options;
 
-    const deck = shuffle(generateDeck());
+    const finalSettings = {
+        ...DEFAULT_SPADES_SETTINGS,
+        ...settings,
+    };
+
+    const deck = shuffle(generateDeck(finalSettings.jokersEnabled));
     const hands = dealCards(deck, playerCount);
     const playOrder = Array.from({ length: playerCount }, (_, i) =>
         generatePlayerId(i),
@@ -224,15 +247,7 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         completedTricks: [],
         phase,
         round,
-        settings: {
-            allowNil: true,
-            bagsPenalty: 100,
-            winTarget: 500,
-            blindNilEnabled: false,
-            blindBidEnabled: false,
-            jokersEnabled: false,
-            deuceOfSpadesHigh: false,
-        },
+        settings: finalSettings,
         history: [],
         hands: hands.map((h) => h.map((c) => `${c.rank}${c.suit}`)),
         handsCounts,
@@ -287,6 +302,7 @@ export interface DominoesMockOptions {
     round?: number;
     currentTurnIndex?: number;
     boardTileCount?: number;
+    settings?: Partial<typeof DEFAULT_DOMINOES_SETTINGS>;
 }
 
 export function generateDominoesMockData(options: DominoesMockOptions = {}): {
@@ -300,7 +316,13 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         round = 1,
         currentTurnIndex = 0,
         boardTileCount = 0,
+        settings = {},
     } = options;
+
+    const finalSettings = {
+        ...DEFAULT_DOMINOES_SETTINGS,
+        ...settings,
+    };
 
     const allTiles = shuffle(generateDominoSet());
     const hands = dealTiles(allTiles, playerCount);
@@ -357,15 +379,9 @@ export function generateDominoesMockData(options: DominoesMockOptions = {}): {
         phase,
         round,
         consecutivePasses: 0,
-        gameMode: "individual",
+        gameMode: finalSettings.gameMode,
         playerScores,
-        settings: {
-            winTarget: 100,
-            roundLimit: null,
-            gameMode: "individual",
-            drawFromBoneyard: false,
-            turnTimeLimit: null,
-        },
+        settings: finalSettings,
     };
 
     const playerDataMap: Record<string, DominoesPlayerData> = {};
@@ -401,11 +417,8 @@ export interface LRCMockOptions {
     phase?: LRCPhase;
     centerPot?: number;
     currentPlayerIndex?: number;
-    startingChips?: number;
-    chipValue?: number;
-    wildMode?: boolean;
-    lastChipChallenge?: boolean;
     showRollResult?: boolean;
+    settings?: Partial<typeof DEFAULT_LRC_SETTINGS>;
 }
 
 /**
@@ -421,12 +434,14 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
         phase = "waiting-for-roll",
         centerPot = 5,
         currentPlayerIndex = 0,
-        startingChips = 3,
-        chipValue = 0.25,
-        wildMode = false,
-        lastChipChallenge = false,
         showRollResult = false,
+        settings = {},
     } = options;
+
+    const finalSettings = {
+        ...DEFAULT_LRC_SETTINGS,
+        ...settings,
+    };
 
     const localPlayerId = generatePlayerId(0);
 
@@ -437,8 +452,12 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
         // Distribute chips somewhat randomly (some to center)
         const chips =
             i === 0
-                ? startingChips
-                : Math.max(0, startingChips - Math.floor(Math.random() * 2));
+                ? finalSettings.startingChips
+                : Math.max(
+                      0,
+                      finalSettings.startingChips -
+                          Math.floor(Math.random() * 2),
+                  );
         lrcPlayers.push({
             id,
             name: MOCK_PLAYER_NAMES[i] || `Player ${i + 1}`,
@@ -452,7 +471,7 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
     let currentRoll: DieRoll[] | null = null;
     if (showRollResult || phase === "showing-results") {
         const faces: DieFace[] = ["L", "C", "R", "DOT", "DOT", "DOT"];
-        if (wildMode) {
+        if (finalSettings.wildMode) {
             faces[0] = "WILD";
         }
         const diceCount = Math.min(3, lrcPlayers[currentPlayerIndex].chips);
@@ -499,15 +518,7 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
         lastChipChallengeSuccess: null,
         roundNumber: 1,
         roundWinners: [],
-        settings: {
-            winTarget: 100,
-            roundLimit: null,
-            turnTimeLimit: 30,
-            startingChips,
-            chipValue,
-            wildMode,
-            lastChipChallenge,
-        },
+        settings: finalSettings,
     };
 
     const playerDataMap: Record<string, LRCPlayerData> = {};

@@ -1,43 +1,57 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "motion/react";
+import { motion, useDragControls } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GripHorizontal, Maximize2, Minimize2 } from "lucide-react";
+import { SettingDefinition } from "@shared/types";
 
 interface FloatingControlPanelProps {
     games: { id: string; name: string }[];
     selectedGame: string;
     onSelectGame: (gameId: string) => void;
-    
+
     players: { id: string; name: string }[];
     selectedPlayerId: string;
     onSelectPlayer: (playerId: string) => void;
-    
+
     scenarios: { id: string; name: string }[];
     selectedScenario: string;
     onSelectScenario: (scenarioId: string) => void;
-    
+
     actionLog: Array<{ event: string; payload: unknown; time: string }>;
     onClearLog: () => void;
-    
+
     gameStateJson: string;
     onUpdateGameState: (json: string) => void;
-    
+
     latency: number;
     onLatencyChange: (val: number) => void;
-    
+
     simulateError: boolean;
     onSimulateErrorChange: (val: boolean) => void;
-    
+
     autoPlay: boolean;
     onAutoPlayChange: (val: boolean) => void;
+
+    settingsSchema?: SettingDefinition[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currentSettings?: Record<string, any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onUpdateSetting?: (key: string, value: any) => void;
+    onRegenerateGame?: () => void;
 }
 
 export function FloatingControlPanel({
@@ -60,9 +74,14 @@ export function FloatingControlPanel({
     onSimulateErrorChange,
     autoPlay,
     onAutoPlayChange,
+    settingsSchema = [],
+    currentSettings = {},
+    onUpdateSetting,
+    onRegenerateGame,
 }: FloatingControlPanelProps) {
     const [isMinimized, setIsMinimized] = useState(false);
     const [jsonInput, setJsonInput] = useState(gameStateJson);
+    const dragControls = useDragControls();
 
     // Update local json input when external state changes, but only if we aren't actively editing
     // For simplicity, we'll just update it when the tab is opened or game changes.
@@ -85,7 +104,11 @@ export function FloatingControlPanel({
                 dragMomentum={false}
                 className="fixed bottom-4 right-4 z-50"
             >
-                <Button variant="default" onClick={() => setIsMinimized(false)} className="shadow-lg">
+                <Button
+                    variant="default"
+                    onClick={() => setIsMinimized(false)}
+                    className="shadow-lg"
+                >
                     <Maximize2 className="w-4 h-4 mr-2" />
                     Open Debug Panel
                 </Button>
@@ -96,6 +119,8 @@ export function FloatingControlPanel({
     return (
         <motion.div
             drag
+            dragControls={dragControls}
+            dragListener={false}
             dragMomentum={false}
             className="fixed top-4 right-4 z-50 w-96 shadow-2xl"
             initial={{ opacity: 0, y: 20 }}
@@ -103,34 +128,81 @@ export function FloatingControlPanel({
         >
             <Card className="border-2 border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                 <CardHeader className="p-3 border-b flex flex-row items-center justify-between space-y-0 bg-muted/50">
-                    <div className="flex items-center gap-2 drag-handle cursor-grab active:cursor-grabbing">
+                    <div
+                        className="flex items-center gap-2 drag-handle cursor-grab active:cursor-grabbing"
+                        onPointerDown={(e) => dragControls.start(e.nativeEvent)}
+                    >
                         <GripHorizontal className="w-5 h-5 text-muted-foreground" />
-                        <CardTitle className="text-sm font-bold">Debug Engine</CardTitle>
+                        <CardTitle className="text-sm font-bold">
+                            Debug Engine
+                        </CardTitle>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsMinimized(true)}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setIsMinimized(true)}
+                    >
                         <Minimize2 className="w-4 h-4" />
                     </Button>
                 </CardHeader>
                 <CardContent className="p-0">
                     <Tabs defaultValue="general" className="w-full">
-                        <TabsList className="w-full justify-start rounded-none border-b h-auto p-0 bg-transparent">
-                            <TabsTrigger value="general" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2">General</TabsTrigger>
-                            <TabsTrigger value="state" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2">State</TabsTrigger>
-                            <TabsTrigger value="network" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2">Network</TabsTrigger>
-                            <TabsTrigger value="log" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2">Log</TabsTrigger>
+                        <TabsList className="w-full justify-start rounded-none border-b h-auto p-0 bg-transparent overflow-x-auto flex-nowrap">
+                            <TabsTrigger
+                                value="general"
+                                className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2"
+                            >
+                                General
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="settings"
+                                className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2"
+                            >
+                                Settings
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="state"
+                                className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2"
+                            >
+                                State
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="network"
+                                className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2"
+                            >
+                                Network
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="log"
+                                className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary py-2"
+                            >
+                                Log
+                            </TabsTrigger>
                         </TabsList>
-                        
+
                         <div className="p-4 max-h-[60vh] overflow-y-auto">
-                            <TabsContent value="general" className="mt-0 space-y-4">
+                            <TabsContent
+                                value="general"
+                                className="mt-0 space-y-4"
+                            >
                                 <div className="space-y-2">
                                     <Label>Game</Label>
-                                    <Select value={selectedGame} onValueChange={onSelectGame}>
+                                    <Select
+                                        value={selectedGame}
+                                        onValueChange={onSelectGame}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select game" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {games.map(g => (
-                                                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                                            {games.map((g) => (
+                                                <SelectItem
+                                                    key={g.id}
+                                                    value={g.id}
+                                                >
+                                                    {g.name}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -138,13 +210,21 @@ export function FloatingControlPanel({
 
                                 <div className="space-y-2">
                                     <Label>Scenario</Label>
-                                    <Select value={selectedScenario} onValueChange={onSelectScenario}>
+                                    <Select
+                                        value={selectedScenario}
+                                        onValueChange={onSelectScenario}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select scenario" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {scenarios.map(s => (
-                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                            {scenarios.map((s) => (
+                                                <SelectItem
+                                                    key={s.id}
+                                                    value={s.id}
+                                                >
+                                                    {s.name}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -152,62 +232,317 @@ export function FloatingControlPanel({
 
                                 <div className="space-y-2">
                                     <Label>Perspective (Player View)</Label>
-                                    <Select value={selectedPlayerId} onValueChange={onSelectPlayer}>
+                                    <Select
+                                        value={selectedPlayerId}
+                                        onValueChange={onSelectPlayer}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select player" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {players.map(p => (
-                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                            {players.map((p) => (
+                                                <SelectItem
+                                                    key={p.id}
+                                                    value={p.id}
+                                                >
+                                                    {p.name}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="flex items-center justify-between pt-2 border-t">
-                                    <Label htmlFor="auto-play" className="flex flex-col space-y-1">
+                                    <Label
+                                        htmlFor="auto-play"
+                                        className="flex flex-col space-y-1"
+                                    >
                                         <span>Auto-Play</span>
-                                        <span className="font-normal text-xs text-muted-foreground">Automatically dispatch random valid actions</span>
+                                        <span className="font-normal text-xs text-muted-foreground">
+                                            Automatically dispatch random valid
+                                            actions
+                                        </span>
                                     </Label>
-                                    <Switch id="auto-play" checked={autoPlay} onCheckedChange={onAutoPlayChange} />
+                                    <Switch
+                                        id="auto-play"
+                                        checked={autoPlay}
+                                        onCheckedChange={onAutoPlayChange}
+                                    />
                                 </div>
+
+                                {onRegenerateGame && (
+                                    <div className="pt-2 border-t">
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={onRegenerateGame}
+                                        >
+                                            Regenerate Game
+                                        </Button>
+                                    </div>
+                                )}
                             </TabsContent>
 
-                            <TabsContent value="state" className="mt-0 space-y-4">
+                            <TabsContent
+                                value="settings"
+                                className="mt-0 space-y-4"
+                            >
+                                {settingsSchema.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-4">
+                                        No settings schema available for this
+                                        game.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {settingsSchema.map((def) => {
+                                            const value =
+                                                currentSettings[def.key] ??
+                                                def.default;
+
+                                            if (def.type === "boolean") {
+                                                return (
+                                                    <div
+                                                        key={def.key}
+                                                        className="flex items-center justify-between"
+                                                    >
+                                                        <Label
+                                                            htmlFor={`setting-${def.key}`}
+                                                            className="flex flex-col space-y-1"
+                                                        >
+                                                            <span>
+                                                                {def.label}
+                                                            </span>
+                                                            <span className="font-normal text-xs text-muted-foreground">
+                                                                {
+                                                                    def.description
+                                                                }
+                                                            </span>
+                                                        </Label>
+                                                        <Switch
+                                                            id={`setting-${def.key}`}
+                                                            checked={Boolean(
+                                                                value,
+                                                            )}
+                                                            onCheckedChange={(
+                                                                checked,
+                                                            ) =>
+                                                                onUpdateSetting?.(
+                                                                    def.key,
+                                                                    checked,
+                                                                )
+                                                            }
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (
+                                                def.type === "number" ||
+                                                def.type === "nullableNumber"
+                                            ) {
+                                                return (
+                                                    <div
+                                                        key={def.key}
+                                                        className="space-y-2"
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <Label
+                                                                htmlFor={`setting-${def.key}`}
+                                                            >
+                                                                {def.label}
+                                                            </Label>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {value === null
+                                                                    ? "None"
+                                                                    : `${value}${def.suffix ? ` ${def.suffix}` : ""}`}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Slider
+                                                                id={`setting-${def.key}`}
+                                                                value={[
+                                                                    value ===
+                                                                    null
+                                                                        ? (def.min ??
+                                                                          0)
+                                                                        : Number(
+                                                                              value,
+                                                                          ),
+                                                                ]}
+                                                                onValueChange={(
+                                                                    v,
+                                                                ) =>
+                                                                    onUpdateSetting?.(
+                                                                        def.key,
+                                                                        v[0],
+                                                                    )
+                                                                }
+                                                                min={def.min}
+                                                                max={def.max}
+                                                                step={def.step}
+                                                                disabled={
+                                                                    value ===
+                                                                    null
+                                                                }
+                                                                className="flex-1"
+                                                            />
+                                                            {def.type ===
+                                                                "nullableNumber" && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        onUpdateSetting?.(
+                                                                            def.key,
+                                                                            value ===
+                                                                                null
+                                                                                ? def.default
+                                                                                : null,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {value ===
+                                                                    null
+                                                                        ? "Enable"
+                                                                        : "Disable"}
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {def.description}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (
+                                                def.type === "select" &&
+                                                def.options
+                                            ) {
+                                                return (
+                                                    <div
+                                                        key={def.key}
+                                                        className="space-y-2"
+                                                    >
+                                                        <Label
+                                                            htmlFor={`setting-${def.key}`}
+                                                        >
+                                                            {def.label}
+                                                        </Label>
+                                                        <Select
+                                                            value={String(
+                                                                value,
+                                                            )}
+                                                            onValueChange={(
+                                                                v,
+                                                            ) =>
+                                                                onUpdateSetting?.(
+                                                                    def.key,
+                                                                    v,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger
+                                                                id={`setting-${def.key}`}
+                                                            >
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {def.options.map(
+                                                                    (opt) => (
+                                                                        <SelectItem
+                                                                            key={
+                                                                                opt.value
+                                                                            }
+                                                                            value={
+                                                                                opt.value
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                opt.label
+                                                                            }
+                                                                        </SelectItem>
+                                                                    ),
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {def.description}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return null;
+                                        })}
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            <TabsContent
+                                value="state"
+                                className="mt-0 space-y-4"
+                            >
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <Label>Master Game State (JSON)</Label>
-                                        <Button size="sm" variant="secondary" onClick={handleApplyJson}>Apply</Button>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={handleApplyJson}
+                                        >
+                                            Apply
+                                        </Button>
                                     </div>
-                                    <textarea 
+                                    <textarea
                                         className="w-full h-64 p-2 font-mono text-xs border rounded-md bg-muted/50"
                                         value={jsonInput}
-                                        onChange={(e) => setJsonInput(e.target.value)}
+                                        onChange={(e) =>
+                                            setJsonInput(e.target.value)
+                                        }
                                     />
                                 </div>
                             </TabsContent>
 
-                            <TabsContent value="network" className="mt-0 space-y-4">
+                            <TabsContent
+                                value="network"
+                                className="mt-0 space-y-4"
+                            >
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <Label>Simulated Latency</Label>
-                                            <span className="text-xs text-muted-foreground">{latency}ms</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {latency}ms
+                                            </span>
                                         </div>
-                                        <Slider 
-                                            value={[latency]} 
-                                            onValueChange={(v) => onLatencyChange(v[0])} 
-                                            max={2000} 
-                                            step={50} 
+                                        <Slider
+                                            value={[latency]}
+                                            onValueChange={(v) =>
+                                                onLatencyChange(v[0])
+                                            }
+                                            max={2000}
+                                            step={50}
                                         />
                                     </div>
-                                    
+
                                     <div className="flex items-center justify-between pt-2 border-t">
-                                        <Label htmlFor="sim-error" className="flex flex-col space-y-1">
+                                        <Label
+                                            htmlFor="sim-error"
+                                            className="flex flex-col space-y-1"
+                                        >
                                             <span>Simulate Error</span>
-                                            <span className="font-normal text-xs text-muted-foreground">Next action will fail</span>
+                                            <span className="font-normal text-xs text-muted-foreground">
+                                                Next action will fail
+                                            </span>
                                         </Label>
-                                        <Switch id="sim-error" checked={simulateError} onCheckedChange={onSimulateErrorChange} />
+                                        <Switch
+                                            id="sim-error"
+                                            checked={simulateError}
+                                            onCheckedChange={
+                                                onSimulateErrorChange
+                                            }
+                                        />
                                     </div>
                                 </div>
                             </TabsContent>
@@ -215,16 +550,33 @@ export function FloatingControlPanel({
                             <TabsContent value="log" className="mt-0 space-y-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <Label>Action Log</Label>
-                                    <Button size="sm" variant="ghost" onClick={onClearLog}>Clear</Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={onClearLog}
+                                    >
+                                        Clear
+                                    </Button>
                                 </div>
                                 <div className="space-y-2">
                                     {actionLog.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground text-center py-4">No actions intercepted yet.</p>
+                                        <p className="text-xs text-muted-foreground text-center py-4">
+                                            No actions intercepted yet.
+                                        </p>
                                     ) : (
                                         actionLog.map((log, i) => (
-                                            <div key={i} className="text-xs p-2 rounded bg-muted/50 border font-mono break-all">
-                                                <div className="font-bold text-primary">{log.event}</div>
-                                                <div className="text-muted-foreground mt-1">{JSON.stringify(log.payload)}</div>
+                                            <div
+                                                key={i}
+                                                className="text-xs p-2 rounded bg-muted/50 border font-mono break-all"
+                                            >
+                                                <div className="font-bold text-primary">
+                                                    {log.event}
+                                                </div>
+                                                <div className="text-muted-foreground mt-1">
+                                                    {JSON.stringify(
+                                                        log.payload,
+                                                    )}
+                                                </div>
                                             </div>
                                         ))
                                     )}
