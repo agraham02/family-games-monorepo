@@ -6,19 +6,24 @@ import { cn } from "@/lib/utils";
 import { Tile as TileType, BoardState } from "@shared/types";
 import Tile from "./Tile";
 import { TileSize, useKeyboardNavigation } from "@/hooks";
+import { useEdgeRegion } from "@/components/games/shared/EdgeRegion";
 
 interface TileHandProps {
     tiles: TileType[];
     board: BoardState;
-    selectedTile: TileType | null;
-    isMyTurn: boolean;
-    onTileSelect: (tile: TileType | null) => void;
+    selectedTile?: TileType | null;
+    isMyTurn?: boolean;
+    onTileSelect?: (tile: TileType | null) => void;
     className?: string;
     showHints?: boolean;
     /** Prefix for layoutId to enable shared animations with Board */
     layoutIdPrefix?: string;
     /** Tile size for responsive display */
     tileSize?: TileSize;
+    /** Whether this is the local player's hand */
+    isLocalPlayer?: boolean;
+    /** Number of tiles (for opponents showing backs) */
+    tileCount?: number;
 }
 
 /**
@@ -45,14 +50,19 @@ function canPlayTile(tile: TileType, board: BoardState): boolean {
 export default function TileHand({
     tiles,
     board,
-    selectedTile,
-    isMyTurn,
+    selectedTile = null,
+    isMyTurn = false,
     onTileSelect,
     className,
     showHints = false,
     layoutIdPrefix,
     tileSize = "md",
+    isLocalPlayer = true,
+    tileCount = 0,
 }: TileHandProps) {
+    const edgeRegion = useEdgeRegion();
+    const rotation = edgeRegion?.cardRotation ?? 0;
+
     const playableTiles = tiles.filter((t) => canPlayTile(t, board));
     const hasPlayableTile = playableTiles.length > 0;
     const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -67,7 +77,7 @@ export default function TileHand({
     const handleConfirm = useCallback(
         (index: number) => {
             const tile = tiles[index];
-            if (tile) {
+            if (tile && onTileSelect) {
                 onTileSelect(selectedTile?.id === tile.id ? null : tile);
             }
         },
@@ -75,7 +85,7 @@ export default function TileHand({
     );
 
     const handleCancel = useCallback(() => {
-        if (selectedTile) {
+        if (selectedTile && onTileSelect) {
             onTileSelect(null);
         }
         setFocusedIndex(-1);
@@ -87,7 +97,7 @@ export default function TileHand({
         onSelect: setFocusedIndex,
         onConfirm: handleConfirm,
         onCancel: handleCancel,
-        enabled: isMyTurn && tiles.length > 0,
+        enabled: isLocalPlayer && isMyTurn && tiles.length > 0,
         wrap: true,
     });
 
@@ -98,10 +108,43 @@ export default function TileHand({
         }
     }, [focusedIndex]);
 
+    // If not local player, render face-down tiles
+    if (!isLocalPlayer) {
+        const count = Math.max(0, tileCount);
+        return (
+            <div className={cn("flex items-center justify-center", className)}>
+                <div
+                    className="flex gap-1 sm:gap-2 flex-row"
+                    style={{
+                        transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                        transformOrigin: "center center",
+                    }}
+                >
+                    {Array.from({ length: count }).map((_, index) => (
+                        <motion.div
+                            key={`facedown-${index}`}
+                            className="shrink-0"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.03 }}
+                        >
+                            <Tile
+                                tile={{ id: `facedown-${index}`, left: 0, right: 0 }}
+                                isFaceDown={true}
+                                size={tileSize}
+                                rotation={0} // Container handles rotation
+                            />
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className={cn("w-full", className)}>
+        <div className={cn("w-full flex flex-col items-center", className)}>
             {/* Hand label with count and status */}
-            <div className="mb-2 flex items-center justify-between px-1">
+            <div className="mb-2 flex items-center justify-between px-1 w-full max-w-md">
                 <span className="text-sm font-medium text-white/70 flex items-center gap-2">
                     Your Hand
                     <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">
@@ -127,7 +170,7 @@ export default function TileHand({
             {/* Tiles container with horizontal scroll */}
             <div
                 className={cn(
-                    "flex gap-1 sm:gap-2 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30 transition-opacity duration-300",
+                    "flex gap-1 sm:gap-2 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30 transition-opacity duration-300 justify-center w-full",
                     !isMyTurn && "opacity-50",
                 )}
                 role="listbox"
@@ -172,7 +215,7 @@ export default function TileHand({
                                         : undefined
                                 }
                                 onClick={
-                                    isMyTurn
+                                    isMyTurn && onTileSelect
                                         ? () =>
                                               onTileSelect(
                                                   isSelected ? null : tile,
@@ -180,6 +223,7 @@ export default function TileHand({
                                         : undefined
                                 }
                                 onFocus={() => setFocusedIndex(index)}
+                                rotation={rotation}
                             />
                         </motion.div>
                     );

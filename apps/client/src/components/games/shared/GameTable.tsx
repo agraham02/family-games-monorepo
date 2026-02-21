@@ -28,7 +28,7 @@ interface LayoutModeConfig {
 function getLayoutMode(
     width: number,
     height: number,
-    playerCount: number
+    playerCount: number,
 ): LayoutMode {
     const isLandscape = width > height;
     const isMobileLandscape = isLandscape && height < 500;
@@ -56,7 +56,7 @@ function getLayoutMode(
  */
 function getLayoutConfig(
     mode: LayoutMode,
-    playerCount: number
+    playerCount: number,
 ): LayoutModeConfig {
     switch (mode) {
         case "compact":
@@ -155,7 +155,7 @@ function GameTable({
     const layoutMode = getLayoutMode(
         dimensions.width,
         dimensions.height,
-        playerCount
+        playerCount,
     );
     const layoutConfig = getLayoutConfig(layoutMode, playerCount);
 
@@ -365,6 +365,8 @@ interface TableCenterProps {
     className?: string;
     /** Minimum size of the center area */
     minSize?: number;
+    /** Optional inline styles */
+    style?: React.CSSProperties;
 }
 
 /**
@@ -375,12 +377,13 @@ export function TableCenter({
     children,
     className,
     minSize = 100,
+    style,
 }: TableCenterProps) {
     return (
         <motion.div
             className={cn(
                 "flex flex-col items-center justify-center z-20",
-                className
+                className,
             )}
             style={{
                 gridArea: "center",
@@ -388,6 +391,7 @@ export function TableCenter({
                 minHeight: minSize,
                 // Ensure center is truly centered within the grid cell
                 placeSelf: "center",
+                ...style,
             }}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

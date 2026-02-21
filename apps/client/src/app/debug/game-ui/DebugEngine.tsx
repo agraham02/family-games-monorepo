@@ -17,19 +17,12 @@ function GameComponentWrapper({
     GameComponent,
     gameData: initialGameData,
     playerData: initialPlayerData,
-    setMasterGameState,
     selectedPlayerId,
 }: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     GameComponent: any;
     gameData: GameData;
     playerData: PlayerData | null;
-    setMasterGameState: React.Dispatch<
-        React.SetStateAction<{
-            gameData: GameData | null;
-            playerDataMap: Record<string, PlayerData>;
-        }>
-    >;
     selectedPlayerId: string;
 }) {
     const { socket, connected } = useWebSocket();
@@ -77,7 +70,7 @@ function GameComponentWrapper({
         if (!socket) return;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleGameUpdate = (payload: any) => {
+        const handleGameUpdate = (_payload: any) => {
             // In a real app, we'd check if this update confirms our action
             // For debug, we just confirm the oldest action when we get an update
             if (optimisticAction.hasPendingAction) {
@@ -220,9 +213,9 @@ export function DebugEngine() {
 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const newGameData = { ...prevState.gameData } as any;
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const newPlayerDataMap = {
                         ...prevState.playerDataMap,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     } as any;
 
                     // Basic reducer for Spades PLAY_CARD
@@ -283,9 +276,9 @@ export function DebugEngine() {
                                 setMasterGameState((s) => {
                                     if (!s.gameData) return s;
                                     const nextState = { ...s };
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                     const nextGameData = {
                                         ...s.gameData,
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                     } as any;
 
                                     // Move trick to completed
@@ -446,9 +439,9 @@ export function DebugEngine() {
             );
 
             if (selectedGameId === "spades" && gameData.phase === "playing") {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const playerData = masterGameState.playerDataMap[
                     currentTurnPlayerId
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ] as any;
                 if (
                     playerData &&
@@ -486,9 +479,9 @@ export function DebugEngine() {
                 selectedGameId === "dominoes" &&
                 gameData.phase === "playing"
             ) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const playerData = masterGameState.playerDataMap[
                     currentTurnPlayerId
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ] as any;
                 if (
                     playerData &&

@@ -15,7 +15,7 @@ interface ActionConfirmationBarProps {
     /** Handler for confirm action */
     onConfirm: () => void;
     /** Handler for cancel action */
-    onCancel: () => void;
+    onCancel?: () => void;
     /** Label for the confirm button (e.g., "Play Card", "Place Tile") */
     confirmLabel?: string;
     /** Label for the cancel button */
@@ -24,6 +24,16 @@ interface ActionConfirmationBarProps {
     disabled?: boolean;
     /** Additional class name for the container */
     className?: string;
+    /** Variant for the confirm button */
+    confirmVariant?:
+        | "default"
+        | "destructive"
+        | "outline"
+        | "secondary"
+        | "ghost"
+        | "link";
+    /** Optional message to display above the buttons */
+    message?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,33 +64,49 @@ function ActionConfirmationBar({
     cancelLabel = "Cancel",
     disabled = false,
     className,
+    confirmVariant,
+    message,
 }: ActionConfirmationBarProps) {
     return (
         <AnimatePresence>
             {isVisible && (
                 <motion.div
                     className={cn(
-                        "fixed bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2 md:gap-3",
-                        className
+                        "fixed bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2",
+                        className,
                     )}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 20 }}
                 >
-                    <Button
-                        onClick={onConfirm}
-                        disabled={disabled}
-                        className="bg-emerald-600 hover:bg-emerald-700 shadow-lg text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 h-auto"
-                    >
-                        {confirmLabel}
-                    </Button>
-                    <Button
-                        onClick={onCancel}
-                        variant="secondary"
-                        className="shadow-lg text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 h-auto"
-                    >
-                        {cancelLabel}
-                    </Button>
+                    {message && (
+                        <span className="text-white/90 text-xs md:text-sm font-medium bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                            {message}
+                        </span>
+                    )}
+                    <div className="flex gap-2 md:gap-3">
+                        <Button
+                            onClick={onConfirm}
+                            disabled={disabled}
+                            variant={confirmVariant}
+                            className={cn(
+                                "shadow-lg text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 h-auto",
+                                !confirmVariant &&
+                                    "bg-emerald-600 hover:bg-emerald-700",
+                            )}
+                        >
+                            {confirmLabel}
+                        </Button>
+                        {onCancel && (
+                            <Button
+                                onClick={onCancel}
+                                variant="secondary"
+                                className="shadow-lg text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 h-auto"
+                            >
+                                {cancelLabel}
+                            </Button>
+                        )}
+                    </div>
                 </motion.div>
             )}
         </AnimatePresence>

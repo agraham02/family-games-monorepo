@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useEffect, useState, useMemo } from "react";
+import React, { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { BoardState, Tile as TileType } from "@shared/types";
@@ -40,7 +40,6 @@ export default function Board({
     canPlaceLeft,
     canPlaceRight,
     onPlaceTile,
-    lastPlayedSide,
     className,
     layoutIdPrefix,
     tileSize = "sm",
@@ -58,39 +57,12 @@ export default function Board({
         board.tiles,
     );
 
-    const activePoints = useMemo(() => {
-        const points = [];
-        if (selectedTile && isMyTurn) {
-            if (canPlaceLeft && leftEndPos)
-                points.push({ x: leftEndPos.x, y: leftEndPos.y });
-            if (canPlaceRight && rightEndPos)
-                points.push({ x: rightEndPos.x, y: rightEndPos.y });
-        } else if (board.tiles.length > 0) {
-            // Focus on the last played tile if we know the side, otherwise center
-            if (lastPlayedSide === "left" && leftEndPos) {
-                points.push({ x: leftEndPos.x, y: leftEndPos.y });
-            } else if (lastPlayedSide === "right" && rightEndPos) {
-                points.push({ x: rightEndPos.x, y: rightEndPos.y });
-            }
-        }
-        return points;
-    }, [
-        selectedTile,
-        isMyTurn,
-        canPlaceLeft,
-        canPlaceRight,
-        leftEndPos,
-        rightEndPos,
-        board.tiles.length,
-        lastPlayedSide,
-    ]);
-
     const { camera, isManualPan, handlePan, handleZoom, recenter } =
         useDominoCamera({
             containerWidth,
             containerHeight,
             logicalBounds: bounds,
-            activePoints,
+            activePoints: [], // Always auto-scale to fit the entire board
             unitSize,
             padding: 60,
         });
@@ -137,7 +109,7 @@ export default function Board({
     const showGhostPreviews = selectedTile && isMyTurn && !isEmpty;
 
     return (
-        <div className={cn("relative w-full", className)}>
+        <div className={cn("relative w-full flex flex-col", className)}>
             {/* Board label with end values */}
             <div className="mb-2 text-sm font-medium text-white/70 flex items-center justify-between px-1">
                 <span className="flex items-center gap-2">
@@ -164,7 +136,7 @@ export default function Board({
             {/* Board container */}
             <div
                 ref={containerRef}
-                className="relative bg-linear-to-b from-green-700 to-green-800 dark:from-green-800 dark:to-green-900 rounded-xl min-h-50 sm:min-h-75 shadow-inner border border-green-600/30 overflow-hidden touch-none cursor-grab active:cursor-grabbing"
+                className="relative flex-1 w-full overflow-hidden touch-none cursor-grab active:cursor-grabbing"
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}

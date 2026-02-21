@@ -14,7 +14,6 @@ import {
     DominoesPlayerData,
     Tile as TileType,
 } from "@shared/types";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import TileHand from "./TileHand";
 import Board from "./Board";
@@ -27,6 +26,7 @@ import {
     EdgePosition,
     DealingItem,
     DealingOverlay,
+    ActionConfirmationBar,
 } from "@/components/games/shared";
 import { useTurnTimer, useResponsiveTileSize } from "@/hooks";
 import { useWebSocket } from "@/contexts/WebSocketContext";
@@ -120,7 +120,7 @@ function DominoesGameTable({
     >({});
 
     // Responsive tile sizing
-    const { boardTileSize, handTileSize, ghostTileSize, isCompact } =
+    const { boardTileSize, handTileSize, ghostTileSize } =
         useResponsiveTileSize();
 
     // Refs for deal animation tracking
@@ -134,11 +134,15 @@ function DominoesGameTable({
         playerData.localOrdering?.length || gameData.playOrder.length;
     const localOrdering = playerData.localOrdering || gameData.playOrder;
     const hand = useMemo(() => playerData.hand || [], [playerData.hand]);
-    const board = gameData.board ?? {
-        tiles: [],
-        leftEnd: null,
-        rightEnd: null,
-    };
+    const board = useMemo(
+        () =>
+            gameData.board ?? {
+                tiles: [],
+                leftEnd: null,
+                rightEnd: null,
+            },
+        [gameData.board],
+    );
     const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
     const isPlaying = gameData.phase === "playing";
 
@@ -502,11 +506,10 @@ function DominoesGameTable({
                                     </AnimatePresence>
                                 </div>
 
-                                {/* Only show hand for local player */}
-                                {isLocal && (
-                                    <TileHand
-                                        tiles={
-                                            isDealing
+                                <TileHand
+                                    tiles={
+                                        isLocal
+                                            ? isDealing
                                                 ? hand.slice(
                                                       0,
                                                       visibleTileCounts[
@@ -514,24 +517,40 @@ function DominoesGameTable({
                                                       ] || 0,
                                                   )
                                                 : hand
-                                        }
-                                        board={board}
-                                        selectedTile={selectedTile}
-                                        isMyTurn={
-                                            isMyTurn && isPlaying && !isDealing
-                                        }
-                                        onTileSelect={handleTileSelect}
-                                        showHints={showHints}
-                                        tileSize={handTileSize}
-                                        layoutIdPrefix="dominoes"
-                                    />
-                                )}
+                                            : []
+                                    }
+                                    board={board}
+                                    selectedTile={isLocal ? selectedTile : null}
+                                    isMyTurn={
+                                        isLocal &&
+                                        isMyTurn &&
+                                        isPlaying &&
+                                        !isDealing
+                                    }
+                                    onTileSelect={
+                                        isLocal ? handleTileSelect : undefined
+                                    }
+                                    showHints={isLocal ? showHints : false}
+                                    tileSize={handTileSize}
+                                    layoutIdPrefix="dominoes"
+                                    isLocalPlayer={isLocal}
+                                    tileCount={
+                                        isDealing
+                                            ? visibleTileCounts[playerId] || 0
+                                            : gameData?.handsCounts?.[
+                                                  playerId
+                                              ] || 0
+                                    }
+                                />
                             </EdgeRegion>
                         );
                     })}
 
                     {/* Center Area - Dominoes Board */}
-                    <TableCenter className="flex flex-col items-center gap-4 w-full max-w-3xl">
+                    <TableCenter
+                        className="flex flex-col items-center gap-4 w-full h-full max-w-5xl"
+                        style={{ placeSelf: "stretch" }}
+                    >
                         {/* Deal animation overlay */}
                         <DealingOverlay
                             dealingItems={dealingTiles}
@@ -539,7 +558,7 @@ function DominoesGameTable({
                         />
 
                         {/* Round indicator */}
-                        <div className="bg-black/30 backdrop-blur-sm rounded-full px-4 py-1">
+                        <div className="bg-black/30 backdrop-blur-sm rounded-full px-4 py-1 mt-4">
                             <span className="text-white/80 text-sm font-medium">
                                 Round {gameData.round}
                             </span>
@@ -557,41 +576,9 @@ function DominoesGameTable({
                             lastPlayedSide={lastPlayedSide}
                             tileSize={boardTileSize}
                             ghostTileSize={ghostTileSize}
-                            className="w-full"
+                            className="w-full flex-1"
                             layoutIdPrefix="dominoes"
                         />
-
-                        {/* Pass button when must pass - enhanced visibility */}
-                        <AnimatePresence>
-                            {isMyTurn && isPlaying && mustPass && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.8, y: -10 }}
-                                    className="flex flex-col items-center gap-2"
-                                >
-                                    <Button
-                                        variant="destructive"
-                                        size={isCompact ? "default" : "lg"}
-                                        onClick={handlePass}
-                                        className="shadow-xl shadow-red-500/30 font-bold text-base px-6 py-3 ring-2 ring-red-400/50 ring-offset-2 ring-offset-black/50"
-                                    >
-                                        <motion.span
-                                            animate={{ scale: [1, 1.05, 1] }}
-                                            transition={{
-                                                duration: 1.5,
-                                                repeat: Infinity,
-                                            }}
-                                        >
-                                            Pass Turn
-                                        </motion.span>
-                                    </Button>
-                                    <span className="text-white/60 text-xs">
-                                        No playable tiles in hand
-                                    </span>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
 
                         {/* Cancel selection hint when tile selected with both sides valid */}
                         {selectedTile && canPlaceLeft && canPlaceRight && (
@@ -612,6 +599,15 @@ function DominoesGameTable({
                     </TableCenter>
                 </GameTable>
             </LayoutGroup>
+
+            {/* Pass Action Confirmation Bar */}
+            <ActionConfirmationBar
+                isVisible={isMyTurn && isPlaying && mustPass}
+                onConfirm={handlePass}
+                confirmLabel="Pass Turn"
+                confirmVariant="destructive"
+                message="No playable tiles in hand"
+            />
         </div>
     );
 }

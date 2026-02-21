@@ -26,6 +26,7 @@ export function useDominoCamera({
     const [camera, setCamera] = useState<CameraState>({ x: 0, y: 0, scale: 1 });
     const [isManualPan, setIsManualPan] = useState(false);
     const prevActivePointsRef = useRef(activePoints);
+    const prevBoundsRef = useRef(logicalBounds);
 
     const focusOnPoints = useCallback(
         (points: { x: number; y: number }[]) => {
@@ -109,25 +110,39 @@ export function useDominoCamera({
         [containerWidth, containerHeight, logicalBounds, unitSize, padding],
     );
 
-    // Auto-focus when active points change
+    // Auto-focus when active points or bounds change
     useEffect(() => {
-        const prev = prevActivePointsRef.current;
-        const changed = pointsChanged(prev, activePoints);
+        const prevPoints = prevActivePointsRef.current;
+        const prevBounds = prevBoundsRef.current;
 
-        if (changed) {
+        const pointsChangedFlag = pointsChanged(prevPoints, activePoints);
+        const boundsChangedFlag =
+            prevBounds.minX !== logicalBounds.minX ||
+            prevBounds.maxX !== logicalBounds.maxX ||
+            prevBounds.minY !== logicalBounds.minY ||
+            prevBounds.maxY !== logicalBounds.maxY;
+
+        if (pointsChangedFlag || boundsChangedFlag) {
             prevActivePointsRef.current = activePoints;
+            prevBoundsRef.current = logicalBounds;
             if (!isManualPan) {
                 focusOnPoints(activePoints);
             }
         }
-    }, [activePoints, isManualPan, focusOnPoints]);
+    }, [activePoints, logicalBounds, isManualPan, focusOnPoints]);
 
     // Initial focus
     useEffect(() => {
         if (!isManualPan && containerWidth > 0) {
             focusOnPoints(activePoints);
         }
-    }, [containerWidth, containerHeight]); // Re-run if container resizes
+    }, [
+        containerWidth,
+        containerHeight,
+        isManualPan,
+        activePoints,
+        focusOnPoints,
+    ]); // Re-run if container resizes
 
     const handlePan = useCallback((dx: number, dy: number) => {
         setIsManualPan(true);

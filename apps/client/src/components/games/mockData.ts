@@ -152,9 +152,15 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
         settings = {},
     } = options;
 
-    const finalSettings = {
+    const finalSettings: SpadesClientSettings = {
         ...DEFAULT_SPADES_SETTINGS,
         ...settings,
+        turnTimeLimit:
+            (settings.turnTimeLimit ??
+                DEFAULT_SPADES_SETTINGS.turnTimeLimit) === null
+                ? undefined
+                : (settings.turnTimeLimit ??
+                      DEFAULT_SPADES_SETTINGS.turnTimeLimit)!,
     };
 
     const deck = shuffle(generateDeck(finalSettings.jokersEnabled));

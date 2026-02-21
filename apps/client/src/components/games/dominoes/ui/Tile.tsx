@@ -22,6 +22,10 @@ interface TileProps {
     highlightDouble?: boolean;
     /** Render double tiles perpendicular (vertical when on horizontal board) */
     perpendicularDoubles?: boolean;
+    /** Whether the tile is face down (for opponents' hands) */
+    isFaceDown?: boolean;
+    /** Explicit rotation in degrees */
+    rotation?: number;
 }
 
 // Pip positions for each value (0-6)
@@ -117,6 +121,8 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
         layoutId,
         highlightDouble = true,
         perpendicularDoubles = false,
+        isFaceDown = false,
+        rotation,
     },
     ref,
 ) {
@@ -124,7 +130,7 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
     const config = SIZE_CONFIG[size];
     const { width, height, pipSize, gap } = config;
 
-    const isDouble = tile.left === tile.right;
+    const isDouble = !isFaceDown && tile.left === tile.right;
     const showDoubleHighlight = isDouble && highlightDouble;
 
     // Doubles on the board render perpendicular (vertical when board is horizontal)
@@ -141,6 +147,9 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
 
     // Calculate rotation based on display mode
     const getRotation = () => {
+        if (rotation !== undefined) {
+            return rotation;
+        }
         if (shouldRenderPerpendicular) {
             // Perpendicular doubles stay vertical on horizontal board
             return 0;
@@ -217,45 +226,81 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
                     showDoubleHighlight && "ring-2 ring-amber-500/70 rounded",
                 )}
             >
-                {/* Background */}
-                <rect
-                    x="0"
-                    y="0"
-                    width={width}
-                    height={height}
-                    rx="4"
-                    ry="4"
-                    className="fill-white dark:fill-zinc-200 stroke-zinc-300 dark:stroke-zinc-600"
-                    strokeWidth="1"
-                />
+                {isFaceDown ? (
+                    <>
+                        {/* Face down background */}
+                        <rect
+                            x="0"
+                            y="0"
+                            width={width}
+                            height={height}
+                            rx="4"
+                            ry="4"
+                            className="fill-zinc-800 dark:fill-zinc-900 stroke-zinc-600 dark:stroke-zinc-700"
+                            strokeWidth="1"
+                        />
+                        {/* Subtle pattern or logo for the back */}
+                        <rect
+                            x="4"
+                            y="4"
+                            width={width - 8}
+                            height={height - 8}
+                            rx="2"
+                            ry="2"
+                            className="fill-transparent stroke-zinc-700 dark:stroke-zinc-800"
+                            strokeWidth="1"
+                            strokeDasharray="2 2"
+                        />
+                        <circle
+                            cx={width / 2}
+                            cy={height / 2}
+                            r={width / 4}
+                            className="fill-zinc-700/50 dark:fill-zinc-800/50"
+                        />
+                    </>
+                ) : (
+                    <>
+                        {/* Background */}
+                        <rect
+                            x="0"
+                            y="0"
+                            width={width}
+                            height={height}
+                            rx="4"
+                            ry="4"
+                            className="fill-white dark:fill-zinc-200 stroke-zinc-300 dark:stroke-zinc-600"
+                            strokeWidth="1"
+                        />
 
-                {/* Divider line */}
-                <line
-                    x1="2"
-                    y1={halfHeight + gap / 2}
-                    x2={width - 2}
-                    y2={halfHeight + gap / 2}
-                    className="stroke-zinc-400 dark:stroke-zinc-500"
-                    strokeWidth="1.5"
-                />
+                        {/* Divider line */}
+                        <line
+                            x1="2"
+                            y1={halfHeight + gap / 2}
+                            x2={width - 2}
+                            y2={halfHeight + gap / 2}
+                            className="stroke-zinc-400 dark:stroke-zinc-500"
+                            strokeWidth="1.5"
+                        />
 
-                {/* Top half pips (left value) */}
-                <PipHalf
-                    value={tile.left}
-                    halfWidth={width}
-                    halfHeight={halfHeight}
-                    pipSize={pipSize}
-                    offsetY={0}
-                />
+                        {/* Top half pips (left value) */}
+                        <PipHalf
+                            value={tile.left}
+                            halfWidth={width}
+                            halfHeight={halfHeight}
+                            pipSize={pipSize}
+                            offsetY={0}
+                        />
 
-                {/* Bottom half pips (right value) */}
-                <PipHalf
-                    value={tile.right}
-                    halfWidth={width}
-                    halfHeight={halfHeight}
-                    pipSize={pipSize}
-                    offsetY={halfHeight + gap}
-                />
+                        {/* Bottom half pips (right value) */}
+                        <PipHalf
+                            value={tile.right}
+                            halfWidth={width}
+                            halfHeight={halfHeight}
+                            pipSize={pipSize}
+                            offsetY={halfHeight + gap}
+                        />
+                    </>
+                )}
             </svg>
         </motion.button>
     );
