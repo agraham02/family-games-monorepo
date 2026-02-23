@@ -2,5 +2,6 @@
 // Barrel export for all utility functions
 
 export * from "./errors";
+export * from "./dominoLayout";
 export * from "./player";
 export * from "./shuffle";

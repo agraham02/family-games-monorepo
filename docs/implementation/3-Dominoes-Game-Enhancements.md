@@ -4,9 +4,28 @@
 
 This document provides precise implementation details for enhancing the Dominoes game with Partner (2v2) mode, improved tile placement UI, board layout visualization, and polished round/game summary screens.
 
+## Implementation Status (Current Workspace)
+
+The items below reflect what is now implemented in the current monorepo (apps/api, apps/client, packages/shared):
+
+- Dominoes debug actions are normalized to production contract (`PLACE_TILE` with `side`), with backward compatibility for legacy debug payloads.
+- Debug board state shape now matches renderer expectations, and debug play/autoplay correctly update `leftEnd`/`rightEnd`.
+- Board layout metadata is server-authored and persisted in Dominoes board state as `board.layout`.
+- Layout generation is seeded by game + round to keep per-session deterministic rendering while varying across sessions.
+- Client Dominoes board rendering prefers authoritative `board.layout`, with fallback layout computation only when metadata is missing.
+- Ghost-end previews were refined so orientation and placement previews match the selected side and end value.
+- Layout algorithm duplication was removed by centralizing `computeDominoBoardLayout` in `packages/shared/src/utils/dominoLayout.ts` and consuming it from API/client/debug paths.
+
+### Notes
+
+- This section documents shipped behavior and should be considered the source of truth for current Dominoes board-rendering architecture.
+- Remaining sections in this document include planned enhancements that may be partially implemented, superseded, or pending.
+
 ---
 
-## Current State Analysis
+## Baseline Analysis (Historical Reference)
+
+This section describes the pre-enhancement baseline and is kept for context only.
 
 ### Existing Implementation
 
@@ -57,6 +76,8 @@ interface BoardState {
 
 ### 1. Game Mode Setting
 
+**Status:** Planned
+
 #### File: `src/models/Settings.ts`
 
 **Updated DominoesSettings**:
@@ -70,6 +91,8 @@ interface BoardState {
 | `turnTimeLimit`    | `number \| null`         | `null`         | Seconds per turn         |
 
 ### 2. Team Mode Support
+
+**Status:** Planned
 
 #### File: `src/games/dominoes/index.ts`
 
@@ -124,7 +147,7 @@ This ensures alternating team play while partners are opposite.
 ```typescript
 function init(
     room: Room,
-    customSettings?: Partial<DominoesSettings>
+    customSettings?: Partial<DominoesSettings>,
 ): DominoesState {
     const settings = { ...DEFAULT_SETTINGS, ...customSettings };
 
@@ -159,6 +182,8 @@ function init(
 
 ### 3. Team Scoring Rules
 
+**Status:** Planned
+
 #### Caribbean Partner Dominoes Rules
 
 **Win Condition** (team mode):
@@ -184,7 +209,7 @@ function calculateRoundScores(
     currentScores: Record<string, number> | Record<number, number>,
     winnerId: string | null,
     gameMode: "individual" | "team",
-    teams?: Record<number, { players: string[] }>
+    teams?: Record<number, { players: string[] }>,
 ): RoundScoreResult;
 ```
 
@@ -214,6 +239,8 @@ interface RoundScoreResult {
 ```
 
 ### 4. Enhanced Board Visualization
+
+**Status:** Partial (core board layout metadata and rendering path delivered)
 
 #### Current Issue
 
@@ -312,6 +339,8 @@ Visual Elements:
 
 ### 5. Tile Placement Interaction
 
+**Status:** Partial (smart side selection and ghost-end previews delivered)
+
 #### Current Flow
 
 1. Player taps tile in hand → tile selected
@@ -381,6 +410,8 @@ function handleBoardEndClick(side: "left" | "right") {
 
 ### 6. Tile Hand Display
 
+**Status:** Planned
+
 #### File: `src/components/games/dominoes/ui/TileHand.tsx`
 
 **Current Implementation**: Horizontal row of tiles
@@ -418,6 +449,8 @@ interface TileHandProps {
 ```
 
 ### 7. Round Summary Modal
+
+**Status:** Planned
 
 #### File: `src/components/games/dominoes/ui/RoundSummaryModal.tsx`
 
@@ -480,6 +513,8 @@ interface TileHandProps {
 
 ### 8. Game Summary Modal
 
+**Status:** Planned
+
 #### File: `src/components/games/dominoes/ui/GameSummaryModal.tsx` (NEW)
 
 **Trigger**: `phase === "finished"`
@@ -520,6 +555,8 @@ interface TileHandProps {
 ```
 
 ### 9. Animation System
+
+**Status:** Planned
 
 #### Tile Play Animation
 
@@ -569,6 +606,8 @@ When player passes:
 
 ### 10. Real-Time Tile Selection
 
+**Status:** Planned (simplified random deal model remains preferred)
+
 #### Current Issue
 
 Current implementation deals tiles instantly. The TODO mentions "Players draw/choose tiles from shuffled set shown in real time with websockets, avoiding race conditions."
@@ -601,78 +640,81 @@ More complex approach:
 
 ---
 
-## Implementation Order
+## Delivery Status
 
-### Phase 1: Team Mode Backend
+### Delivered (in this branch)
 
-1. Update DominoesSettings with gameMode
-2. Update init() for team play order
-3. Update scoring for team mode
-4. Update metadata for dynamic team requirements
+1. Debug play/autoplay contract parity with production Dominoes action shape.
+2. Debug board state normalization so placed tile chains render correctly.
+3. Server-authored Dominoes board layout metadata in game state.
+4. Seeded layout generation based on game/round identity for deterministic session rendering.
+5. Client board rendering updated to prefer authoritative `board.layout`.
+6. Ghost-end previews updated to reflect actual selected side/end orientation.
+7. Layout algorithm centralized in shared utility and consumed by API/client/debug.
 
-### Phase 2: Team Mode Frontend
+### Remaining Roadmap
 
-1. Update client types
-2. Update GameSettingsCard with mode toggle
-3. Update RoundSummaryModal for teams
-4. Update score displays
+#### Phase 1: Team Mode Backend
 
-### Phase 3: Board Visualization
+- [ ] Update DominoesSettings with gameMode
+- [ ] Update init() for team play order
+- [ ] Update scoring for team mode
+- [ ] Update metadata for dynamic team requirements
 
-1. Enhance Tile component
-2. Implement board layout with scroll
-3. Add double tile perpendicular rendering
-4. Add placement previews
+#### Phase 2: Team Mode Frontend
 
-### Phase 4: Tile Interaction
+- [ ] Update client types
+- [ ] Update GameSettingsCard with mode toggle
+- [ ] Update RoundSummaryModal for teams
+- [ ] Update score displays
 
-1. Smart placement logic
-2. Valid move highlighting
-3. Tile selection animations
-4. Pass button improvements
+#### Phase 3: Remaining Board & Interaction Polish
 
-### Phase 5: Summary Screens
+- [ ] Valid move highlighting in hand/board UI
+- [ ] Tile selection animations and pass feedback polish
+- [ ] Additional responsive refinements for long chains/hands
 
-1. Enhanced RoundSummaryModal
-2. Create GameSummaryModal
-3. Add tile graphics to summaries
-4. Add animations
+#### Phase 4: Summary Screens
 
-### Phase 6: Polish
+- [ ] Enhanced RoundSummaryModal details and visuals
+- [ ] Create GameSummaryModal
+- [ ] Add tile graphics to summary views
 
-1. Tile play animations
-2. Pass animations
-3. Turn indicator improvements
-4. Mobile responsiveness
+#### Phase 5: Animation & UX Polish
+
+- [ ] Tile play animations (hand to board)
+- [ ] Pass animations
+- [ ] Turn indicator improvements
 
 ---
 
 ## File Change Summary
 
-### API (family-gr-api)
+### Implemented in Current Workspace
 
-| File                                  | Action | Changes                                      |
-| ------------------------------------- | ------ | -------------------------------------------- |
-| `src/models/Settings.ts`              | MODIFY | Add gameMode to DominoesSettings             |
-| `src/games/dominoes/index.ts`         | MODIFY | Team mode init, play order, updated metadata |
-| `src/games/dominoes/types.ts`         | MODIFY | Add team-related types                       |
-| `src/games/dominoes/helpers/score.ts` | MODIFY | Team scoring logic                           |
+| Area   | File                                                                 | Action | Notes                                                       |
+| ------ | -------------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| API    | `apps/api/src/games/dominoes/index.ts`                               | MODIFY | Seeded board layout generation wired into state lifecycle   |
+| API    | `apps/api/src/games/dominoes/helpers/board.ts`                       | MODIFY | Uses shared layout utility for authoritative `board.layout` |
+| Shared | `packages/shared/src/types/games/dominoes.ts`                        | MODIFY | Adds board layout metadata types                            |
+| Shared | `packages/shared/src/utils/dominoLayout.ts`                          | ADD    | Canonical Dominoes layout computation                       |
+| Shared | `packages/shared/src/utils/index.ts`                                 | MODIFY | Exports shared layout utility                               |
+| Client | `apps/client/src/components/games/dominoes/ui/Board.tsx`             | MODIFY | Prefers server layout + improved ghost-end preview behavior |
+| Client | `apps/client/src/components/games/dominoes/ui/DominoesGameTable.tsx` | MODIFY | Removes stale board plumbing and aligns placement flow      |
+| Client | `apps/client/src/hooks/useDominoLayout.ts`                           | MODIFY | Wraps shared layout utility as fallback path                |
+| Debug  | `apps/client/src/app/debug/game-ui/DebugEngine.tsx`                  | MODIFY | Action/state parity and board layout hydration              |
 
-### Client (family-gr-client)
+### Planned / Not Yet Implemented
 
-| File                                                     | Action | Changes                             |
-| -------------------------------------------------------- | ------ | ----------------------------------- |
-| `src/types/games/dominoes/index.ts`                      | MODIFY | Add gameMode, teams to DominoesData |
-| `src/types/lobby/index.ts`                               | MODIFY | Update DominoesSettings             |
-| `src/components/lobby/GameSettingsCard.tsx`              | MODIFY | Add game mode toggle                |
-| `src/components/games/dominoes/index.tsx`                | MODIFY | State management, animations        |
-| `src/components/games/dominoes/ui/DominoesGameTable.tsx` | MODIFY | Placement preview, animations       |
-| `src/components/games/dominoes/ui/Board.tsx`             | MODIFY | Enhanced layout, scroll, previews   |
-| `src/components/games/dominoes/ui/Tile.tsx`              | MODIFY | Enhanced visuals, orientations      |
-| `src/components/games/dominoes/ui/TileHand.tsx`          | MODIFY | Highlighting, sorting, selection    |
-| `src/components/games/dominoes/ui/RoundSummaryModal.tsx` | MODIFY | Detailed breakdown                  |
-| `src/components/games/dominoes/ui/GameSummaryModal.tsx`  | CREATE | End of game summary                 |
-| `src/components/games/dominoes/ui/ScoreDisplay.tsx`      | MODIFY | Team score support                  |
+| Area   | File                                                                 | Planned Work                                |
+| ------ | -------------------------------------------------------------------- | ------------------------------------------- |
+| API    | `apps/api/src/games/dominoes/helpers/score.ts`                       | Team scoring logic and output model updates |
+| API    | `apps/api/src/games/dominoes/index.ts`                               | Team mode init/play-order support           |
+| Shared | `packages/shared/src/types`                                          | Team-mode settings/state contracts          |
+| Client | `apps/client/src/components/lobby/GameSettingsCard.tsx`              | Team mode toggle and setting wiring         |
+| Client | `apps/client/src/components/games/dominoes/ui/TileHand.tsx`          | Hinting/sorting/selection polish            |
+| Client | `apps/client/src/components/games/dominoes/ui/RoundSummaryModal.tsx` | Rich round summary UX                       |
+| Client | `apps/client/src/components/games/dominoes/ui/GameSummaryModal.tsx`  | End-of-game summary modal                   |
 
 ---
 

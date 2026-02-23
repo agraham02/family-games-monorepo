@@ -73,7 +73,7 @@ function calculateTileSizes(dimensions: Dimensions): ResponsiveTileSizeConfig {
     if (minDimension < 1024) {
         return {
             boardTileSize: "sm",
-            handTileSize: "md",
+            handTileSize: "sm",
             ghostTileSize: "sm",
             isCompact: false,
             isLandscape,
@@ -83,7 +83,7 @@ function calculateTileSizes(dimensions: Dimensions): ResponsiveTileSizeConfig {
     // Desktop (≥1024px)
     return {
         boardTileSize: "md",
-        handTileSize: "lg",
+        handTileSize: "md",
         ghostTileSize: "md",
         isCompact: false,
         isLandscape,

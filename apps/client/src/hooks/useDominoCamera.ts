@@ -105,7 +105,17 @@ export function useDominoCamera({
                     containerHeight / 2 - centerY * unitSize * targetScale;
             }
 
-            setCamera({ x: targetX, y: targetY, scale: targetScale });
+            setCamera((prev) => {
+                const xDelta = Math.abs(prev.x - targetX);
+                const yDelta = Math.abs(prev.y - targetY);
+                const scaleDelta = Math.abs(prev.scale - targetScale);
+
+                if (xDelta < 0.5 && yDelta < 0.5 && scaleDelta < 0.002) {
+                    return prev;
+                }
+
+                return { x: targetX, y: targetY, scale: targetScale };
+            });
         },
         [containerWidth, containerHeight, logicalBounds, unitSize, padding],
     );

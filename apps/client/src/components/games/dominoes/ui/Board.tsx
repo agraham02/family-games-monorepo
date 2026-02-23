@@ -13,13 +13,12 @@ import { useContainerDimensions } from "@/hooks/useContainerDimensions";
 
 interface BoardProps {
     board: BoardState;
+    layoutSeed?: string;
     selectedTile: TileType | null;
     isMyTurn: boolean;
     canPlaceLeft: boolean;
     canPlaceRight: boolean;
     onPlaceTile: (side: "left" | "right") => void;
-    onCancelSelection?: () => void;
-    lastPlayedSide?: "left" | "right" | null;
     className?: string;
     layoutIdPrefix?: string;
     tileSize?: TileSize;
@@ -33,8 +32,30 @@ const TILE_UNIT_SIZES = {
     lg: 56,
 };
 
+function orientTileForPlacement(
+    tile: TileType,
+    endValue: number | undefined,
+): TileType {
+    if (endValue === undefined) return tile;
+
+    if (tile.left === endValue) {
+        return tile;
+    }
+
+    if (tile.right === endValue) {
+        return {
+            ...tile,
+            left: tile.right,
+            right: tile.left,
+        };
+    }
+
+    return tile;
+}
+
 export default function Board({
     board,
+    layoutSeed,
     selectedTile,
     isMyTurn,
     canPlaceLeft,
@@ -46,16 +67,36 @@ export default function Board({
     ghostTileSize,
 }: BoardProps) {
     const effectiveGhostSize = ghostTileSize ?? tileSize;
+    const ghostUnitSize = TILE_UNIT_SIZES[effectiveGhostSize];
     const prefersReducedMotion = usePrefersReducedMotion();
     const containerRef = useRef<HTMLDivElement>(null);
     const { width: containerWidth, height: containerHeight } =
         useContainerDimensions(containerRef);
 
     const unitSize = TILE_UNIT_SIZES[tileSize];
+    const serverLayouts = board.layout?.tileLayouts;
+    const hasServerLayout =
+        !!serverLayouts &&
+        Object.keys(serverLayouts).length === board.tiles.length &&
+        !!board.layout?.bounds;
 
-    const { layouts, bounds, leftEndPos, rightEndPos } = useDominoLayout(
-        board.tiles,
+    const fallbackLayout = useDominoLayout(
+        hasServerLayout ? [] : board.tiles,
+        layoutSeed,
     );
+
+    const layouts = hasServerLayout
+        ? new Map(
+              Object.values(serverLayouts ?? {}).map((layout) => [
+                  layout.id,
+                  layout,
+              ]),
+          )
+        : fallbackLayout.layouts;
+
+    const bounds = board.layout?.bounds ?? fallbackLayout.bounds;
+    const leftEndPos = board.layout?.leftEndPos ?? fallbackLayout.leftEndPos;
+    const rightEndPos = board.layout?.rightEndPos ?? fallbackLayout.rightEndPos;
 
     const { camera, isManualPan, handlePan, handleZoom, recenter } =
         useDominoCamera({
@@ -63,7 +104,7 @@ export default function Board({
             containerHeight,
             logicalBounds: bounds,
             activePoints: [], // Always auto-scale to fit the entire board
-            unitSize,
+            unitSize: 2 * unitSize,
             padding: 60,
         });
 
@@ -107,6 +148,22 @@ export default function Board({
 
     const isEmpty = board.tiles.length === 0;
     const showGhostPreviews = selectedTile && isMyTurn && !isEmpty;
+    const leftGhostTile =
+        selectedTile && board.leftEnd
+            ? orientTileForPlacement(selectedTile, board.leftEnd.value)
+            : selectedTile;
+    const rightGhostTile =
+        selectedTile && board.rightEnd
+            ? orientTileForPlacement(selectedTile, board.rightEnd.value)
+            : selectedTile;
+
+    const getGhostRotation = (direction: string, isDouble: boolean) => {
+        if (direction === "RIGHT") return isDouble ? 90 : 0;
+        if (direction === "LEFT") return isDouble ? 90 : 180;
+        if (direction === "DOWN") return isDouble ? 0 : 90;
+        if (direction === "UP") return isDouble ? 0 : 270;
+        return 0;
+    };
 
     return (
         <div className={cn("relative w-full flex flex-col", className)}>
@@ -160,7 +217,13 @@ export default function Board({
                     transition={
                         prefersReducedMotion
                             ? { duration: 0 }
-                            : { type: "spring", stiffness: 300, damping: 30 }
+                            : isManualPan
+                              ? { duration: 0 }
+                              : {
+                                    type: "spring",
+                                    stiffness: 220,
+                                    damping: 34,
+                                }
                     }
                 >
                     {isEmpty ? (
@@ -180,29 +243,16 @@ export default function Board({
                                 const layout = layouts.get(tile.id);
                                 if (!layout) return null;
 
-                                // Calculate physical position
-                                // The layout x,y is the center of the tile.
-                                // We need to position the top-left corner of the Tile component.
-                                // A Tile component is always rendered vertically by default, unless isHorizontal is true.
-                                // Wait, Tile.tsx has `isHorizontal` prop.
-                                // If we pass `isHorizontal={true}`, its width is 2*unitSize, height is unitSize.
-                                // If we pass `isHorizontal={false}`, its width is unitSize, height is 2*unitSize.
-                                // Let's always render it horizontally and use CSS rotation, or use the prop.
-                                // Actually, Tile.tsx handles `isHorizontal` and `perpendicularDoubles`.
-                                // But since we are doing 2D layout, we should just use CSS rotation on a wrapper div,
-                                // and always render the Tile in a fixed orientation (e.g. horizontal).
-                                // Wait, if we render it horizontal, its center is at (width/2, height/2).
-                                // So top-left is (x * unitSize - width/2, y * unitSize - height/2).
-
                                 const width = 2 * unitSize;
                                 const height = unitSize;
-                                const px = layout.x * unitSize - width / 2;
-                                const py = layout.y * unitSize - height / 2;
+                                const logicalUnit = 2 * unitSize;
+                                const px = layout.x * logicalUnit - width / 2;
+                                const py = layout.y * logicalUnit - height / 2;
 
                                 return (
                                     <motion.div
                                         key={tile.id}
-                                        className="absolute"
+                                        className="absolute flex items-center justify-center"
                                         style={{
                                             left: px,
                                             top: py,
@@ -238,6 +288,7 @@ export default function Board({
                             <AnimatePresence>
                                 {showGhostPreviews &&
                                     canPlaceLeft &&
+                                    leftGhostTile &&
                                     leftEndPos && (
                                         <motion.div
                                             initial={{ opacity: 0, scale: 0.8 }}
@@ -246,20 +297,20 @@ export default function Board({
                                             className="absolute z-30 cursor-pointer group"
                                             style={{
                                                 left:
-                                                    leftEndPos.x * unitSize -
-                                                    (2 * unitSize) / 2,
+                                                    leftEndPos.x *
+                                                        (2 * ghostUnitSize) -
+                                                    ghostUnitSize,
                                                 top:
-                                                    leftEndPos.y * unitSize -
-                                                    unitSize / 2,
-                                                width: 2 * unitSize,
-                                                height: unitSize,
-                                                rotate:
-                                                    leftEndPos.direction ===
-                                                        "UP" ||
-                                                    leftEndPos.direction ===
-                                                        "DOWN"
-                                                        ? 90
-                                                        : 0,
+                                                    leftEndPos.y *
+                                                        (2 * ghostUnitSize) -
+                                                    ghostUnitSize / 2,
+                                                width: 2 * ghostUnitSize,
+                                                height: ghostUnitSize,
+                                                rotate: getGhostRotation(
+                                                    leftEndPos.direction,
+                                                    leftGhostTile.left ===
+                                                        leftGhostTile.right,
+                                                ),
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -269,7 +320,7 @@ export default function Board({
                                             <div className="relative w-full h-full">
                                                 <div className="opacity-50 group-hover:opacity-90 transition-opacity duration-200 w-full h-full">
                                                     <Tile
-                                                        tile={selectedTile}
+                                                        tile={leftGhostTile}
                                                         isHorizontal={true}
                                                         size={
                                                             effectiveGhostSize
@@ -293,13 +344,11 @@ export default function Board({
                                                 <span
                                                     className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full"
                                                     style={{
-                                                        rotate:
-                                                            leftEndPos.direction ===
-                                                                "UP" ||
-                                                            leftEndPos.direction ===
-                                                                "DOWN"
-                                                                ? "-90deg"
-                                                                : "0deg",
+                                                        rotate: `-${getGhostRotation(
+                                                            leftEndPos.direction,
+                                                            leftGhostTile.left ===
+                                                                leftGhostTile.right,
+                                                        )}deg`,
                                                     }}
                                                 >
                                                     Tap to place
@@ -313,6 +362,7 @@ export default function Board({
                             <AnimatePresence>
                                 {showGhostPreviews &&
                                     canPlaceRight &&
+                                    rightGhostTile &&
                                     rightEndPos && (
                                         <motion.div
                                             initial={{ opacity: 0, scale: 0.8 }}
@@ -321,20 +371,20 @@ export default function Board({
                                             className="absolute z-30 cursor-pointer group"
                                             style={{
                                                 left:
-                                                    rightEndPos.x * unitSize -
-                                                    (2 * unitSize) / 2,
+                                                    rightEndPos.x *
+                                                        (2 * ghostUnitSize) -
+                                                    ghostUnitSize,
                                                 top:
-                                                    rightEndPos.y * unitSize -
-                                                    unitSize / 2,
-                                                width: 2 * unitSize,
-                                                height: unitSize,
-                                                rotate:
-                                                    rightEndPos.direction ===
-                                                        "UP" ||
-                                                    rightEndPos.direction ===
-                                                        "DOWN"
-                                                        ? 90
-                                                        : 0,
+                                                    rightEndPos.y *
+                                                        (2 * ghostUnitSize) -
+                                                    ghostUnitSize / 2,
+                                                width: 2 * ghostUnitSize,
+                                                height: ghostUnitSize,
+                                                rotate: getGhostRotation(
+                                                    rightEndPos.direction,
+                                                    rightGhostTile.left ===
+                                                        rightGhostTile.right,
+                                                ),
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -344,7 +394,7 @@ export default function Board({
                                             <div className="relative w-full h-full">
                                                 <div className="opacity-50 group-hover:opacity-90 transition-opacity duration-200 w-full h-full">
                                                     <Tile
-                                                        tile={selectedTile}
+                                                        tile={rightGhostTile}
                                                         isHorizontal={true}
                                                         size={
                                                             effectiveGhostSize
@@ -368,13 +418,11 @@ export default function Board({
                                                 <span
                                                     className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full"
                                                     style={{
-                                                        rotate:
-                                                            rightEndPos.direction ===
-                                                                "UP" ||
-                                                            rightEndPos.direction ===
-                                                                "DOWN"
-                                                                ? "-90deg"
-                                                                : "0deg",
+                                                        rotate: `-${getGhostRotation(
+                                                            rightEndPos.direction,
+                                                            rightGhostTile.left ===
+                                                                rightGhostTile.right,
+                                                        )}deg`,
                                                     }}
                                                 >
                                                     Tap to place

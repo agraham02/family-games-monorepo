@@ -111,6 +111,7 @@ function init(
     room: Room,
     customSettings?: Partial<DominoesSettings>,
 ): DominoesState {
+    const gameId = uuidv4();
     // Turn players into an object map for easier access
     const players: Record<string, User> = Object.fromEntries(
         room.users.map((user) => [user.id, user]),
@@ -215,7 +216,7 @@ function init(
     });
 
     return {
-        id: uuidv4(),
+        id: gameId,
         roomId: room.id,
         type: DOMINOES_NAME,
 
@@ -227,7 +228,7 @@ function init(
 
         hands,
         boneyard,
-        board: initializeBoard(),
+        board: initializeBoard(`${gameId}-r1`),
 
         phase: "playing",
         round: 1,
@@ -441,7 +442,12 @@ function handlePlaceTile(
     const newHands = { ...state.hands, [playerId]: newHand };
 
     // Place tile on board
-    const newBoard = placeTileOnBoard(tile, state.board, side);
+    const newBoard = placeTileOnBoard(
+        tile,
+        state.board,
+        side,
+        `${state.id}-r${state.round}`,
+    );
 
     // Reset consecutive passes since a tile was played
     const consecutivePasses = 0;
@@ -865,7 +871,7 @@ function startNextRound(state: DominoesState): DominoesState {
         ...state,
         hands: newHands,
         boneyard,
-        board: initializeBoard(),
+        board: initializeBoard(`${state.id}-r${newRound}`),
         currentTurnIndex: startingPlayerIndex,
         startingPlayerIndex,
         phase: "playing",

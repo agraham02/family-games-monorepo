@@ -1,7 +1,12 @@
 // src/games/dominoes/helpers/board.ts
 // Board state management and tile placement logic for Dominoes
 
-import { Tile, BoardEnd, BoardState } from "@family-games/shared";
+import {
+    Tile,
+    BoardEnd,
+    BoardState,
+    computeDominoBoardLayout,
+} from "@family-games/shared";
 
 // Re-export BoardState for convenience
 export type { BoardState };
@@ -10,11 +15,14 @@ export type { BoardState };
  * Initialize an empty domino board.
  * @returns Empty board state with no tiles and null ends
  */
-export function initializeBoard(): BoardState {
+export function initializeBoard(layoutSeed?: string): BoardState {
     return {
         tiles: [],
         leftEnd: null,
         rightEnd: null,
+        layout: layoutSeed
+            ? computeDominoBoardLayout([], layoutSeed)
+            : undefined,
     };
 }
 
@@ -82,13 +90,18 @@ export function placeTileOnBoard(
     tile: Tile,
     board: BoardState,
     side: "left" | "right",
+    layoutSeed?: string,
 ): BoardState {
     // If board is empty, place the first tile
     if (board.tiles.length === 0) {
+        const tiles = [tile];
         return {
-            tiles: [tile],
+            tiles,
             leftEnd: { value: tile.left, tileId: tile.id },
             rightEnd: { value: tile.right, tileId: tile.id },
+            layout: layoutSeed
+                ? computeDominoBoardLayout(tiles, layoutSeed)
+                : undefined,
         };
     }
 
@@ -131,5 +144,8 @@ export function placeTileOnBoard(
         tiles: newTiles,
         leftEnd: side === "left" ? newEnd : board.leftEnd,
         rightEnd: side === "right" ? newEnd : board.rightEnd,
+        layout: layoutSeed
+            ? computeDominoBoardLayout(newTiles, layoutSeed, board.layout)
+            : undefined,
     };
 }

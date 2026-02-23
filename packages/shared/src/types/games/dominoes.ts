@@ -56,6 +56,31 @@ export interface BoardEnd {
     tileId: string; // ID of the tile at this end
 }
 
+export type DominoLayoutDirection = "UP" | "DOWN" | "LEFT" | "RIGHT";
+
+export interface DominoTileLayout {
+    id: string;
+    x: number;
+    y: number;
+    rotation: number;
+    isDouble: boolean;
+    direction: DominoLayoutDirection;
+}
+
+export interface DominoLayoutPoint {
+    x: number;
+    y: number;
+    direction: DominoLayoutDirection;
+}
+
+export interface DominoBoardLayout {
+    seed: string;
+    tileLayouts: Record<string, DominoTileLayout>;
+    bounds: { minX: number; maxX: number; minY: number; maxY: number };
+    leftEndPos: DominoLayoutPoint | null;
+    rightEndPos: DominoLayoutPoint | null;
+}
+
 /**
  * Represents the current state of the domino board.
  */
@@ -63,6 +88,7 @@ export interface BoardState {
     tiles: Tile[]; // Tiles placed on board in order
     leftEnd: BoardEnd | null;
     rightEnd: BoardEnd | null;
+    layout?: DominoBoardLayout;
 }
 
 // ============================================================================

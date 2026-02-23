@@ -106,9 +106,6 @@ function DominoesGameTable({
     onPass,
 }: DominoesGameTableProps) {
     const [selectedTile, setSelectedTile] = useState<TileType | null>(null);
-    const [lastPlayedSide, setLastPlayedSide] = useState<
-        "left" | "right" | null
-    >(null);
     // Track which player just passed for pass animation
     const [passedPlayerId, setPassedPlayerId] = useState<string | null>(null);
 
@@ -209,7 +206,6 @@ function DominoesGameTable({
 
             onPlaceTile(tileToPlace, side);
             setSelectedTile(null);
-            setLastPlayedSide(side);
         },
         [selectedTile, isMyTurn, isPlaying, onPlaceTile],
     );
@@ -228,7 +224,6 @@ function DominoesGameTable({
             // Empty board - auto place on left
             if (board.tiles.length === 0) {
                 onPlaceTile(tile, "left");
-                setLastPlayedSide("left");
                 setSelectedTile(null);
                 return;
             }
@@ -236,14 +231,12 @@ function DominoesGameTable({
             // Only one side valid - auto place
             if (leftValid && !rightValid) {
                 onPlaceTile(tile, "left");
-                setLastPlayedSide("left");
                 setSelectedTile(null);
                 return;
             }
 
             if (rightValid && !leftValid) {
                 onPlaceTile(tile, "right");
-                setLastPlayedSide("right");
                 setSelectedTile(null);
                 return;
             }
@@ -548,7 +541,7 @@ function DominoesGameTable({
 
                     {/* Center Area - Dominoes Board */}
                     <TableCenter
-                        className="flex flex-col items-center gap-4 w-full h-full max-w-5xl"
+                        className="flex flex-col items-center gap-2 w-full h-full max-w-5xl"
                         style={{ placeSelf: "stretch" }}
                     >
                         {/* Deal animation overlay */}
@@ -567,16 +560,15 @@ function DominoesGameTable({
                         {/* Dominoes Board */}
                         <Board
                             board={board}
+                            layoutSeed={`${gameData.id}-r${gameData.round}`}
                             selectedTile={selectedTile}
                             isMyTurn={isMyTurn && isPlaying}
                             canPlaceLeft={canPlaceLeft}
                             canPlaceRight={canPlaceRight}
                             onPlaceTile={handlePlaceTile}
-                            onCancelSelection={handleCancelSelection}
-                            lastPlayedSide={lastPlayedSide}
                             tileSize={boardTileSize}
                             ghostTileSize={ghostTileSize}
-                            className="w-full flex-1"
+                            className="w-full flex-1 min-h-[260px] rounded-2xl border border-white/10 bg-black/15 backdrop-blur-[1px] p-3"
                             layoutIdPrefix="dominoes"
                         />
 

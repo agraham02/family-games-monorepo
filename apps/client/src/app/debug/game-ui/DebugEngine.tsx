@@ -4,13 +4,37 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { GAME_REGISTRY } from "@/components/games/registry";
 import { MockSessionProvider, MockWebSocketProvider } from "./MockProviders";
 import { FloatingControlPanel } from "./FloatingControlPanel";
-import { GameData, PlayerData } from "@shared/types";
+import { DominoesData, GameData, PlayerData } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { useOptimisticGameAction } from "@/hooks/useOptimisticGameAction";
 import { useGameSettingsSchema } from "@/hooks/useGameSettingsSchema";
 import { optimisticGameReducer } from "@/lib/gameReducers";
+import { computeDominoBoardLayout } from "@shared/utils";
 import { toast } from "sonner";
+
+function withDominoesLayout(gameData: GameData): GameData {
+    if (gameData.type !== "dominoes") {
+        return gameData;
+    }
+
+    const dominoesData = gameData as DominoesData;
+    const board = dominoesData.board ?? {
+        tiles: [],
+        leftEnd: null,
+        rightEnd: null,
+    };
+
+    const seed = `${dominoesData.id}-r${dominoesData.round}`;
+
+    return {
+        ...dominoesData,
+        board: {
+            ...board,
+            layout: computeDominoBoardLayout(board.tiles, seed, board.layout),
+        },
+    } as GameData;
+}
 
 // Wrapper to use hooks that require context providers
 function GameComponentWrapper({
@@ -181,8 +205,10 @@ export function DebugEngine() {
                 : mockData.gameData.settings,
         } as GameData;
 
+        const gameDataWithLayout = withDominoesLayout(gameDataWithSettings);
+
         setMasterGameState({
-            gameData: gameDataWithSettings,
+            gameData: gameDataWithLayout,
             playerDataMap: mockData.playerDataMap || {},
         });
 
@@ -334,16 +360,21 @@ export function DebugEngine() {
                         }
                     }
 
-                    // Basic reducer for Dominoes PLAY_TILE
+                    // Basic reducer for Dominoes PLACE_TILE (with PLAY_TILE fallback for debug parity)
                     if (
-                        action.type === "PLAY_TILE" &&
+                        (action.type === "PLACE_TILE" ||
+                            action.type === "PLAY_TILE") &&
                         selectedGameId === "dominoes"
                     ) {
                         const tile = action.payload.tile as {
+                            id: string;
                             left: number;
                             right: number;
                         };
-                        const end = action.payload.end;
+                        const side =
+                            (action.payload.side as "left" | "right") ||
+                            ((action.payload.end as "left" | "right") ??
+                                "right");
                         const playerId = action.userId || selectedPlayerId;
 
                         // Remove tile from player's hand
@@ -354,11 +385,17 @@ export function DebugEngine() {
                             newPlayerDataMap[playerId] = {
                                 ...newPlayerDataMap[playerId],
                                 hand: newPlayerDataMap[playerId].hand.filter(
-                                    (t: { left: number; right: number }) =>
-                                        !(
-                                            t.left === tile.left &&
-                                            t.right === tile.right
-                                        ),
+                                    (t: {
+                                        id?: string;
+                                        left: number;
+                                        right: number;
+                                    }) =>
+                                        t.id
+                                            ? t.id !== tile.id
+                                            : !(
+                                                  t.left === tile.left &&
+                                                  t.right === tile.right
+                                              ),
                                 ),
                             };
                         }
@@ -372,12 +409,71 @@ export function DebugEngine() {
                             };
                         }
 
+                        const previousLayout = newGameData.board.layout;
+
+                        const existingTiles = Array.isArray(
+                            newGameData.board.tiles,
+                        )
+                            ? [...newGameData.board.tiles]
+                            : [];
+
+                        const isFirstTile = existingTiles.length === 0;
+
+                        if (isFirstTile) {
+                            existingTiles.push(tile);
+                            newGameData.board = {
+                                ...newGameData.board,
+                                tiles: existingTiles,
+                                leftEnd: { value: tile.left, tileId: tile.id },
+                                rightEnd: {
+                                    value: tile.right,
+                                    tileId: tile.id,
+                                },
+                            };
+                        } else {
+                            if (side === "left") {
+                                existingTiles.unshift(tile);
+                                const leftValue =
+                                    tile.left ===
+                                    newGameData.board.leftEnd?.value
+                                        ? tile.right
+                                        : tile.left;
+
+                                newGameData.board = {
+                                    ...newGameData.board,
+                                    tiles: existingTiles,
+                                    leftEnd: {
+                                        value: leftValue,
+                                        tileId: tile.id,
+                                    },
+                                };
+                            } else {
+                                existingTiles.push(tile);
+                                const rightValue =
+                                    tile.right ===
+                                    newGameData.board.rightEnd?.value
+                                        ? tile.left
+                                        : tile.right;
+
+                                newGameData.board = {
+                                    ...newGameData.board,
+                                    tiles: existingTiles,
+                                    rightEnd: {
+                                        value: rightValue,
+                                        tileId: tile.id,
+                                    },
+                                };
+                            }
+                        }
+
+                        const layoutSeed = `${newGameData.id}-r${newGameData.round}`;
                         newGameData.board = {
                             ...newGameData.board,
-                            tiles: [
-                                ...newGameData.board.tiles,
-                                { tile, end, playedBy: playerId },
-                            ],
+                            layout: computeDominoBoardLayout(
+                                newGameData.board.tiles,
+                                layoutSeed,
+                                previousLayout,
+                            ),
                         };
 
                         // Advance turn
@@ -414,6 +510,11 @@ export function DebugEngine() {
     const handleUpdateGameState = useCallback((json: string) => {
         try {
             const parsed = JSON.parse(json);
+            if (parsed?.gameData) {
+                parsed.gameData = withDominoesLayout(
+                    parsed.gameData as GameData,
+                );
+            }
             setMasterGameState(parsed);
         } catch (e) {
             console.error("Failed to parse game state JSON", e);
@@ -492,8 +593,8 @@ export function DebugEngine() {
                     handleEmit("game_action", {
                         roomId: "debug-room",
                         action: {
-                            type: "PLAY_TILE",
-                            payload: { tile: tileToPlay, end: "right" },
+                            type: "PLACE_TILE",
+                            payload: { tile: tileToPlay, side: "right" },
                             userId: currentTurnPlayerId,
                         },
                     });
@@ -581,7 +682,6 @@ export function DebugEngine() {
                             GameComponent={GameComponent}
                             gameData={masterGameState.gameData}
                             playerData={currentPlayerData}
-                            setMasterGameState={setMasterGameState}
                             selectedPlayerId={selectedPlayerId}
                         />
                     </div>

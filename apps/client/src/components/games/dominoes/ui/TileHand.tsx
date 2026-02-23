@@ -116,7 +116,10 @@ export default function TileHand({
                 <div
                     className="flex gap-1 sm:gap-2 flex-row"
                     style={{
-                        transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+                        transform:
+                            rotation !== 0
+                                ? `rotate(${rotation}deg)`
+                                : undefined,
                         transformOrigin: "center center",
                     }}
                 >
@@ -129,7 +132,11 @@ export default function TileHand({
                             transition={{ delay: index * 0.03 }}
                         >
                             <Tile
-                                tile={{ id: `facedown-${index}`, left: 0, right: 0 }}
+                                tile={{
+                                    id: `facedown-${index}`,
+                                    left: 0,
+                                    right: 0,
+                                }}
                                 isFaceDown={true}
                                 size={tileSize}
                                 rotation={0} // Container handles rotation
@@ -170,7 +177,7 @@ export default function TileHand({
             {/* Tiles container with horizontal scroll */}
             <div
                 className={cn(
-                    "flex gap-1 sm:gap-2 overflow-x-auto pb-2 px-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30 transition-opacity duration-300 justify-center w-full",
+                    "flex gap-1 sm:gap-2 overflow-x-auto overflow-y-visible py-2 px-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30 transition-opacity duration-300 justify-center w-full",
                     !isMyTurn && "opacity-50",
                 )}
                 role="listbox"
@@ -187,7 +194,8 @@ export default function TileHand({
                     const isSelected = selectedTile?.id === tile.id;
                     const isFocused = focusedIndex === index;
                     // Ensure we have a unique key even if tile.id is somehow missing
-                    const key = tile.id || `tile-${index}-${tile.left}-${tile.right}`;
+                    const key =
+                        tile.id || `tile-${index}-${tile.left}-${tile.right}`;
 
                     return (
                         <motion.div

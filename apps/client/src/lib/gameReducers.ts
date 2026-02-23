@@ -8,6 +8,7 @@ import {
     DominoesPlayerData,
     Tile,
 } from "@shared/types";
+import { computeDominoBoardLayout } from "@shared/utils";
 
 /**
  * Client-side optimistic reducers that mirror server logic
@@ -29,7 +30,7 @@ type OptimisticUpdateResult = {
 function optimisticSpadesPlayCard(
     gameData: SpadesData,
     playerData: SpadesPlayerData,
-    action: { type: string; payload: { card: PlayingCard }; userId: string }
+    action: { type: string; payload: { card: PlayingCard }; userId: string },
 ): OptimisticUpdateResult | null {
     const { card } = action.payload;
     const { userId } = action;
@@ -42,7 +43,7 @@ function optimisticSpadesPlayCard(
 
     // Validate card is in hand
     const cardIndex = playerData.hand.findIndex(
-        (c) => c.rank === card.rank && c.suit === card.suit
+        (c) => c.rank === card.rank && c.suit === card.suit,
     );
     if (cardIndex === -1) {
         return null;
@@ -100,7 +101,7 @@ function optimisticSpadesPlaceBid(
         type: string;
         payload: { bid: { amount: number; type: string; isBlind: boolean } };
         userId: string;
-    }
+    },
 ): OptimisticUpdateResult | null {
     const { bid } = action.payload;
     const { userId } = action;
@@ -114,7 +115,7 @@ function optimisticSpadesPlaceBid(
     // Validate blind bid eligibility
     if (bid.type === "blind" || bid.type === "blind-nil") {
         const playerTeam = Object.entries(gameData.teams).find(([_, team]) =>
-            team.players.includes(userId)
+            team.players.includes(userId),
         );
         if (!playerTeam) return null;
 
@@ -145,7 +146,7 @@ function optimisticSpadesPlaceBid(
 
     // Check if bidding is complete
     const allBidsPlaced = gameData.playOrder.every(
-        (playerId) => newBids[playerId] !== undefined || playerId === userId
+        (playerId) => newBids[playerId] !== undefined || playerId === userId,
     );
 
     return {
@@ -172,7 +173,7 @@ function optimisticDominoesPlaceTile(
         type: string;
         payload: { tile: Tile; side: "left" | "right" };
         userId: string;
-    }
+    },
 ): OptimisticUpdateResult | null {
     const { tile, side } = action.payload;
     const { userId } = action;
@@ -228,6 +229,14 @@ function optimisticDominoesPlaceTile(
         }
     }
 
+    // Compute layout so the optimistic state doesn't fall back to a different layout
+    const layoutSeed = `${gameData.id}-r${gameData.round}`;
+    newBoard.layout = computeDominoBoardLayout(
+        newBoard.tiles,
+        layoutSeed,
+        gameData.board.layout,
+    );
+
     // Update turn index
     const newTurnIndex =
         (gameData.currentTurnIndex + 1) % gameData.playOrder.length;
@@ -256,7 +265,7 @@ function optimisticDominoesPlaceTile(
 function optimisticDominoesPass(
     gameData: DominoesData,
     playerData: DominoesPlayerData,
-    action: { type: string; payload: Record<string, never>; userId: string }
+    action: { type: string; payload: Record<string, never>; userId: string },
 ): OptimisticUpdateResult | null {
     const { userId } = action;
 
@@ -291,7 +300,7 @@ function optimisticDominoesPass(
 export function optimisticGameReducer(
     gameData: GameData,
     playerData: PlayerData,
-    action: { type: string; payload: unknown; userId: string }
+    action: { type: string; payload: unknown; userId: string },
 ): OptimisticUpdateResult | null {
     if (gameData.type === "spades") {
         const spadesData = gameData as SpadesData;
@@ -306,7 +315,7 @@ export function optimisticGameReducer(
                         type: string;
                         payload: { card: PlayingCard };
                         userId: string;
-                    }
+                    },
                 );
             case "PLACE_BID":
                 return optimisticSpadesPlaceBid(
@@ -322,7 +331,7 @@ export function optimisticGameReducer(
                             };
                         };
                         userId: string;
-                    }
+                    },
                 );
             default:
                 // No optimistic update for this action
@@ -341,7 +350,7 @@ export function optimisticGameReducer(
                         type: string;
                         payload: { tile: Tile; side: "left" | "right" };
                         userId: string;
-                    }
+                    },
                 );
             case "PASS":
                 return optimisticDominoesPass(
@@ -351,7 +360,7 @@ export function optimisticGameReducer(
                         type: string;
                         payload: Record<string, never>;
                         userId: string;
-                    }
+                    },
                 );
             default:
                 // No optimistic update for this action
