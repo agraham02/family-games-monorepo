@@ -67,7 +67,7 @@ function canPlaceTileOnSide(
     side: "left" | "right",
 ): boolean {
     if (!board || board.tiles.length === 0) {
-        return true;
+        return side === "left";
     }
 
     const end = side === "left" ? board.leftEnd : board.rightEnd;
@@ -106,6 +106,9 @@ function DominoesGameTable({
     onPass,
 }: DominoesGameTableProps) {
     const [selectedTile, setSelectedTile] = useState<TileType | null>(null);
+    const [selectedSide, setSelectedSide] = useState<"left" | "right" | null>(
+        null,
+    );
     // Track which player just passed for pass animation
     const [passedPlayerId, setPassedPlayerId] = useState<string | null>(null);
 
@@ -206,51 +209,47 @@ function DominoesGameTable({
 
             onPlaceTile(tileToPlace, side);
             setSelectedTile(null);
+            setSelectedSide(null);
         },
         [selectedTile, isMyTurn, isPlaying, onPlaceTile],
     );
 
-    // Smart tile selection - auto-place if only one side valid
+    // Tile selection creates/updates a move draft with optional end preselection
     const handleTileSelect = useCallback(
         (tile: TileType | null) => {
             if (!isMyTurn || !isPlaying || !tile) {
                 setSelectedTile(null);
+                setSelectedSide(null);
                 return;
             }
 
             const leftValid = canPlaceTileOnSide(tile, board, "left");
             const rightValid = canPlaceTileOnSide(tile, board, "right");
 
-            // Empty board - auto place on left
-            if (board.tiles.length === 0) {
-                onPlaceTile(tile, "left");
-                setSelectedTile(null);
-                return;
-            }
-
-            // Only one side valid - auto place
+            // Only one side valid - preselect that side, require explicit confirm
             if (leftValid && !rightValid) {
-                onPlaceTile(tile, "left");
-                setSelectedTile(null);
+                setSelectedTile(tile);
+                setSelectedSide("left");
                 return;
             }
 
             if (rightValid && !leftValid) {
-                onPlaceTile(tile, "right");
-                setSelectedTile(null);
+                setSelectedTile(tile);
+                setSelectedSide("right");
                 return;
             }
 
-            // Both sides valid - show ghost previews, wait for board click
+            // Both sides valid - show two ghost previews and require end selection + confirm
             if (leftValid && rightValid) {
                 setSelectedTile(tile);
+                setSelectedSide(null);
                 return;
             }
 
             // Tile not playable (shouldn't happen with hints enabled)
             toast.error("This tile cannot be played");
         },
-        [isMyTurn, isPlaying, board, onPlaceTile],
+        [isMyTurn, isPlaying, board],
     );
 
     // Handle pass with animation
@@ -264,7 +263,17 @@ function DominoesGameTable({
     // Handle cancel selection
     const handleCancelSelection = useCallback(() => {
         setSelectedTile(null);
+        setSelectedSide(null);
     }, []);
+
+    const handleGhostSideSelect = useCallback((side: "left" | "right") => {
+        setSelectedSide(side);
+    }, []);
+
+    const handleConfirmPlacement = useCallback(() => {
+        if (!selectedSide) return;
+        handlePlaceTile(selectedSide);
+    }, [handlePlaceTile, selectedSide]);
 
     // Show toast when it's the player's turn
     useEffect(() => {
@@ -565,21 +574,24 @@ function DominoesGameTable({
                             isMyTurn={isMyTurn && isPlaying}
                             canPlaceLeft={canPlaceLeft}
                             canPlaceRight={canPlaceRight}
-                            onPlaceTile={handlePlaceTile}
+                            selectedGhostSide={selectedSide}
+                            onSelectGhostSide={handleGhostSideSelect}
                             tileSize={boardTileSize}
                             ghostTileSize={ghostTileSize}
                             className="w-full flex-1 min-h-[260px] rounded-2xl border border-white/10 bg-black/15 backdrop-blur-[1px] p-3"
                             layoutIdPrefix="dominoes"
                         />
 
-                        {/* Cancel selection hint when tile selected with both sides valid */}
-                        {selectedTile && canPlaceLeft && canPlaceRight && (
+                        {/* Cancel selection hint when tile selected */}
+                        {selectedTile && (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 className="text-white/70 text-sm text-center"
                             >
-                                Tap a &quot;Place Here&quot; button, or{" "}
+                                {canPlaceLeft && canPlaceRight
+                                    ? "Choose an end preview, then confirm your move, or "
+                                    : "Review the ghost placement, then confirm your move, or "}
                                 <button
                                     onClick={handleCancelSelection}
                                     className="underline hover:text-white"
@@ -591,6 +603,26 @@ function DominoesGameTable({
                     </TableCenter>
                 </GameTable>
             </LayoutGroup>
+
+            {/* Place Tile Confirmation Bar */}
+            <ActionConfirmationBar
+                isVisible={
+                    isMyTurn &&
+                    isPlaying &&
+                    !mustPass &&
+                    selectedTile !== null &&
+                    selectedSide !== null
+                }
+                onConfirm={handleConfirmPlacement}
+                onCancel={handleCancelSelection}
+                confirmLabel="Confirm Tile"
+                confirmVariant="default"
+                message={
+                    canPlaceLeft && canPlaceRight
+                        ? "Choose an end and confirm"
+                        : "Confirm this placement"
+                }
+            />
 
             {/* Pass Action Confirmation Bar */}
             <ActionConfirmationBar

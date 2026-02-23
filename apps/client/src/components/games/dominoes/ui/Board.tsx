@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { BoardState, Tile as TileType } from "@shared/types";
 import Tile from "./Tile";
 import { Button } from "@/components/ui/button";
-import { Focus } from "lucide-react";
+import { Focus, Minus, Plus } from "lucide-react";
 import { TileSize, usePrefersReducedMotion } from "@/hooks";
 import { useDominoLayout } from "@/hooks/useDominoLayout";
 import { useDominoCamera } from "@/hooks/useDominoCamera";
@@ -18,7 +18,8 @@ interface BoardProps {
     isMyTurn: boolean;
     canPlaceLeft: boolean;
     canPlaceRight: boolean;
-    onPlaceTile: (side: "left" | "right") => void;
+    selectedGhostSide: "left" | "right" | null;
+    onSelectGhostSide: (side: "left" | "right") => void;
     className?: string;
     layoutIdPrefix?: string;
     tileSize?: TileSize;
@@ -60,7 +61,8 @@ export default function Board({
     isMyTurn,
     canPlaceLeft,
     canPlaceRight,
-    onPlaceTile,
+    selectedGhostSide,
+    onSelectGhostSide,
     className,
     layoutIdPrefix,
     tileSize = "sm",
@@ -98,20 +100,30 @@ export default function Board({
     const leftEndPos = board.layout?.leftEndPos ?? fallbackLayout.leftEndPos;
     const rightEndPos = board.layout?.rightEndPos ?? fallbackLayout.rightEndPos;
 
-    const { camera, isManualPan, handlePan, handleZoom, recenter } =
-        useDominoCamera({
-            containerWidth,
-            containerHeight,
-            logicalBounds: bounds,
-            activePoints: [], // Always auto-scale to fit the entire board
-            unitSize: 2 * unitSize,
-            padding: 60,
-        });
+    const {
+        camera,
+        isManualPan,
+        handlePan,
+        handleZoom,
+        zoomIn,
+        zoomOut,
+        recenter,
+    } = useDominoCamera({
+        containerWidth,
+        containerHeight,
+        logicalBounds: bounds,
+        activePoints: [], // Always auto-scale to fit the entire board
+        unitSize: 2 * unitSize,
+        padding: 60,
+    });
 
     const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
     const handlePointerDown = (e: React.PointerEvent) => {
         if (e.button !== 0) return;
+        if ((e.target as HTMLElement).closest("[data-board-control='true']")) {
+            return;
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         lastPointerRef.current = { x: e.clientX, y: e.clientY };
     };
@@ -147,7 +159,7 @@ export default function Board({
     }, [handleZoom]);
 
     const isEmpty = board.tiles.length === 0;
-    const showGhostPreviews = selectedTile && isMyTurn && !isEmpty;
+    const showGhostPreviews = selectedTile && isMyTurn;
     const leftGhostTile =
         selectedTile && board.leftEnd
             ? orientTileForPlacement(selectedTile, board.leftEnd.value)
@@ -156,6 +168,8 @@ export default function Board({
         selectedTile && board.rightEnd
             ? orientTileForPlacement(selectedTile, board.rightEnd.value)
             : selectedTile;
+
+    const emptyBoardGhostPos = { x: 0, y: 0, direction: "RIGHT" as const };
 
     const getGhostRotation = (direction: string, isDouble: boolean) => {
         if (direction === "RIGHT") return isDouble ? 90 : 0;
@@ -199,16 +213,49 @@ export default function Board({
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
             >
-                {isManualPan && (
+                <div
+                    data-board-control="true"
+                    className="absolute top-2 right-2 z-40 flex items-center gap-1.5 bg-black/45 backdrop-blur-sm rounded-lg p-1"
+                >
                     <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-none"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={zoomOut}
+                        aria-label="Zoom out"
+                    >
+                        <Minus className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-none"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={zoomIn}
+                        aria-label="Zoom in"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        type="button"
                         variant="secondary"
                         size="sm"
-                        className="absolute top-2 right-2 z-40 bg-black/50 hover:bg-black/70 text-white border-none"
+                        className="h-8 bg-black/50 hover:bg-black/70 text-white border-none px-2"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={recenter}
                     >
-                        <Focus className="w-4 h-4 mr-2" />
+                        <Focus className="w-4 h-4 mr-1" />
                         Recenter
                     </Button>
+                </div>
+
+                {isManualPan && (
+                    <div className="absolute top-12 right-2 z-40 text-[10px] text-white/70 bg-black/40 px-2 py-1 rounded-md">
+                        View locked to manual pan/zoom
+                    </div>
                 )}
 
                 <motion.div
@@ -229,7 +276,13 @@ export default function Board({
                     {isEmpty ? (
                         <div className="absolute inset-0 flex items-center justify-center">
                             <div className="text-green-200/80 italic text-center flex flex-col items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-green-400/50 animate-pulse" />
+                                <div
+                                    className={cn(
+                                        "w-3 h-3 rounded-full bg-green-400/50",
+                                        !prefersReducedMotion &&
+                                            "animate-pulse",
+                                    )}
+                                />
                                 <span className="text-sm">
                                     {isMyTurn
                                         ? "Select a tile from your hand to start"
@@ -260,13 +313,21 @@ export default function Board({
                                             height,
                                             rotate: layout.rotation,
                                         }}
-                                        initial={{ opacity: 0, scale: 0.5 }}
+                                        initial={
+                                            prefersReducedMotion
+                                                ? { opacity: 1, scale: 1 }
+                                                : { opacity: 0, scale: 0.5 }
+                                        }
                                         animate={{ opacity: 1, scale: 1 }}
-                                        transition={{
-                                            type: "spring",
-                                            stiffness: 300,
-                                            damping: 25,
-                                        }}
+                                        transition={
+                                            prefersReducedMotion
+                                                ? { duration: 0 }
+                                                : {
+                                                      type: "spring",
+                                                      stiffness: 300,
+                                                      damping: 25,
+                                                  }
+                                        }
                                     >
                                         <Tile
                                             tile={tile}
@@ -289,7 +350,7 @@ export default function Board({
                                 {showGhostPreviews &&
                                     canPlaceLeft &&
                                     leftGhostTile &&
-                                    leftEndPos && (
+                                    (leftEndPos || isEmpty) && (
                                         <motion.div
                                             initial={{ opacity: 0, scale: 0.8 }}
                                             animate={{ opacity: 1, scale: 1 }}
@@ -297,24 +358,33 @@ export default function Board({
                                             className="absolute z-30 cursor-pointer group"
                                             style={{
                                                 left:
-                                                    leftEndPos.x *
+                                                    (
+                                                        leftEndPos ??
+                                                        emptyBoardGhostPos
+                                                    ).x *
                                                         (2 * ghostUnitSize) -
                                                     ghostUnitSize,
                                                 top:
-                                                    leftEndPos.y *
+                                                    (
+                                                        leftEndPos ??
+                                                        emptyBoardGhostPos
+                                                    ).y *
                                                         (2 * ghostUnitSize) -
                                                     ghostUnitSize / 2,
                                                 width: 2 * ghostUnitSize,
                                                 height: ghostUnitSize,
                                                 rotate: getGhostRotation(
-                                                    leftEndPos.direction,
+                                                    (
+                                                        leftEndPos ??
+                                                        emptyBoardGhostPos
+                                                    ).direction,
                                                     leftGhostTile.left ===
                                                         leftGhostTile.right,
                                                 ),
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                onPlaceTile("left");
+                                                onSelectGhostSide("left");
                                             }}
                                         >
                                             <div className="relative w-full h-full">
@@ -333,25 +403,57 @@ export default function Board({
                                                 </div>
                                                 <motion.div
                                                     className="absolute inset-0 rounded-lg ring-2 ring-yellow-400"
-                                                    animate={{
-                                                        opacity: [0.5, 1, 0.5],
-                                                    }}
-                                                    transition={{
-                                                        duration: 1.5,
-                                                        repeat: Infinity,
-                                                    }}
+                                                    animate={
+                                                        prefersReducedMotion
+                                                            ? {
+                                                                  opacity:
+                                                                      selectedGhostSide ===
+                                                                      "left"
+                                                                          ? 1
+                                                                          : 0.7,
+                                                              }
+                                                            : {
+                                                                  opacity:
+                                                                      selectedGhostSide ===
+                                                                      "left"
+                                                                          ? [
+                                                                                0.8,
+                                                                                1,
+                                                                                0.8,
+                                                                            ]
+                                                                          : [
+                                                                                0.5,
+                                                                                1,
+                                                                                0.5,
+                                                                            ],
+                                                              }
+                                                    }
+                                                    transition={
+                                                        prefersReducedMotion
+                                                            ? { duration: 0 }
+                                                            : {
+                                                                  duration: 1.5,
+                                                                  repeat: Infinity,
+                                                              }
+                                                    }
                                                 />
                                                 <span
                                                     className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full"
                                                     style={{
                                                         rotate: `-${getGhostRotation(
-                                                            leftEndPos.direction,
+                                                            (
+                                                                leftEndPos ??
+                                                                emptyBoardGhostPos
+                                                            ).direction,
                                                             leftGhostTile.left ===
                                                                 leftGhostTile.right,
                                                         )}deg`,
                                                     }}
                                                 >
-                                                    Tap to place
+                                                    {selectedGhostSide ===
+                                                    "left"
+                                                        ? "End selected"
+                                                        : "Tap to choose end"}
                                                 </span>
                                             </div>
                                         </motion.div>
@@ -388,7 +490,7 @@ export default function Board({
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                onPlaceTile("right");
+                                                onSelectGhostSide("right");
                                             }}
                                         >
                                             <div className="relative w-full h-full">
@@ -407,13 +509,39 @@ export default function Board({
                                                 </div>
                                                 <motion.div
                                                     className="absolute inset-0 rounded-lg ring-2 ring-yellow-400"
-                                                    animate={{
-                                                        opacity: [0.5, 1, 0.5],
-                                                    }}
-                                                    transition={{
-                                                        duration: 1.5,
-                                                        repeat: Infinity,
-                                                    }}
+                                                    animate={
+                                                        prefersReducedMotion
+                                                            ? {
+                                                                  opacity:
+                                                                      selectedGhostSide ===
+                                                                      "right"
+                                                                          ? 1
+                                                                          : 0.7,
+                                                              }
+                                                            : {
+                                                                  opacity:
+                                                                      selectedGhostSide ===
+                                                                      "right"
+                                                                          ? [
+                                                                                0.8,
+                                                                                1,
+                                                                                0.8,
+                                                                            ]
+                                                                          : [
+                                                                                0.5,
+                                                                                1,
+                                                                                0.5,
+                                                                            ],
+                                                              }
+                                                    }
+                                                    transition={
+                                                        prefersReducedMotion
+                                                            ? { duration: 0 }
+                                                            : {
+                                                                  duration: 1.5,
+                                                                  repeat: Infinity,
+                                                              }
+                                                    }
                                                 />
                                                 <span
                                                     className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap bg-black/40 px-2 py-0.5 rounded-full"
@@ -425,7 +553,10 @@ export default function Board({
                                                         )}deg`,
                                                     }}
                                                 >
-                                                    Tap to place
+                                                    {selectedGhostSide ===
+                                                    "right"
+                                                        ? "End selected"
+                                                        : "Tap to choose end"}
                                                 </span>
                                             </div>
                                         </motion.div>

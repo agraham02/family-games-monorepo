@@ -8,7 +8,10 @@ import {
     DominoesPlayerData,
     Tile,
 } from "@shared/types";
-import { computeDominoBoardLayout } from "@shared/utils";
+import {
+    computeDominoBoardLayout,
+    orientDominoTileForEnd,
+} from "@shared/utils";
 
 /**
  * Client-side optimistic reducers that mirror server logic
@@ -205,25 +208,30 @@ function optimisticDominoesPlaceTile(
         newBoard.leftEnd = { value: tile.left, tileId: tile.id };
         newBoard.rightEnd = { value: tile.right, tileId: tile.id };
     } else {
+        const targetEnd =
+            side === "left" ? newBoard.leftEnd : newBoard.rightEnd;
+        if (!targetEnd) {
+            return null;
+        }
+
+        const { orientedTile, newEndValue } = orientDominoTileForEnd(
+            tile,
+            targetEnd.value,
+        );
+
         // Place on specified side
         if (side === "left") {
-            newBoardTiles.unshift(tile);
+            newBoardTiles.unshift(orientedTile);
             newBoard.tiles = newBoardTiles;
             newBoard.leftEnd = {
-                value:
-                    tile.left === newBoard.leftEnd?.value
-                        ? tile.right
-                        : tile.left,
+                value: newEndValue,
                 tileId: tile.id,
             };
         } else {
-            newBoardTiles.push(tile);
+            newBoardTiles.push(orientedTile);
             newBoard.tiles = newBoardTiles;
             newBoard.rightEnd = {
-                value:
-                    tile.right === newBoard.rightEnd?.value
-                        ? tile.left
-                        : tile.right,
+                value: newEndValue,
                 tileId: tile.id,
             };
         }

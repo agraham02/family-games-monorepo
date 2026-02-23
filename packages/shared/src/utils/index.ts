@@ -3,5 +3,6 @@
 
 export * from "./errors";
 export * from "./dominoLayout";
+export * from "./dominoesBoard";
 export * from "./player";
 export * from "./shuffle";

@@ -183,14 +183,28 @@ export function useDominoCamera({
 
     const recenter = useCallback(() => {
         setIsManualPan(false);
-        focusOnPoints(activePoints);
-    }, [activePoints, focusOnPoints]);
+        focusOnPoints([]);
+    }, [focusOnPoints]);
+
+    const zoomIn = useCallback(() => {
+        const centerX = containerWidth / 2;
+        const centerY = containerHeight / 2;
+        handleZoom(1.15, centerX, centerY);
+    }, [containerWidth, containerHeight, handleZoom]);
+
+    const zoomOut = useCallback(() => {
+        const centerX = containerWidth / 2;
+        const centerY = containerHeight / 2;
+        handleZoom(0.85, centerX, centerY);
+    }, [containerWidth, containerHeight, handleZoom]);
 
     return {
         camera,
         isManualPan,
         handlePan,
         handleZoom,
+        zoomIn,
+        zoomOut,
         recenter,
     };
 }

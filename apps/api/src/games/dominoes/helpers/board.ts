@@ -6,6 +6,7 @@ import {
     BoardEnd,
     BoardState,
     computeDominoBoardLayout,
+    orientDominoTileForEnd,
 } from "@family-games/shared";
 
 // Re-export BoardState for convenience
@@ -111,23 +112,10 @@ export function placeTileOnBoard(
         throw new Error("Invalid board state");
     }
 
-    // Determine the orientation of the tile based on which value matches
-    // Note: We flip the tile representation to maintain consistent board layout
-    // where the connecting value faces the board and new value faces outward
-    let orientedTile = tile;
-    let newEndValue: number;
-
-    if (tile.left === end.value) {
-        // Tile connects with its left side, so right side becomes the new end
-        newEndValue = tile.right;
-    } else if (tile.right === end.value) {
-        // Tile connects with its right side, so left side becomes the new end
-        // Create a flipped representation with the same ID for visual consistency
-        orientedTile = { ...tile, left: tile.right, right: tile.left };
-        newEndValue = tile.left;
-    } else {
-        throw new Error("Tile does not match board end");
-    }
+    const { orientedTile, newEndValue } = orientDominoTileForEnd(
+        tile,
+        end.value,
+    );
 
     // Update board state
     const newTiles =

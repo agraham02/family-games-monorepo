@@ -5,7 +5,7 @@ import {
     Tile,
 } from "../types";
 
-const DEFAULT_MAX_WIDTH = 12;
+const DEFAULT_MAX_WIDTH = 16;
 
 function hashSeed(seed: string): number {
     let hash = 2166136261;
@@ -189,15 +189,9 @@ function getForwardDirectionCandidates(
     verticalDir: DominoLayoutDirection,
 ): DominoLayoutDirection[] {
     const base = getNextDirection(prevDir, prevPrevDir, x, limit, verticalDir);
-    const alternateVertical = verticalDir === "DOWN" ? "UP" : "DOWN";
 
     if (prevDir === "RIGHT" || prevDir === "LEFT") {
-        return uniqueDirections([
-            base,
-            verticalDir,
-            alternateVertical,
-            prevDir,
-        ]);
+        return uniqueDirections([base, verticalDir]);
     }
 
     return uniqueDirections([
@@ -215,15 +209,9 @@ function getBackwardDirectionCandidates(
     verticalDir: DominoLayoutDirection,
 ): DominoLayoutDirection[] {
     const base = getPrevDirection(nextDir, nextNextDir, x, limit, verticalDir);
-    const alternateVertical = verticalDir === "DOWN" ? "UP" : "DOWN";
 
     if (nextDir === "RIGHT" || nextDir === "LEFT") {
-        return uniqueDirections([
-            base,
-            verticalDir,
-            alternateVertical,
-            nextDir,
-        ]);
+        return uniqueDirections([base, verticalDir]);
     }
 
     return uniqueDirections([
@@ -233,222 +221,12 @@ function getBackwardDirectionCandidates(
     ]);
 }
 
-export function computeDominoBoardLayout(
-    tiles: Tile[],
-    seed: string,
-    previousLayout?: DominoBoardLayout,
-): DominoBoardLayout {
-    const tileLayouts: Record<string, DominoTileLayout> = {};
+function calculateBounds(tileLayouts: Record<string, DominoTileLayout>) {
     let minX = 0;
     let maxX = 0;
     let minY = 0;
     let maxY = 0;
 
-    if (tiles.length === 0) {
-        return {
-            seed,
-            tileLayouts,
-            bounds: { minX, maxX, minY, maxY },
-            leftEndPos: null,
-            rightEndPos: null,
-        };
-    }
-
-    const rng = createSeededRng(seed);
-    const maxWidth = Math.max(
-        10,
-        Math.min(14, DEFAULT_MAX_WIDTH + Math.floor(rng() * 5) - 2),
-    );
-    const forwardVerticalBias: DominoLayoutDirection =
-        rng() > 0.5 ? "DOWN" : "UP";
-    const backwardVerticalBias: DominoLayoutDirection =
-        rng() > 0.5 ? "UP" : "DOWN";
-
-    // Find a stable anchor tile
-    let anchorIndex = Math.floor(tiles.length / 2);
-    let anchorDir: DominoLayoutDirection = "RIGHT";
-    let anchorX = 0;
-    let anchorY = 0;
-
-    if (previousLayout && previousLayout.tileLayouts) {
-        const previousCenterX =
-            (previousLayout.bounds.minX + previousLayout.bounds.maxX) / 2;
-        const previousCenterY =
-            (previousLayout.bounds.minY + previousLayout.bounds.maxY) / 2;
-        const existingIndices = tiles
-            .map((tile, index) => ({
-                index,
-                hasLayout: !!previousLayout.tileLayouts[tile.id],
-            }))
-            .filter((entry) => entry.hasLayout)
-            .map((entry) => entry.index);
-
-        if (existingIndices.length > 0) {
-            anchorIndex = existingIndices.reduce((best, current) => {
-                const currentLayout =
-                    previousLayout.tileLayouts[tiles[current].id];
-                const bestLayout = previousLayout.tileLayouts[tiles[best].id];
-                const currentDistance =
-                    Math.abs(currentLayout.x - previousCenterX) +
-                    Math.abs(currentLayout.y - previousCenterY);
-                const bestDistance =
-                    Math.abs(bestLayout.x - previousCenterX) +
-                    Math.abs(bestLayout.y - previousCenterY);
-                return currentDistance < bestDistance ? current : best;
-            }, existingIndices[0]);
-
-            const oldAnchor = previousLayout.tileLayouts[tiles[anchorIndex].id];
-            anchorDir = oldAnchor.direction;
-            anchorX = oldAnchor.x;
-            anchorY = oldAnchor.y;
-        }
-    }
-
-    const anchorTile = tiles[anchorIndex];
-    const anchorIsDouble = anchorTile.left === anchorTile.right;
-
-    const anchorLayout: DominoTileLayout = {
-        id: anchorTile.id,
-        x: anchorX,
-        y: anchorY,
-        rotation: getRotation(anchorDir, anchorIsDouble),
-        isDouble: anchorIsDouble,
-        direction: anchorDir,
-    };
-
-    tileLayouts[anchorTile.id] = anchorLayout;
-
-    // Build forward chain
-    for (let i = anchorIndex + 1; i < tiles.length; i++) {
-        const tile = tiles[i];
-        const isDouble = tile.left === tile.right;
-        const prev = tileLayouts[tiles[i - 1].id];
-        const prevPrev =
-            i - 2 >= anchorIndex ? tileLayouts[tiles[i - 2].id] : null;
-
-        const directionCandidates = getForwardDirectionCandidates(
-            prev.direction,
-            prevPrev?.direction ?? null,
-            prev.x,
-            maxWidth / 2,
-            forwardVerticalBias,
-        );
-
-        let selectedLayout: DominoTileLayout | null = null;
-
-        for (const nextDir of directionCandidates) {
-            const entry = getEntrySocketRelative(nextDir, isDouble);
-            const exit = getExitSocketRelative(
-                prev.direction,
-                nextDir,
-                prev.isDouble,
-            );
-
-            const x = prev.x + exit.x - entry.x;
-            const y = prev.y + exit.y - entry.y;
-            const rotation = getRotation(nextDir, isDouble);
-
-            if (!overlapsExistingTile(x, y, rotation, tileLayouts)) {
-                selectedLayout = {
-                    id: tile.id,
-                    x,
-                    y,
-                    rotation,
-                    isDouble,
-                    direction: nextDir,
-                };
-                break;
-            }
-        }
-
-        if (!selectedLayout) {
-            const fallbackDir = directionCandidates[0];
-            const entry = getEntrySocketRelative(fallbackDir, isDouble);
-            const exit = getExitSocketRelative(
-                prev.direction,
-                fallbackDir,
-                prev.isDouble,
-            );
-
-            selectedLayout = {
-                id: tile.id,
-                x: prev.x + exit.x - entry.x,
-                y: prev.y + exit.y - entry.y,
-                rotation: getRotation(fallbackDir, isDouble),
-                isDouble,
-                direction: fallbackDir,
-            };
-        }
-
-        tileLayouts[tile.id] = selectedLayout;
-    }
-
-    // Build backward chain
-    for (let i = anchorIndex - 1; i >= 0; i--) {
-        const tile = tiles[i];
-        const isDouble = tile.left === tile.right;
-        const prev = tileLayouts[tiles[i + 1].id];
-        const prevPrev =
-            i + 2 <= anchorIndex ? tileLayouts[tiles[i + 2].id] : null;
-
-        const directionCandidates = getBackwardDirectionCandidates(
-            prev.direction,
-            prevPrev?.direction ?? null,
-            prev.x,
-            maxWidth / 2,
-            backwardVerticalBias,
-        );
-
-        let selectedLayout: DominoTileLayout | null = null;
-
-        for (const currDir of directionCandidates) {
-            const entry = getEntrySocketRelative(prev.direction, prev.isDouble);
-            const exit = getExitSocketRelative(
-                currDir,
-                prev.direction,
-                isDouble,
-            );
-
-            const x = prev.x + entry.x - exit.x;
-            const y = prev.y + entry.y - exit.y;
-            const rotation = getRotation(currDir, isDouble);
-
-            if (!overlapsExistingTile(x, y, rotation, tileLayouts)) {
-                selectedLayout = {
-                    id: tile.id,
-                    x,
-                    y,
-                    rotation,
-                    isDouble,
-                    direction: currDir,
-                };
-                break;
-            }
-        }
-
-        if (!selectedLayout) {
-            const fallbackDir = directionCandidates[0];
-            const entry = getEntrySocketRelative(prev.direction, prev.isDouble);
-            const exit = getExitSocketRelative(
-                fallbackDir,
-                prev.direction,
-                isDouble,
-            );
-
-            selectedLayout = {
-                id: tile.id,
-                x: prev.x + entry.x - exit.x,
-                y: prev.y + entry.y - exit.y,
-                rotation: getRotation(fallbackDir, isDouble),
-                isDouble,
-                direction: fallbackDir,
-            };
-        }
-
-        tileLayouts[tile.id] = selectedLayout;
-    }
-
-    // Calculate bounds
     for (const layout of Object.values(tileLayouts)) {
         const { width, height } = getTileDimensions(layout.rotation);
 
@@ -458,7 +236,16 @@ export function computeDominoBoardLayout(
         maxY = Math.max(maxY, layout.y + height / 2);
     }
 
-    // Calculate ghost positions
+    return { minX, maxX, minY, maxY };
+}
+
+function calculateEndPositions(
+    tiles: Tile[],
+    tileLayouts: Record<string, DominoTileLayout>,
+    maxWidth: number,
+    forwardVerticalBias: DominoLayoutDirection,
+    backwardVerticalBias: DominoLayoutDirection,
+) {
     const leftTile = tiles[0];
     const leftLayout = tileLayouts[leftTile.id];
     const leftPrevLayout = tiles.length > 1 ? tileLayouts[tiles[1].id] : null;
@@ -502,9 +289,6 @@ export function computeDominoBoardLayout(
     const rightGhostY = rightLayout.y + rightExit.y - rightEntry.y;
 
     return {
-        seed,
-        tileLayouts,
-        bounds: { minX, maxX, minY, maxY },
         leftEndPos: { x: leftGhostX, y: leftGhostY, direction: leftGhostDir },
         rightEndPos: {
             x: rightGhostX,
@@ -512,4 +296,286 @@ export function computeDominoBoardLayout(
             direction: rightGhostDir,
         },
     };
+}
+
+function buildLinearFallbackLayout(
+    tiles: Tile[],
+    seed: string,
+): DominoBoardLayout {
+    const tileLayouts: Record<string, DominoTileLayout> = {};
+    const maxWidth = DEFAULT_MAX_WIDTH;
+    const forwardVerticalBias: DominoLayoutDirection = "DOWN";
+    const backwardVerticalBias: DominoLayoutDirection = "UP";
+
+    const first = tiles[0];
+    const firstIsDouble = first.left === first.right;
+    tileLayouts[first.id] = {
+        id: first.id,
+        x: 0,
+        y: 0,
+        rotation: getRotation("RIGHT", firstIsDouble),
+        isDouble: firstIsDouble,
+        direction: "RIGHT",
+    };
+
+    for (let i = 1; i < tiles.length; i++) {
+        const prev = tileLayouts[tiles[i - 1].id];
+        const tile = tiles[i];
+        const isDouble = tile.left === tile.right;
+        const dir: DominoLayoutDirection = "RIGHT";
+        const entry = getEntrySocketRelative(dir, isDouble);
+        const exit = getExitSocketRelative(prev.direction, dir, prev.isDouble);
+
+        tileLayouts[tile.id] = {
+            id: tile.id,
+            x: prev.x + exit.x - entry.x,
+            y: prev.y + exit.y - entry.y,
+            rotation: getRotation(dir, isDouble),
+            isDouble,
+            direction: dir,
+        };
+    }
+
+    const bounds = calculateBounds(tileLayouts);
+    const endPositions = calculateEndPositions(
+        tiles,
+        tileLayouts,
+        maxWidth,
+        forwardVerticalBias,
+        backwardVerticalBias,
+    );
+
+    return {
+        seed,
+        tileLayouts,
+        bounds,
+        leftEndPos: endPositions.leftEndPos,
+        rightEndPos: endPositions.rightEndPos,
+    };
+}
+
+function buildLayoutAttempt(
+    tiles: Tile[],
+    seed: string,
+    previousLayout?: DominoBoardLayout,
+): DominoBoardLayout | null {
+    const tileLayouts: Record<string, DominoTileLayout> = {};
+
+    const rng = createSeededRng(seed);
+    const maxWidth = Math.max(
+        12,
+        Math.min(20, DEFAULT_MAX_WIDTH + Math.floor(rng() * 7) - 3),
+    );
+    const forwardVerticalBias: DominoLayoutDirection =
+        rng() > 0.5 ? "DOWN" : "UP";
+    const backwardVerticalBias: DominoLayoutDirection =
+        forwardVerticalBias === "DOWN" ? "UP" : "DOWN";
+
+    let anchorIndex = Math.floor(tiles.length / 2);
+    let anchorDir: DominoLayoutDirection = "RIGHT";
+    let anchorX = 0;
+    let anchorY = 0;
+
+    if (previousLayout && previousLayout.tileLayouts) {
+        const previousCenterX =
+            (previousLayout.bounds.minX + previousLayout.bounds.maxX) / 2;
+        const previousCenterY =
+            (previousLayout.bounds.minY + previousLayout.bounds.maxY) / 2;
+        const existingIndices = tiles
+            .map((tile, index) => ({
+                index,
+                hasLayout: !!previousLayout.tileLayouts[tile.id],
+            }))
+            .filter((entry) => entry.hasLayout)
+            .map((entry) => entry.index);
+
+        if (existingIndices.length > 0) {
+            anchorIndex = existingIndices.reduce((best, current) => {
+                const currentLayout =
+                    previousLayout.tileLayouts[tiles[current].id];
+                const bestLayout = previousLayout.tileLayouts[tiles[best].id];
+                const currentDistance =
+                    Math.abs(currentLayout.x - previousCenterX) +
+                    Math.abs(currentLayout.y - previousCenterY);
+                const bestDistance =
+                    Math.abs(bestLayout.x - previousCenterX) +
+                    Math.abs(bestLayout.y - previousCenterY);
+                return currentDistance < bestDistance ? current : best;
+            }, existingIndices[0]);
+
+            const oldAnchor = previousLayout.tileLayouts[tiles[anchorIndex].id];
+            anchorDir = oldAnchor.direction;
+            anchorX = oldAnchor.x;
+            anchorY = oldAnchor.y;
+        }
+    }
+
+    const anchorTile = tiles[anchorIndex];
+    const anchorIsDouble = anchorTile.left === anchorTile.right;
+
+    tileLayouts[anchorTile.id] = {
+        id: anchorTile.id,
+        x: anchorX,
+        y: anchorY,
+        rotation: getRotation(anchorDir, anchorIsDouble),
+        isDouble: anchorIsDouble,
+        direction: anchorDir,
+    };
+
+    for (let i = anchorIndex + 1; i < tiles.length; i++) {
+        const tile = tiles[i];
+        const isDouble = tile.left === tile.right;
+        const prev = tileLayouts[tiles[i - 1].id];
+        const prevPrev =
+            i - 2 >= anchorIndex ? tileLayouts[tiles[i - 2].id] : null;
+
+        const directionCandidates = getForwardDirectionCandidates(
+            prev.direction,
+            prevPrev?.direction ?? null,
+            prev.x,
+            maxWidth / 2,
+            forwardVerticalBias,
+        );
+
+        let selectedLayout: DominoTileLayout | null = null;
+
+        for (const nextDir of directionCandidates) {
+            const entry = getEntrySocketRelative(nextDir, isDouble);
+            const exit = getExitSocketRelative(
+                prev.direction,
+                nextDir,
+                prev.isDouble,
+            );
+
+            const x = prev.x + exit.x - entry.x;
+            const y = prev.y + exit.y - entry.y;
+            const rotation = getRotation(nextDir, isDouble);
+
+            if (!overlapsExistingTile(x, y, rotation, tileLayouts)) {
+                selectedLayout = {
+                    id: tile.id,
+                    x,
+                    y,
+                    rotation,
+                    isDouble,
+                    direction: nextDir,
+                };
+                break;
+            }
+        }
+
+        if (!selectedLayout) {
+            return null;
+        }
+
+        tileLayouts[tile.id] = selectedLayout;
+    }
+
+    for (let i = anchorIndex - 1; i >= 0; i--) {
+        const tile = tiles[i];
+        const isDouble = tile.left === tile.right;
+        const prev = tileLayouts[tiles[i + 1].id];
+        const prevPrev =
+            i + 2 <= anchorIndex ? tileLayouts[tiles[i + 2].id] : null;
+
+        const directionCandidates = getBackwardDirectionCandidates(
+            prev.direction,
+            prevPrev?.direction ?? null,
+            prev.x,
+            maxWidth / 2,
+            backwardVerticalBias,
+        );
+
+        let selectedLayout: DominoTileLayout | null = null;
+
+        for (const currDir of directionCandidates) {
+            const entry = getEntrySocketRelative(prev.direction, prev.isDouble);
+            const exit = getExitSocketRelative(
+                currDir,
+                prev.direction,
+                isDouble,
+            );
+
+            const x = prev.x + entry.x - exit.x;
+            const y = prev.y + entry.y - exit.y;
+            const rotation = getRotation(currDir, isDouble);
+
+            if (!overlapsExistingTile(x, y, rotation, tileLayouts)) {
+                selectedLayout = {
+                    id: tile.id,
+                    x,
+                    y,
+                    rotation,
+                    isDouble,
+                    direction: currDir,
+                };
+                break;
+            }
+        }
+
+        if (!selectedLayout) {
+            return null;
+        }
+
+        tileLayouts[tile.id] = selectedLayout;
+    }
+
+    const bounds = calculateBounds(tileLayouts);
+    const endPositions = calculateEndPositions(
+        tiles,
+        tileLayouts,
+        maxWidth,
+        forwardVerticalBias,
+        backwardVerticalBias,
+    );
+
+    return {
+        seed,
+        tileLayouts,
+        bounds,
+        leftEndPos: endPositions.leftEndPos,
+        rightEndPos: endPositions.rightEndPos,
+    };
+}
+
+export function computeDominoBoardLayout(
+    tiles: Tile[],
+    seed: string,
+    previousLayout?: DominoBoardLayout,
+): DominoBoardLayout {
+    if (tiles.length === 0) {
+        return {
+            seed,
+            tileLayouts: {},
+            bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+            leftEndPos: null,
+            rightEndPos: null,
+        };
+    }
+
+    const attempts: Array<{ attemptSeed: string; prev?: DominoBoardLayout }> = [
+        { attemptSeed: seed, prev: previousLayout },
+        { attemptSeed: `${seed}:reset`, prev: undefined },
+    ];
+
+    for (let i = 1; i <= 24; i++) {
+        attempts.push({ attemptSeed: `${seed}:retry-${i}`, prev: undefined });
+    }
+
+    for (const attempt of attempts) {
+        const layout = buildLayoutAttempt(
+            tiles,
+            attempt.attemptSeed,
+            attempt.prev,
+        );
+        if (layout) {
+            return {
+                ...layout,
+                seed,
+            };
+        }
+    }
+
+    const fallback = buildLinearFallbackLayout(tiles, seed);
+    return fallback;
 }
