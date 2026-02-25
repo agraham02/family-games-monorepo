@@ -26,6 +26,8 @@ interface TileProps {
     isFaceDown?: boolean;
     /** Explicit rotation in degrees */
     rotation?: number;
+    /** Disable framer-motion layout FLIP animation (use for board tiles under camera transform) */
+    disableLayoutAnimation?: boolean;
 }
 
 // Pip positions for each value (0-6)
@@ -123,6 +125,7 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
         perpendicularDoubles = false,
         isFaceDown = false,
         rotation,
+        disableLayoutAnimation = false,
     },
     ref,
 ) {
@@ -186,9 +189,9 @@ const Tile = forwardRef<HTMLButtonElement, TileProps>(function Tile(
             style={{
                 transform: `rotate(${getRotation()}deg)`,
             }}
-            layout={!prefersReducedMotion}
+            layout={!prefersReducedMotion && !disableLayoutAnimation}
             transition={
-                prefersReducedMotion
+                prefersReducedMotion || disableLayoutAnimation
                     ? { duration: 0 }
                     : { type: "spring", stiffness: 300, damping: 30 }
             }

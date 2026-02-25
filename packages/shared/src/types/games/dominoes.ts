@@ -73,12 +73,25 @@ export interface DominoLayoutPoint {
     direction: DominoLayoutDirection;
 }
 
+/** Tracks one end of the chain for incremental append. */
+export interface DominoEndpoint {
+    tileId: string;
+    x: number;
+    y: number;
+    direction: DominoLayoutDirection;
+    isDouble: boolean;
+}
+
 export interface DominoBoardLayout {
     seed: string;
     tileLayouts: Record<string, DominoTileLayout>;
     bounds: { minX: number; maxX: number; minY: number; maxY: number };
     leftEndPos: DominoLayoutPoint | null;
     rightEndPos: DominoLayoutPoint | null;
+    /** Head endpoint metadata for incremental append (right end). */
+    _head?: DominoEndpoint;
+    /** Tail endpoint metadata for incremental append (left end). */
+    _tail?: DominoEndpoint;
 }
 
 /**

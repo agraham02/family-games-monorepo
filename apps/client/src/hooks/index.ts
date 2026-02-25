@@ -1,6 +1,13 @@
 export { useContainerDimensions } from "./useContainerDimensions";
 export type { ContainerDimensions } from "./useContainerDimensions";
 
+export { useBoardCamera } from "./useBoardCamera";
+export type {
+    CameraState,
+    UseBoardCameraProps,
+    UseBoardCameraReturn,
+} from "./useBoardCamera";
+
 export { useWebSocketError } from "./useWebSocketError";
 
 export { usePlayerPositions } from "./usePlayerPositions";

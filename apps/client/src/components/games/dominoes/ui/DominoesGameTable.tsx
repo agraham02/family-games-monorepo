@@ -569,7 +569,6 @@ function DominoesGameTable({
                         {/* Dominoes Board */}
                         <Board
                             board={board}
-                            layoutSeed={`${gameData.id}-r${gameData.round}`}
                             selectedTile={selectedTile}
                             isMyTurn={isMyTurn && isPlaying}
                             canPlaceLeft={canPlaceLeft}
