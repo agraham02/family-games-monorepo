@@ -26,6 +26,8 @@ interface BoardProps {
     layoutIdPrefix?: string;
     tileSize?: TileSize;
     ghostTileSize?: TileSize;
+    /** Suppress camera auto-focus during deal animation */
+    isDealing?: boolean;
 }
 
 // ============================================================================
@@ -311,6 +313,7 @@ export default function Board({
     layoutIdPrefix,
     tileSize = "sm",
     ghostTileSize,
+    isDealing = false,
 }: BoardProps) {
     const effectiveGhostSize = ghostTileSize ?? tileSize;
     const prefersReducedMotion = usePrefersReducedMotion();
@@ -352,6 +355,7 @@ export default function Board({
         logicalBounds: bounds,
         unitSize: 2 * unitSize,
         padding: 60,
+        isDealing,
     });
 
     // Ghost tile computation
@@ -401,13 +405,9 @@ export default function Board({
                 )}
             </div>
 
-            {/* Board container — gesture target */}
-            <div
-                ref={containerRef}
-                {...bindGestures()}
-                className="relative flex-1 w-full overflow-hidden touch-none cursor-grab active:cursor-grabbing"
-            >
-                {/* Zoom / recenter controls (always visible) */}
+            {/* Board area — gesture target + controls */}
+            <div className="relative flex-1 w-full">
+                {/* Zoom / recenter controls — outside gesture container so clicks aren't intercepted */}
                 <ZoomControls
                     zoomIn={zoomIn}
                     zoomOut={zoomOut}
@@ -421,82 +421,107 @@ export default function Board({
                     </div>
                 )}
 
-                {/* Camera transform layer */}
-                <motion.div
-                    className="absolute inset-0 origin-top-left"
-                    animate={{
-                        x: camera.x,
-                        y: camera.y,
-                        scale: camera.scale,
-                    }}
-                    transition={cameraTransition}
+                {/* Gesture-bound container */}
+                <div
+                    ref={containerRef}
+                    {...bindGestures()}
+                    className="absolute inset-0 overflow-hidden touch-none cursor-grab active:cursor-grabbing"
                 >
-                    {/* Empty board indicator */}
-                    {isEmpty && (
-                        <EmptyBoardIndicator
-                            isMyTurn={isMyTurn}
-                            prefersReducedMotion={prefersReducedMotion}
-                        />
-                    )}
+                    {/* Camera transform layer */}
+                    <motion.div
+                        className="absolute inset-0 origin-top-left"
+                        animate={{
+                            x: camera.x,
+                            y: camera.y,
+                            scale: camera.scale,
+                        }}
+                        transition={cameraTransition}
+                    >
+                        {/* Empty board indicator */}
+                        {isEmpty && (
+                            <EmptyBoardIndicator
+                                isMyTurn={isMyTurn}
+                                prefersReducedMotion={prefersReducedMotion}
+                            />
+                        )}
 
-                    {/* Placed tiles */}
-                    {!isEmpty &&
-                        board.tiles.map((tile) => {
-                            const layout = layouts.get(tile.id);
-                            if (!layout) return null;
-                            return (
-                                <PlacedTile
-                                    key={tile.id}
-                                    tile={tile}
-                                    layout={layout}
-                                    unitSize={unitSize}
-                                    tileSize={tileSize}
-                                    prefersReducedMotion={prefersReducedMotion}
-                                    layoutIdPrefix={layoutIdPrefix}
-                                />
-                            );
-                        })}
+                        {/* Placed tiles */}
+                        {!isEmpty &&
+                            board.tiles.map((tile) => {
+                                const layout = layouts.get(tile.id);
+                                if (!layout) return null;
+                                return (
+                                    <PlacedTile
+                                        key={tile.id}
+                                        tile={tile}
+                                        layout={layout}
+                                        unitSize={unitSize}
+                                        tileSize={tileSize}
+                                        prefersReducedMotion={
+                                            prefersReducedMotion
+                                        }
+                                        layoutIdPrefix={layoutIdPrefix}
+                                    />
+                                );
+                            })}
 
-                    {/* Ghost preview — LEFT end */}
-                    <AnimatePresence>
-                        {showGhostPreviews &&
-                            canPlaceLeft &&
-                            leftGhostTile &&
-                            (leftEndPos || isEmpty) && (
-                                <GhostPreview
-                                    key="ghost-left"
-                                    tile={leftGhostTile}
-                                    side="left"
-                                    position={leftEndPos ?? emptyBoardGhostPos}
-                                    unitSize={unitSize}
-                                    tileSize={effectiveGhostSize}
-                                    isSelected={selectedGhostSide === "left"}
-                                    onSelect={() => onSelectGhostSide("left")}
-                                    prefersReducedMotion={prefersReducedMotion}
-                                />
-                            )}
-                    </AnimatePresence>
+                        {/* Ghost preview — LEFT end */}
+                        <AnimatePresence>
+                            {showGhostPreviews &&
+                                canPlaceLeft &&
+                                leftGhostTile &&
+                                (leftEndPos || isEmpty) && (
+                                    <GhostPreview
+                                        key="ghost-left"
+                                        tile={leftGhostTile}
+                                        side="left"
+                                        position={
+                                            leftEndPos ?? emptyBoardGhostPos
+                                        }
+                                        unitSize={unitSize}
+                                        tileSize={effectiveGhostSize}
+                                        isSelected={
+                                            selectedGhostSide === "left"
+                                        }
+                                        onSelect={() =>
+                                            onSelectGhostSide("left")
+                                        }
+                                        prefersReducedMotion={
+                                            prefersReducedMotion
+                                        }
+                                    />
+                                )}
+                        </AnimatePresence>
 
-                    {/* Ghost preview — RIGHT end */}
-                    <AnimatePresence>
-                        {showGhostPreviews &&
-                            canPlaceRight &&
-                            rightGhostTile &&
-                            (rightEndPos || isEmpty) && (
-                                <GhostPreview
-                                    key="ghost-right"
-                                    tile={rightGhostTile}
-                                    side="right"
-                                    position={rightEndPos ?? emptyBoardGhostPos}
-                                    unitSize={unitSize}
-                                    tileSize={effectiveGhostSize}
-                                    isSelected={selectedGhostSide === "right"}
-                                    onSelect={() => onSelectGhostSide("right")}
-                                    prefersReducedMotion={prefersReducedMotion}
-                                />
-                            )}
-                    </AnimatePresence>
-                </motion.div>
+                        {/* Ghost preview — RIGHT end */}
+                        <AnimatePresence>
+                            {showGhostPreviews &&
+                                canPlaceRight &&
+                                rightGhostTile &&
+                                (rightEndPos || isEmpty) && (
+                                    <GhostPreview
+                                        key="ghost-right"
+                                        tile={rightGhostTile}
+                                        side="right"
+                                        position={
+                                            rightEndPos ?? emptyBoardGhostPos
+                                        }
+                                        unitSize={unitSize}
+                                        tileSize={effectiveGhostSize}
+                                        isSelected={
+                                            selectedGhostSide === "right"
+                                        }
+                                        onSelect={() =>
+                                            onSelectGhostSide("right")
+                                        }
+                                        prefersReducedMotion={
+                                            prefersReducedMotion
+                                        }
+                                    />
+                                )}
+                        </AnimatePresence>
+                    </motion.div>
+                </div>
             </div>
         </div>
     );

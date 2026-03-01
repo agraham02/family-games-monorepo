@@ -35,6 +35,8 @@ export interface UseBoardCameraProps {
     minScale?: number;
     /** Max zoom scale */
     maxScale?: number;
+    /** When true, suppress auto-focus updates (e.g. during deal animation) */
+    isDealing?: boolean;
 }
 
 export interface UseBoardCameraReturn {
@@ -72,9 +74,14 @@ export function useBoardCamera({
     padding = DEFAULT_PADDING,
     minScale = DEFAULT_MIN_SCALE,
     maxScale = DEFAULT_MAX_SCALE,
+    isDealing = false,
 }: UseBoardCameraProps): UseBoardCameraReturn {
     const [camera, setCamera] = useState<CameraState>({ x: 0, y: 0, scale: 1 });
     const [isUserControlled, setIsUserControlled] = useState(false);
+
+    // Always-fresh ref so gesture callbacks never read stale state
+    const cameraRef = useRef<CameraState>(camera);
+    cameraRef.current = camera;
 
     // Refs to track gesture state
     const cameraAtGestureStart = useRef<CameraState>({ x: 0, y: 0, scale: 1 });
@@ -140,7 +147,11 @@ export function useBoardCamera({
 
         prevBoundsRef.current = logicalBounds;
 
-        if (!isUserControlled && (changed || containerWidth > 0)) {
+        if (
+            !isUserControlled &&
+            !isDealing &&
+            (changed || containerWidth > 0)
+        ) {
             const target = fitAll();
             setCamera((current) => {
                 // Avoid no-op updates
@@ -157,6 +168,7 @@ export function useBoardCamera({
     }, [
         logicalBounds,
         isUserControlled,
+        isDealing,
         fitAll,
         containerWidth,
         containerHeight,
@@ -174,7 +186,7 @@ export function useBoardCamera({
     const bindGestures = useGesture(
         {
             onDragStart: () => {
-                cameraAtGestureStart.current = { ...camera };
+                cameraAtGestureStart.current = { ...cameraRef.current };
                 hasDraggedRef.current = false;
             },
             onDrag: ({
@@ -212,7 +224,7 @@ export function useBoardCamera({
             },
 
             onPinchStart: () => {
-                cameraAtGestureStart.current = { ...camera };
+                cameraAtGestureStart.current = { ...cameraRef.current };
             },
             onPinch: ({ offset: [scale], origin: [ox, oy], memo }) => {
                 setIsUserControlled(true);
@@ -253,16 +265,13 @@ export function useBoardCamera({
         },
         {
             drag: {
-                from: () => [
-                    camera.x - cameraAtGestureStart.current.x,
-                    camera.y - cameraAtGestureStart.current.y,
-                ],
+                from: () => [0, 0],
                 filterTaps: true,
                 threshold: DRAG_THRESHOLD,
             },
             pinch: {
                 scaleBounds: { min: minScale, max: maxScale },
-                from: () => [camera.scale, 0],
+                from: () => [cameraRef.current.scale, 0],
             },
             wheel: {
                 eventOptions: { passive: false },

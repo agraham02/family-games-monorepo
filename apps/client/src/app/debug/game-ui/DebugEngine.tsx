@@ -10,7 +10,8 @@ import { useSession } from "@/contexts/SessionContext";
 import { useOptimisticGameAction } from "@/hooks/useOptimisticGameAction";
 import { useGameSettingsSchema } from "@/hooks/useGameSettingsSchema";
 import { optimisticGameReducer } from "@/lib/gameReducers";
-import { computeDominoBoardLayout } from "@shared/utils";
+import { computeDominoBoardLayoutV3 } from "@shared/utils";
+import type { DominoBoardLayoutV3 } from "@shared/types";
 import { toast } from "sonner";
 
 function withDominoesLayout(gameData: GameData): GameData {
@@ -26,12 +27,15 @@ function withDominoesLayout(gameData: GameData): GameData {
     };
 
     const seed = `${dominoesData.id}-r${dominoesData.round}`;
+    const prevLayoutV3 = board.layout as DominoBoardLayoutV3 | undefined;
+    const result = computeDominoBoardLayoutV3(board.tiles, seed, prevLayoutV3);
+    const layout = result.ok ? result.layout : result.previousLayout;
 
     return {
         ...dominoesData,
         board: {
             ...board,
-            layout: computeDominoBoardLayout(board.tiles, seed, board.layout),
+            layout,
         },
     } as GameData;
 }
@@ -467,13 +471,19 @@ export function DebugEngine() {
                         }
 
                         const layoutSeed = `${newGameData.id}-r${newGameData.round}`;
+                        const prevV3 = previousLayout as
+                            | DominoBoardLayoutV3
+                            | undefined;
+                        const layoutResult = computeDominoBoardLayoutV3(
+                            newGameData.board.tiles,
+                            layoutSeed,
+                            prevV3,
+                        );
                         newGameData.board = {
                             ...newGameData.board,
-                            layout: computeDominoBoardLayout(
-                                newGameData.board.tiles,
-                                layoutSeed,
-                                previousLayout,
-                            ),
+                            layout: layoutResult.ok
+                                ? layoutResult.layout
+                                : layoutResult.previousLayout,
                         };
 
                         // Advance turn

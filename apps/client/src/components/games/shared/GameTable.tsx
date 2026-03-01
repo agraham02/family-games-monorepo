@@ -243,12 +243,18 @@ function GameTable({
                             "left  center right"
                             ".     bottom ."
                         `,
-                        // Using minmax(0, auto) prevents content from blowing out grid items
-                        // (auto alone acts as a minimum, causing overflow issues)
+                        // Rows: always use symmetric fr proportions so the center
+                        // area is vertically centered regardless of how much content
+                        // the top/bottom edges have (or if they're empty).
                         gridTemplateRows:
-                            "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                            "minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr)",
+                        // Columns: when side players exist (3+), give sides a fixed fraction
+                        // so the center never shifts when edge content appears/animates.
+                        // For 2-player (no side edges), sides collapse to content-based auto.
                         gridTemplateColumns:
-                            "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                            playerCount >= 3
+                                ? "minmax(5rem, 1fr) minmax(0, 3fr) minmax(5rem, 1fr)"
+                                : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
                     }}
                 >
                     {children}

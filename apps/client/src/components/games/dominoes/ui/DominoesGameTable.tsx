@@ -549,10 +549,7 @@ function DominoesGameTable({
                     })}
 
                     {/* Center Area - Dominoes Board */}
-                    <TableCenter
-                        className="flex flex-col items-center gap-2 w-full h-full max-w-5xl"
-                        style={{ placeSelf: "stretch" }}
-                    >
+                    <TableCenter className="flex flex-col items-center gap-2 w-full h-full">
                         {/* Deal animation overlay */}
                         <DealingOverlay
                             dealingItems={dealingTiles}
@@ -577,7 +574,8 @@ function DominoesGameTable({
                             onSelectGhostSide={handleGhostSideSelect}
                             tileSize={boardTileSize}
                             ghostTileSize={ghostTileSize}
-                            className="w-full flex-1 min-h-[260px] rounded-2xl border border-white/10 bg-black/15 backdrop-blur-[1px] p-3"
+                            isDealing={isDealing}
+                            className="w-full flex-1 min-h-65 rounded-2xl border border-white/10 bg-black/15 backdrop-blur-[1px] p-3"
                             layoutIdPrefix="dominoes"
                         />
 

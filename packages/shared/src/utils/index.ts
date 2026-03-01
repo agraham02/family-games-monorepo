@@ -2,7 +2,13 @@
 // Barrel export for all utility functions
 
 export * from "./errors";
-export * from "./dominoLayoutEngine";
+// V2 layout engine — only re-export non-conflicting names (v3 takes priority)
+export {
+    computeDominoBoardLayout,
+    computeFullLayout,
+} from "./dominoLayoutEngine";
+export * from "./dominoLayoutEngineV3";
+export * from "./connectionTable";
 export * from "./dominoesBoard";
 export * from "./player";
 export * from "./shuffle";
