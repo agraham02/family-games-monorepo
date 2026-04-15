@@ -6,6 +6,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import GamePausedOverlay from "@/components/games/GamePausedOverlay";
 import SpectatorBanner from "@/components/games/SpectatorBanner";
 import { getGameComponent } from "@/components/games/registry";
+import { RotateDeviceOverlay } from "@/components/games/shared";
 import { GameSkeleton } from "@/components/skeletons";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GameData, GameEventPayload, PlayerData, User } from "@shared/types";
@@ -92,7 +93,7 @@ export default function GamePage() {
                     const disconnected = roomState.users.filter(
                         (u) =>
                             u.isConnected === false &&
-                            !roomState.spectators?.includes(u.id)
+                            !roomState.spectators?.includes(u.id),
                     );
                     setDisconnectedPlayers(disconnected);
                 }
@@ -130,7 +131,7 @@ export default function GamePage() {
                     setLeaderId(payload.gameState.leaderId);
                     // Update disconnected players from game state
                     const disconnected = Object.values(
-                        payload.gameState.players
+                        payload.gameState.players,
                     ).filter((p) => p.isConnected === false);
                     setDisconnectedPlayers(disconnected);
                     // Request player-specific state
@@ -146,7 +147,7 @@ export default function GamePage() {
                     setIsPaused(true);
                     setTimeoutAt(payload.timeoutAt);
                     toast.warning(
-                        "Game paused: Waiting for players to reconnect..."
+                        "Game paused: Waiting for players to reconnect...",
                     );
                     break;
                 case "game_resumed":
@@ -173,12 +174,12 @@ export default function GamePage() {
                 case "user_reconnected":
                     // Remove from disconnected list
                     setDisconnectedPlayers((prev) =>
-                        prev.filter((p) => p.id !== payload.userId)
+                        prev.filter((p) => p.id !== payload.userId),
                     );
                     break;
             }
         },
-        [emit, roomId, userId]
+        [emit, roomId, userId],
     );
 
     // Set up game event listeners
@@ -205,7 +206,7 @@ export default function GamePage() {
                 `${payload.playerName} ran out of time - ${actionText}`,
                 {
                     duration: 3000,
-                }
+                },
             );
         }
         sock.on("turn_timeout", handleTurnTimeout);
@@ -418,6 +419,7 @@ export default function GamePage() {
                                 isSpectator={isSpectator}
                                 roomCode={roomCode}
                             />
+                            <RotateDeviceOverlay />
                         </ErrorBoundary>
                     );
                 }

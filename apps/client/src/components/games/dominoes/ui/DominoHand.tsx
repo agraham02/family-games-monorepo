@@ -115,10 +115,22 @@ export default function DominoHand({
 
     const dominoes = tiles.map(tileToDomino);
 
-    // Calculate total hand dimensions for centering
+    // Calculate total hand dimensions for centering.
+    // On compact screens we reduce tile size and use negative overlap
+    // if the full hand would overflow.
     const numTiles = dominoes.length;
-    const totalHandWidth =
+    const idealHandWidth =
         numTiles * tileDims.width + Math.max(0, numTiles - 1) * TILE_GAP;
+
+    // In compact mode, if hand would overflow, use tighter gap or overlap
+    const isCompact = layoutConfig.layoutMode === "compact";
+    const effectiveGap =
+        isCompact && numTiles > 5
+            ? Math.max(-4, TILE_GAP - numTiles)
+            : TILE_GAP;
+    const effectiveHandWidth =
+        numTiles * tileDims.width +
+        Math.max(0, numTiles - 1) * Math.max(0, effectiveGap);
 
     return (
         <div
@@ -128,12 +140,12 @@ export default function DominoHand({
                 className,
             )}
             style={{
-                width: totalHandWidth,
+                width: effectiveHandWidth,
                 height: tileDims.height,
                 maxWidth: "100%",
             }}
         >
-            <div className="flex flex-row" style={{ gap: TILE_GAP }}>
+            <div className="flex flex-row" style={{ gap: effectiveGap }}>
                 <AnimatePresence mode="popLayout">
                     {dominoes.map((domino, index) => {
                         const isSelected = selectedIndex === index;
@@ -239,6 +251,7 @@ interface OpponentTilesProps {
 /**
  * Renders face-down domino tiles for opponents.
  * Integrates with GameTable/EdgeRegion for responsive sizing and rotation.
+ * In badge mode (compact layout), shows a simple count badge instead.
  */
 export function OpponentTiles({
     tileCount,
@@ -247,6 +260,33 @@ export function OpponentTiles({
 }: OpponentTilesProps) {
     const { layoutConfig } = useGameTable();
     const edgeContext = useEdgeRegion();
+
+    // In badge mode (compact layout), show a simple tile count badge
+    if (layoutConfig.useBadgeMode && tileCount > 0) {
+        return (
+            <motion.div
+                className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-lg",
+                    "bg-black/30 backdrop-blur-sm border border-white/10",
+                    className,
+                )}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            >
+                {/* Mini tile icon */}
+                <div
+                    className="rounded-sm border border-[#3A7A9A]/50 bg-[#2C5F7C] overflow-hidden"
+                    style={{ width: 14, height: 24 }}
+                >
+                    <div className="h-1/2 border-b border-[#3A7A9A]/40" />
+                </div>
+                <span className="font-bold text-white/90 text-sm tabular-nums">
+                    {tileCount}
+                </span>
+            </motion.div>
+        );
+    }
 
     const sizeKey = layoutConfig.opponentCardSize;
     const tileDims = TILE_SIZES[sizeKey] ?? TILE_SIZES.sm;
@@ -260,7 +300,7 @@ export function OpponentTiles({
             style={{
                 width:
                     Math.abs(rotation) === 90
-                        ? count * tileDims.height + (count - 1) * gap
+                        ? tileDims.height
                         : count * tileDims.width + (count - 1) * gap,
                 height:
                     Math.abs(rotation) === 90

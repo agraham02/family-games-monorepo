@@ -75,10 +75,15 @@ function CenterGlow() {
     const opacity = 0.15 + (t + 1) * 0.175;
     const radius = 22 + (t + 1) * 6.5;
 
+    // Use the same focal point as the camera so the glow appears
+    // at the visual center of the viewport, not the pixel midpoint.
+    const cx = Math.floor(BOARD_COLS / 2) * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
+    const cy = Math.floor(BOARD_ROWS / 2) * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
+
     return (
         <Circle
-            x={BOARD_PX_W / 2}
-            y={BOARD_PX_H / 2}
+            x={cx}
+            y={cy}
             radius={radius}
             fill="#3B82F6"
             opacity={opacity}

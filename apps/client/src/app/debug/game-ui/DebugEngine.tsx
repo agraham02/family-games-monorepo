@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { GAME_REGISTRY } from "@/components/games/registry";
+import { RotateDeviceOverlay } from "@/components/games/shared";
 import { MockSessionProvider, MockWebSocketProvider } from "./MockProviders";
 import { FloatingControlPanel } from "./FloatingControlPanel";
 import { GameData, PlayerData } from "@shared/types";
@@ -731,6 +732,7 @@ export function DebugEngine() {
 
     return (
         <div className="relative w-full h-screen overflow-hidden bg-background">
+            <RotateDeviceOverlay />
             <MockSessionProvider
                 initialUserId={selectedPlayerId}
                 initialRoomId="debug-room"

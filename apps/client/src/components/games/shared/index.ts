@@ -46,3 +46,6 @@ export { TurnTimer } from "./TurnTimer";
 
 // Celebration animations
 export { Celebration, WinnerAnnouncement } from "./Celebration";
+
+// Device orientation overlay
+export { default as RotateDeviceOverlay } from "./RotateDeviceOverlay";

@@ -243,17 +243,22 @@ function GameTable({
                             "left  center right"
                             ".     bottom ."
                         `,
-                        // Rows: always use symmetric fr proportions so the center
-                        // area is vertically centered regardless of how much content
-                        // the top/bottom edges have (or if they're empty).
+                        // Rows: compact mode uses smaller edge fractions to maximize
+                        // center play area on small screens; spacious/comfortable
+                        // keeps symmetric 1fr/3fr/1fr.
                         gridTemplateRows:
-                            "minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr)",
+                            layoutMode === "compact"
+                                ? "minmax(0, 0.8fr) minmax(0, 3fr) minmax(0, 1fr)"
+                                : "minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr)",
                         // Columns: when side players exist (3+), give sides a fixed fraction
                         // so the center never shifts when edge content appears/animates.
+                        // Compact mode uses smaller minimum to avoid squeezing the center.
                         // For 2-player (no side edges), sides collapse to content-based auto.
                         gridTemplateColumns:
                             playerCount >= 3
-                                ? "minmax(5rem, 1fr) minmax(0, 3fr) minmax(5rem, 1fr)"
+                                ? layoutMode === "compact"
+                                    ? "minmax(3rem, 0.8fr) minmax(0, 3fr) minmax(3rem, 0.8fr)"
+                                    : "minmax(5rem, 1fr) minmax(0, 3fr) minmax(5rem, 1fr)"
                                 : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
                     }}
                 >
