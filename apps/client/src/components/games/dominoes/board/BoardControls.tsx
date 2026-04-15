@@ -1,13 +1,18 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, ScanEye } from "lucide-react";
 import { useDominoesStore } from "../store";
 
 export default function BoardControls() {
     const stageScale = useDominoesStore((s) => s.stageScale);
     const setStageScale = useDominoesStore((s) => s.setStageScale);
-    const resetView = useDominoesStore((s) => s.resetView);
+    const autoFit = useDominoesStore((s) => s.autoFit);
+    const setAutoFit = useDominoesStore((s) => s.setAutoFit);
+    const disableAutoFit = useDominoesStore((s) => s.disableAutoFit);
+
+    const btnBase =
+        "w-10 h-10 rounded-lg bg-card/80 backdrop-blur border border-border flex items-center justify-center hover:bg-card transition-colors text-foreground";
 
     return (
         <motion.div
@@ -24,10 +29,11 @@ export default function BoardControls() {
             <motion.button
                 whileTap={{ scale: 0.9 }}
                 whileHover={{ scale: 1.05 }}
-                onClick={() => setStageScale(Math.min(3, stageScale * 1.2))}
-                className="w-10 h-10 rounded-lg bg-card/80 backdrop-blur border border-border
-                   flex items-center justify-center hover:bg-card transition-colors
-                   text-foreground"
+                onClick={() => {
+                    disableAutoFit();
+                    setStageScale(Math.min(3, stageScale * 1.2));
+                }}
+                className={btnBase}
                 aria-label="Zoom in"
             >
                 <ZoomIn size={18} />
@@ -35,10 +41,11 @@ export default function BoardControls() {
             <motion.button
                 whileTap={{ scale: 0.9 }}
                 whileHover={{ scale: 1.05 }}
-                onClick={() => setStageScale(Math.max(0.3, stageScale / 1.2))}
-                className="w-10 h-10 rounded-lg bg-card/80 backdrop-blur border border-border
-                   flex items-center justify-center hover:bg-card transition-colors
-                   text-foreground"
+                onClick={() => {
+                    disableAutoFit();
+                    setStageScale(Math.max(0.3, stageScale / 1.2));
+                }}
+                className={btnBase}
                 aria-label="Zoom out"
             >
                 <ZoomOut size={18} />
@@ -46,13 +53,16 @@ export default function BoardControls() {
             <motion.button
                 whileTap={{ scale: 0.9 }}
                 whileHover={{ scale: 1.05 }}
-                onClick={resetView}
-                className="w-10 h-10 rounded-lg bg-card/80 backdrop-blur border border-border
-                   flex items-center justify-center hover:bg-card transition-colors
-                   text-foreground"
-                aria-label="Reset view"
+                onClick={() => setAutoFit(!autoFit)}
+                className={`${btnBase} ${autoFit ? "bg-blue-600/80! border-blue-500! text-white!" : ""}`}
+                aria-label={
+                    autoFit
+                        ? "Disable auto-fit camera"
+                        : "Enable auto-fit camera"
+                }
+                title={autoFit ? "Auto-fit: ON" : "Auto-fit: OFF"}
             >
-                <Maximize2 size={18} />
+                <ScanEye size={18} />
             </motion.button>
         </motion.div>
     );

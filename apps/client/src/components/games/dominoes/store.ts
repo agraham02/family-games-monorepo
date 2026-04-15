@@ -39,6 +39,9 @@ interface DominoesVisualStore {
     stageScale: number;
     stagePosition: { x: number; y: number };
 
+    // Auto-fit camera: when true, the camera automatically adjusts to show all tiles
+    autoFit: boolean;
+
     // Actions
     setChain: (chain: DominoChainState) => void;
     selectTile: (domino: Domino | null) => void;
@@ -50,6 +53,9 @@ interface DominoesVisualStore {
     setStageScale: (scale: number) => void;
     setStagePosition: (pos: { x: number; y: number }) => void;
     resetView: () => void;
+    setAutoFit: (on: boolean) => void;
+    /** Disable auto-fit (called on manual pan/zoom) */
+    disableAutoFit: () => void;
 }
 
 const FOCAL_X =
@@ -76,6 +82,7 @@ export const useDominoesStore = create<DominoesVisualStore>((set, get) => ({
     flyingTile: null,
     stageScale: 1,
     stagePosition: { x: 0, y: 0 },
+    autoFit: true,
 
     setChain: (chain) => {
         const { selectedTile } = get();
@@ -109,6 +116,8 @@ export const useDominoesStore = create<DominoesVisualStore>((set, get) => ({
     setStagePosition: (pos) => set({ stagePosition: pos }),
     resetView: () =>
         set({ stageScale: 1, stagePosition: getCenteredPosition(1) }),
+    setAutoFit: (on) => set({ autoFit: on }),
+    disableAutoFit: () => set({ autoFit: false }),
 }));
 
 function computeGhosts(

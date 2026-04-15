@@ -100,20 +100,25 @@ export default function Dominoes({
 
     // Keep prevTileIds in sync (outside useMemo to avoid side effects)
     useEffect(() => {
-        prevTileIdsRef.current = gameData.board?.tiles?.map((t) => t.id) ?? [];
-    }, [boardTiles]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    useEffect(() => {
         store.getState().setChain(chain);
 
-        // Detect new tile placement for animation
+        // Detect new tile placement for animation.
+        // Read prevTileIds BEFORE updating it so the new tile isn't in the set yet.
         const currentCount = chain.segments.length;
         if (currentCount > prevTileCountRef.current && currentCount > 0) {
-            const lastSeg = chain.segments[chain.segments.length - 1];
-            store.getState().setLastPlacedTileId(lastSeg.domino.id);
+            const prevIds = new Set(prevTileIdsRef.current);
+            const newSeg = chain.segments.find(
+                (s) => !prevIds.has(s.domino.id),
+            );
+            if (newSeg) {
+                store.getState().setLastPlacedTileId(newSeg.domino.id);
+            }
         }
         prevTileCountRef.current = currentCount;
-    }, [chain, store]);
+
+        // Now sync prevTileIds for next render
+        prevTileIdsRef.current = gameData.board?.tiles?.map((t) => t.id) ?? [];
+    }, [chain, store]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Current turn info
     const currentTurnPlayerId =

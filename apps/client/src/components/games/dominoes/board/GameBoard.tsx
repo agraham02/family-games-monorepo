@@ -14,6 +14,7 @@ import TileChain from "./TileChain";
 import GhostTile from "./GhostTile";
 import { useDominoesStore } from "../store";
 import { GRID_CELL_SIZE, BOARD_COLS, BOARD_ROWS } from "../engine/types";
+import { getTilePixelBounds } from "../engine/layout";
 
 const BOARD_PX_W = BOARD_COLS * GRID_CELL_SIZE;
 const BOARD_PX_H = BOARD_ROWS * GRID_CELL_SIZE;
@@ -110,6 +111,8 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
     const stagePosition = useDominoesStore((s) => s.stagePosition);
     const setStageScale = useDominoesStore((s) => s.setStageScale);
     const setStagePosition = useDominoesStore((s) => s.setStagePosition);
+    const autoFit = useDominoesStore((s) => s.autoFit);
+    const disableAutoFit = useDominoesStore((s) => s.disableAutoFit);
 
     const focalX =
         Math.floor(BOARD_COLS / 2) * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
@@ -125,6 +128,128 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
         [setStagePosition, focalX, focalY],
     );
 
+    // ── Auto-fit: compute target scale/position to show all tiles ──
+    const AUTOFIT_PADDING = 80; // px of padding around the chain
+
+    const getAutoFitTarget = useCallback(
+        (containerW: number, containerH: number) => {
+            const segments = useDominoesStore.getState().chain.segments;
+            if (segments.length === 0) {
+                // No tiles yet — center on focal point at scale 1
+                return {
+                    scale: 1,
+                    x: containerW / 2 - focalX,
+                    y: containerH / 2 - focalY,
+                };
+            }
+
+            // Compute bounding box of all placed tiles
+            let minX = Infinity,
+                minY = Infinity,
+                maxX = -Infinity,
+                maxY = -Infinity;
+            for (const seg of segments) {
+                const b = getTilePixelBounds(
+                    seg.gridPos,
+                    seg.direction,
+                    seg.domino.isDouble,
+                );
+                minX = Math.min(minX, b.x);
+                minY = Math.min(minY, b.y);
+                maxX = Math.max(maxX, b.x + b.width);
+                maxY = Math.max(maxY, b.y + b.height);
+            }
+
+            const chainW = maxX - minX;
+            const chainH = maxY - minY;
+            const chainCx = (minX + maxX) / 2;
+            const chainCy = (minY + maxY) / 2;
+
+            // Scale to fit with padding, capped at 1.0 so early-game
+            // tiles stay at normal zoom instead of being magnified.
+            const availW = containerW - AUTOFIT_PADDING * 2;
+            const availH = containerH - AUTOFIT_PADDING * 2;
+            const scaleX = availW / Math.max(chainW, 1);
+            const scaleY = availH / Math.max(chainH, 1);
+            const scale = Math.max(0.3, Math.min(1, Math.min(scaleX, scaleY)));
+
+            return {
+                scale,
+                x: containerW / 2 - chainCx * scale,
+                y: containerH / 2 - chainCy * scale,
+            };
+        },
+        [focalX, focalY],
+    );
+
+    // ── Smooth animation for auto-fit camera ──
+    const animFrameRef = useRef<number>(0);
+
+    const animateToTarget = useCallback(
+        (targetScale: number, targetX: number, targetY: number) => {
+            // Cancel any running animation
+            if (animFrameRef.current) {
+                cancelAnimationFrame(animFrameRef.current);
+            }
+
+            const duration = 400; // ms
+            const start = performance.now();
+            const startScale = useDominoesStore.getState().stageScale;
+            const startPos = useDominoesStore.getState().stagePosition;
+
+            const easeOut = (t: number) => 1 - Math.pow(1 - t, 3); // cubic ease-out
+
+            const tick = (now: number) => {
+                const elapsed = now - start;
+                const raw = Math.min(elapsed / duration, 1);
+                const t = easeOut(raw);
+
+                const s = startScale + (targetScale - startScale) * t;
+                const x = startPos.x + (targetX - startPos.x) * t;
+                const y = startPos.y + (targetY - startPos.y) * t;
+
+                setStageScale(s);
+                setStagePosition({ x, y });
+
+                if (raw < 1) {
+                    animFrameRef.current = requestAnimationFrame(tick);
+                }
+            };
+
+            animFrameRef.current = requestAnimationFrame(tick);
+        },
+        [setStageScale, setStagePosition],
+    );
+
+    // Trigger auto-fit whenever the chain changes and autoFit is on
+    const prevSegmentCountRef = useRef(chain.segments.length);
+    useEffect(() => {
+        if (!autoFit) {
+            prevSegmentCountRef.current = chain.segments.length;
+            return;
+        }
+
+        const container = containerRef.current;
+        if (!container) return;
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        const target = getAutoFitTarget(w, h);
+
+        // On first tile or initial load, animate; otherwise also animate
+        animateToTarget(target.scale, target.x, target.y);
+        prevSegmentCountRef.current = chain.segments.length;
+    }, [chain.segments.length, autoFit, getAutoFitTarget, animateToTarget]);
+
+    // Clean up animation on unmount
+    useEffect(() => {
+        return () => {
+            if (animFrameRef.current) {
+                cancelAnimationFrame(animFrameRef.current);
+            }
+        };
+    }, []);
+
     const initializedRef = useRef(false);
     useLayoutEffect(() => {
         const updateSize = () => {
@@ -135,7 +260,15 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
 
                 if (!initializedRef.current) {
                     initializedRef.current = true;
-                    centerBoard(w, h, stageScale);
+                    // If autoFit is on, let the auto-fit effect handle initial positioning
+                    if (!useDominoesStore.getState().autoFit) {
+                        centerBoard(w, h, stageScale);
+                    }
+                } else if (useDominoesStore.getState().autoFit) {
+                    // Re-fit on resize when autoFit is active
+                    const target = getAutoFitTarget(w, h);
+                    setStageScale(target.scale);
+                    setStagePosition({ x: target.x, y: target.y });
                 }
             }
         };
@@ -148,6 +281,11 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
     const handleWheel = useCallback(
         (e: Konva.KonvaEventObject<WheelEvent>) => {
             e.evt.preventDefault();
+            disableAutoFit();
+            if (animFrameRef.current) {
+                cancelAnimationFrame(animFrameRef.current);
+                animFrameRef.current = 0;
+            }
             const stage = stageRef.current;
             if (!stage) return;
 
@@ -172,14 +310,19 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
                 y: pointer.y - mousePointTo.y * clampedScale,
             });
         },
-        [setStageScale, setStagePosition],
+        [setStageScale, setStagePosition, disableAutoFit],
     );
 
     const handleDragEnd = useCallback(
         (e: Konva.KonvaEventObject<DragEvent>) => {
+            disableAutoFit();
+            if (animFrameRef.current) {
+                cancelAnimationFrame(animFrameRef.current);
+                animFrameRef.current = 0;
+            }
             setStagePosition({ x: e.target.x(), y: e.target.y() });
         },
-        [setStagePosition],
+        [setStagePosition, disableAutoFit],
     );
 
     return (
