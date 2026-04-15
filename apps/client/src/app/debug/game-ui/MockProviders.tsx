@@ -1,6 +1,12 @@
 "use client";
 
-import React, { ReactNode, useState, useCallback, useRef } from "react";
+import React, {
+    ReactNode,
+    useState,
+    useEffect,
+    useCallback,
+    useRef,
+} from "react";
 import { SessionContext } from "@/contexts/SessionContext";
 import { WebSocketContext } from "@/contexts/WebSocketContext";
 
@@ -17,6 +23,14 @@ export function MockSessionProvider({
     const [roomId, setRoomId] = useState(initialRoomId);
     const [userName, setUserName] = useState("Debug User");
 
+    // Sync prop changes (e.g. perspective switch) into state
+    useEffect(() => {
+        setUserId(initialUserId);
+    }, [initialUserId]);
+    useEffect(() => {
+        setRoomId(initialRoomId);
+    }, [initialRoomId]);
+
     const value = {
         roomId,
         setRoomId,
@@ -24,7 +38,11 @@ export function MockSessionProvider({
         setUserId,
         userName,
         setUserName,
-        setSessionData: (data: { roomId?: string; userId?: string; userName?: string }) => {
+        setSessionData: (data: {
+            roomId?: string;
+            userId?: string;
+            userName?: string;
+        }) => {
             if (data.roomId) setRoomId(data.roomId);
             if (data.userId) setUserId(data.userId);
             if (data.userName) setUserName(data.userName);
@@ -55,24 +73,41 @@ export function MockWebSocketProvider({
 }) {
     const [connected] = useState(true);
 
-    const listeners = useRef<Record<string, Array<(payload: unknown) => void>>>({});
+    const listeners = useRef<Record<string, Array<(payload: unknown) => void>>>(
+        {},
+    );
 
     const emit = useCallback(
         (event: string, payload: { action?: { type: string } } | unknown) => {
             if (simulateError) {
-                console.error("[MockWebSocket] Simulated Error for event:", event);
+                console.error(
+                    "[MockWebSocket] Simulated Error for event:",
+                    event,
+                );
                 // Emit an error back to the client
                 setTimeout(() => {
-                    const errorListeners = listeners.current["action_error"] || [];
-                    const actionType = (payload as { action?: { type: string } })?.action?.type || event;
-                    errorListeners.forEach(cb => cb({ message: "Simulated network error", action: actionType }));
+                    const errorListeners =
+                        listeners.current["action_error"] || [];
+                    const actionType =
+                        (payload as { action?: { type: string } })?.action
+                            ?.type || event;
+                    errorListeners.forEach((cb) =>
+                        cb({
+                            message: "Simulated network error",
+                            action: actionType,
+                        }),
+                    );
                 }, 100);
                 return;
             }
 
             if (latency > 0) {
                 setTimeout(() => {
-                    console.log(`[MockWebSocket] Emitted (delayed ${latency}ms):`, event, payload);
+                    console.log(
+                        `[MockWebSocket] Emitted (delayed ${latency}ms):`,
+                        event,
+                        payload,
+                    );
                     onEmit?.(event, payload);
                 }, latency);
             } else {
@@ -80,7 +115,7 @@ export function MockWebSocketProvider({
                 onEmit?.(event, payload);
             }
         },
-        [latency, simulateError, onEmit]
+        [latency, simulateError, onEmit],
     );
 
     // Create a fake socket object that matches the Socket.io interface enough for our components
@@ -96,7 +131,9 @@ export function MockWebSocketProvider({
         off: (event: string, callback: (payload: unknown) => void) => {
             console.log("[MockWebSocket] Unsubscribed from:", event);
             if (listeners.current[event]) {
-                listeners.current[event] = listeners.current[event].filter(cb => cb !== callback);
+                listeners.current[event] = listeners.current[event].filter(
+                    (cb) => cb !== callback,
+                );
             }
         },
     };

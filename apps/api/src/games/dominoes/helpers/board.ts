@@ -5,8 +5,6 @@ import {
     Tile,
     BoardEnd,
     BoardState,
-    DominoBoardLayoutV3,
-    computeDominoBoardLayoutV3,
     orientDominoTileForEnd,
 } from "@family-games/shared";
 
@@ -15,19 +13,9 @@ export type { BoardState };
 
 /**
  * Initialize an empty domino board.
- * @returns Empty board state with no tiles and null ends
  */
-export function initializeBoard(layoutSeed?: string): BoardState {
-    if (!layoutSeed) {
-        return { tiles: [], leftEnd: null, rightEnd: null };
-    }
-    const result = computeDominoBoardLayoutV3([], layoutSeed);
-    return {
-        tiles: [],
-        leftEnd: null,
-        rightEnd: null,
-        layout: result.ok ? result.layout : undefined,
-    };
+export function initializeBoard(): BoardState {
+    return { tiles: [], leftEnd: null, rightEnd: null };
 }
 
 /**
@@ -94,22 +82,13 @@ export function placeTileOnBoard(
     tile: Tile,
     board: BoardState,
     side: "left" | "right",
-    layoutSeed?: string,
 ): BoardState {
     // If board is empty, place the first tile
     if (board.tiles.length === 0) {
-        const tiles = [tile];
-        const layout = layoutSeed
-            ? (() => {
-                  const r = computeDominoBoardLayoutV3(tiles, layoutSeed);
-                  return r.ok ? r.layout : undefined;
-              })()
-            : undefined;
         return {
-            tiles,
+            tiles: [tile],
             leftEnd: { value: tile.left, tileId: tile.id },
             rightEnd: { value: tile.right, tileId: tile.id },
-            layout,
         };
     }
 
@@ -135,22 +114,9 @@ export function placeTileOnBoard(
         tileId: tile.id,
     };
 
-    const layout = layoutSeed
-        ? (() => {
-              const prevV3 = board.layout as DominoBoardLayoutV3 | undefined;
-              const r = computeDominoBoardLayoutV3(
-                  newTiles,
-                  layoutSeed,
-                  prevV3,
-              );
-              return r.ok ? r.layout : r.previousLayout;
-          })()
-        : undefined;
-
     return {
         tiles: newTiles,
         leftEnd: side === "left" ? newEnd : board.leftEnd,
         rightEnd: side === "right" ? newEnd : board.rightEnd,
-        layout,
     };
 }

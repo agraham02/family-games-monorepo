@@ -4,41 +4,14 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { GAME_REGISTRY } from "@/components/games/registry";
 import { MockSessionProvider, MockWebSocketProvider } from "./MockProviders";
 import { FloatingControlPanel } from "./FloatingControlPanel";
-import { DominoesData, GameData, PlayerData } from "@shared/types";
+import { GameData, PlayerData } from "@shared/types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { useOptimisticGameAction } from "@/hooks/useOptimisticGameAction";
 import { useGameSettingsSchema } from "@/hooks/useGameSettingsSchema";
 import { optimisticGameReducer } from "@/lib/gameReducers";
-import { computeDominoBoardLayoutV3 } from "@shared/utils";
-import type { DominoBoardLayoutV3 } from "@shared/types";
+import { orientDominoTileForEnd } from "@shared/utils/dominoesBoard";
 import { toast } from "sonner";
-
-function withDominoesLayout(gameData: GameData): GameData {
-    if (gameData.type !== "dominoes") {
-        return gameData;
-    }
-
-    const dominoesData = gameData as DominoesData;
-    const board = dominoesData.board ?? {
-        tiles: [],
-        leftEnd: null,
-        rightEnd: null,
-    };
-
-    const seed = `${dominoesData.id}-r${dominoesData.round}`;
-    const prevLayoutV3 = board.layout as DominoBoardLayoutV3 | undefined;
-    const result = computeDominoBoardLayoutV3(board.tiles, seed, prevLayoutV3);
-    const layout = result.ok ? result.layout : result.previousLayout;
-
-    return {
-        ...dominoesData,
-        board: {
-            ...board,
-            layout,
-        },
-    } as GameData;
-}
 
 // Wrapper to use hooks that require context providers
 function GameComponentWrapper({
@@ -139,6 +112,8 @@ export function DebugEngine() {
     const [latency, setLatency] = useState<number>(0);
     const [simulateError, setSimulateError] = useState<boolean>(false);
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
+    const [autoSwitchPerspective, setAutoSwitchPerspective] =
+        useState<boolean>(false);
 
     const { definitions: settingsSchema, defaults: defaultSettings } =
         useGameSettingsSchema(selectedGameId);
@@ -209,7 +184,7 @@ export function DebugEngine() {
                 : mockData.gameData.settings,
         } as GameData;
 
-        const gameDataWithLayout = withDominoesLayout(gameDataWithSettings);
+        const gameDataWithLayout = gameDataWithSettings;
 
         setMasterGameState({
             gameData: gameDataWithLayout,
@@ -402,6 +377,13 @@ export function DebugEngine() {
                                               ),
                                 ),
                             };
+
+                            // Update hand counts so opponent tile backs reflect reality
+                            newGameData.handsCounts = {
+                                ...newGameData.handsCounts,
+                                [playerId]:
+                                    newPlayerDataMap[playerId].hand.length,
+                            };
                         }
 
                         // Add to board
@@ -412,8 +394,6 @@ export function DebugEngine() {
                                 rightEnd: null,
                             };
                         }
-
-                        const previousLayout = newGameData.board.layout;
 
                         const existingTiles = Array.isArray(
                             newGameData.board.tiles,
@@ -436,61 +416,72 @@ export function DebugEngine() {
                             };
                         } else {
                             if (side === "left") {
-                                existingTiles.unshift(tile);
-                                const leftValue =
-                                    tile.left ===
-                                    newGameData.board.leftEnd?.value
-                                        ? tile.right
-                                        : tile.left;
+                                const { orientedTile, newEndValue } =
+                                    orientDominoTileForEnd(
+                                        tile,
+                                        newGameData.board.leftEnd?.value ?? 0,
+                                    );
+                                existingTiles.unshift(orientedTile);
 
                                 newGameData.board = {
                                     ...newGameData.board,
                                     tiles: existingTiles,
                                     leftEnd: {
-                                        value: leftValue,
+                                        value: newEndValue,
                                         tileId: tile.id,
                                     },
                                 };
                             } else {
-                                existingTiles.push(tile);
-                                const rightValue =
-                                    tile.right ===
-                                    newGameData.board.rightEnd?.value
-                                        ? tile.left
-                                        : tile.right;
+                                const { orientedTile, newEndValue } =
+                                    orientDominoTileForEnd(
+                                        tile,
+                                        newGameData.board.rightEnd?.value ?? 0,
+                                    );
+                                existingTiles.push(orientedTile);
 
                                 newGameData.board = {
                                     ...newGameData.board,
                                     tiles: existingTiles,
                                     rightEnd: {
-                                        value: rightValue,
+                                        value: newEndValue,
                                         tileId: tile.id,
                                     },
                                 };
                             }
                         }
 
-                        const layoutSeed = `${newGameData.id}-r${newGameData.round}`;
-                        const prevV3 = previousLayout as
-                            | DominoBoardLayoutV3
-                            | undefined;
-                        const layoutResult = computeDominoBoardLayoutV3(
-                            newGameData.board.tiles,
-                            layoutSeed,
-                            prevV3,
-                        );
-                        newGameData.board = {
-                            ...newGameData.board,
-                            layout: layoutResult.ok
-                                ? layoutResult.layout
-                                : layoutResult.previousLayout,
-                        };
+                        // Reset consecutive passes on successful placement
+                        newGameData.consecutivePasses = 0;
 
-                        // Advance turn
-                        const playOrder = newGameData.playOrder;
-                        const currentIndex = newGameData.currentTurnIndex;
-                        newGameData.currentTurnIndex =
-                            (currentIndex + 1) % playOrder.length;
+                        // Check if player emptied their hand (domino-out)
+                        if (newPlayerDataMap[playerId]?.hand?.length === 0) {
+                            newGameData.phase = "round-summary";
+                        } else {
+                            // Advance turn
+                            const playOrder = newGameData.playOrder;
+                            const currentIndex = newGameData.currentTurnIndex;
+                            newGameData.currentTurnIndex =
+                                (currentIndex + 1) % playOrder.length;
+                        }
+                    }
+
+                    // Basic reducer for Dominoes PASS
+                    if (
+                        action.type === "PASS" &&
+                        selectedGameId === "dominoes"
+                    ) {
+                        const passes = (newGameData.consecutivePasses ?? 0) + 1;
+                        newGameData.consecutivePasses = passes;
+
+                        if (passes >= newGameData.playOrder.length) {
+                            // All players passed — game is blocked
+                            newGameData.phase = "round-summary";
+                        } else {
+                            const playOrder = newGameData.playOrder;
+                            const currentIndex = newGameData.currentTurnIndex;
+                            newGameData.currentTurnIndex =
+                                (currentIndex + 1) % playOrder.length;
+                        }
                     }
 
                     // Basic reducer for LRC ROLL_DICE
@@ -521,9 +512,7 @@ export function DebugEngine() {
         try {
             const parsed = JSON.parse(json);
             if (parsed?.gameData) {
-                parsed.gameData = withDominoesLayout(
-                    parsed.gameData as GameData,
-                );
+                // Game data used as-is; layout computed client-side
             }
             setMasterGameState(parsed);
         } catch (e) {
@@ -539,6 +528,14 @@ export function DebugEngine() {
         const interval = setInterval(() => {
             const gameData = masterGameState.gameData;
             if (!gameData) return;
+
+            // Don't auto-play when game is not in an active phase
+            if (
+                gameData.phase === "round-summary" ||
+                gameData.phase === "finished"
+            ) {
+                return;
+            }
 
             const currentTurnPlayerId =
                 gameData.playOrder[gameData.currentTurnIndex];
@@ -599,15 +596,61 @@ export function DebugEngine() {
                     playerData.hand &&
                     playerData.hand.length > 0
                 ) {
-                    const tileToPlay = playerData.hand[0];
-                    handleEmit("game_action", {
-                        roomId: "debug-room",
-                        action: {
-                            type: "PLACE_TILE",
-                            payload: { tile: tileToPlay, side: "right" },
-                            userId: currentTurnPlayerId,
-                        },
-                    });
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const board = (gameData as any).board;
+                    const leftVal = board?.leftEnd?.value ?? null;
+                    const rightVal = board?.rightEnd?.value ?? null;
+
+                    // Find a tile that can actually connect
+                    let tileToPlay = null;
+                    let side: "left" | "right" = "right";
+
+                    for (const tile of playerData.hand) {
+                        if (leftVal === null && rightVal === null) {
+                            // Empty board — any tile works
+                            tileToPlay = tile;
+                            break;
+                        }
+                        // Check right end
+                        if (
+                            rightVal !== null &&
+                            (tile.left === rightVal || tile.right === rightVal)
+                        ) {
+                            tileToPlay = tile;
+                            side = "right";
+                            break;
+                        }
+                        // Check left end
+                        if (
+                            leftVal !== null &&
+                            (tile.left === leftVal || tile.right === leftVal)
+                        ) {
+                            tileToPlay = tile;
+                            side = "left";
+                            break;
+                        }
+                    }
+
+                    if (tileToPlay) {
+                        handleEmit("game_action", {
+                            roomId: "debug-room",
+                            action: {
+                                type: "PLACE_TILE",
+                                payload: { tile: tileToPlay, side },
+                                userId: currentTurnPlayerId,
+                            },
+                        });
+                    } else {
+                        // No playable tile — pass
+                        handleEmit("game_action", {
+                            roomId: "debug-room",
+                            action: {
+                                type: "PASS",
+                                payload: {},
+                                userId: currentTurnPlayerId,
+                            },
+                        });
+                    }
                 }
             } else if (
                 selectedGameId === "lrc" &&
@@ -626,6 +669,16 @@ export function DebugEngine() {
 
         return () => clearInterval(interval);
     }, [autoPlay, masterGameState, selectedGameId, handleEmit]);
+
+    // Auto-switch perspective to current turn player
+    useEffect(() => {
+        if (!autoSwitchPerspective || !masterGameState.gameData) return;
+        const { playOrder, currentTurnIndex } = masterGameState.gameData;
+        const currentTurnPlayerId = playOrder?.[currentTurnIndex];
+        if (currentTurnPlayerId && currentTurnPlayerId !== selectedPlayerId) {
+            setSelectedPlayerId(currentTurnPlayerId);
+        }
+    }, [autoSwitchPerspective, masterGameState, selectedPlayerId]);
 
     const gameEntry = GAME_REGISTRY[selectedGameId];
     const GameComponent = gameEntry?.component;
@@ -718,6 +771,8 @@ export function DebugEngine() {
                 onSimulateErrorChange={setSimulateError}
                 autoPlay={autoPlay}
                 onAutoPlayChange={setAutoPlay}
+                autoSwitchPerspective={autoSwitchPerspective}
+                onAutoSwitchPerspectiveChange={setAutoSwitchPerspective}
                 settingsSchema={settingsSchema}
                 currentSettings={currentSettings}
                 onUpdateSetting={handleUpdateSetting}

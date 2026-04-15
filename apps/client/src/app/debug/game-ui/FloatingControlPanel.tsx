@@ -46,6 +46,9 @@ interface FloatingControlPanelProps {
     autoPlay: boolean;
     onAutoPlayChange: (val: boolean) => void;
 
+    autoSwitchPerspective: boolean;
+    onAutoSwitchPerspectiveChange: (val: boolean) => void;
+
     settingsSchema?: SettingDefinition[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     currentSettings?: Record<string, any>;
@@ -74,6 +77,8 @@ export function FloatingControlPanel({
     onSimulateErrorChange,
     autoPlay,
     onAutoPlayChange,
+    autoSwitchPerspective,
+    onAutoSwitchPerspectiveChange,
     settingsSchema = [],
     currentSettings = {},
     onUpdateSetting,
@@ -250,6 +255,26 @@ export function FloatingControlPanel({
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                    <Label
+                                        htmlFor="auto-switch-perspective"
+                                        className="flex flex-col space-y-1"
+                                    >
+                                        <span>Follow Turn</span>
+                                        <span className="font-normal text-xs text-muted-foreground">
+                                            Auto-switch perspective to current
+                                            player&apos;s turn
+                                        </span>
+                                    </Label>
+                                    <Switch
+                                        id="auto-switch-perspective"
+                                        checked={autoSwitchPerspective}
+                                        onCheckedChange={
+                                            onAutoSwitchPerspectiveChange
+                                        }
+                                    />
                                 </div>
 
                                 <div className="flex items-center justify-between pt-2 border-t">

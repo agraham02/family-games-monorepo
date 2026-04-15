@@ -2,17 +2,17 @@
 // Game component registry for dynamic game type rendering
 
 import { ComponentType } from "react";
-import Dominoes from "./dominoes";
 import Spades from "./spades";
 import LRC from "./lrc";
+import Dominoes from "./dominoes";
 import { GameData, PlayerData } from "@shared/types";
 import {
     generateSpadesMockData,
-    generateDominoesMockData,
     generateLRCMockData,
+    generateDominoesMockData,
     SpadesMockOptions,
-    DominoesMockOptions,
     LRCMockOptions,
+    DominoesMockOptions,
 } from "./mockData";
 
 /**
@@ -68,18 +68,6 @@ interface GameRegistryEntry {
  * Add new games here as they are implemented.
  */
 export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
-    dominoes: {
-        component: Dominoes,
-        displayName: "Dominoes",
-        generateMockData:
-            generateDominoesMockData as MockDataGenerator<DominoesMockOptions>,
-        defaultMockOptions: {
-            playerCount: 4,
-            phase: "playing",
-            round: 1,
-            boardTileCount: 5,
-        },
-    },
     spades: {
         component: Spades,
         displayName: "Spades",
@@ -104,6 +92,18 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             startingChips: 3,
             chipValue: 0.25,
             wildMode: false,
+        },
+    },
+    dominoes: {
+        component: Dominoes,
+        displayName: "Dominoes",
+        generateMockData:
+            generateDominoesMockData as MockDataGenerator<DominoesMockOptions>,
+        defaultMockOptions: {
+            playerCount: 4,
+            phase: "playing",
+            round: 1,
+            tilesOnBoard: 3,
         },
     },
 };

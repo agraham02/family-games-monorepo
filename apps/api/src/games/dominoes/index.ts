@@ -228,7 +228,7 @@ function init(
 
         hands,
         boneyard,
-        board: initializeBoard(`${gameId}-r1`),
+        board: initializeBoard(),
 
         phase: "playing",
         round: 1,
@@ -442,12 +442,7 @@ function handlePlaceTile(
     const newHands = { ...state.hands, [playerId]: newHand };
 
     // Place tile on board
-    const newBoard = placeTileOnBoard(
-        tile,
-        state.board,
-        side,
-        `${state.id}-r${state.round}`,
-    );
+    const newBoard = placeTileOnBoard(tile, state.board, side);
 
     // Reset consecutive passes since a tile was played
     const consecutivePasses = 0;
@@ -871,7 +866,7 @@ function startNextRound(state: DominoesState): DominoesState {
         ...state,
         hands: newHands,
         boneyard,
-        board: initializeBoard(`${state.id}-r${newRound}`),
+        board: initializeBoard(),
         currentTurnIndex: startingPlayerIndex,
         startingPlayerIndex,
         phase: "playing",

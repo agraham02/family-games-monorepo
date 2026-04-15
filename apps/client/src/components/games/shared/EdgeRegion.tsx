@@ -59,7 +59,7 @@ const EDGE_LAYOUTS: Record<EdgePosition, EdgeLayout> = {
     left: {
         flexDirection: "row-reverse", // Cards left (toward edge), info right
         gridArea: "left",
-        justifyContent: "flex-start",
+        justifyContent: "flex-end",
         alignItems: "center",
         cardRotation: 90,
     },
@@ -143,10 +143,10 @@ function EdgeRegion({
         <EdgeRegionContext.Provider value={contextValue}>
             <motion.div
                 className={cn(
-                    "flex gap-2",
+                    "flex gap-2 z-20",
                     overflowClass,
                     paddingClasses[position],
-                    className
+                    className,
                 )}
                 style={{
                     gridArea: layout.gridArea,

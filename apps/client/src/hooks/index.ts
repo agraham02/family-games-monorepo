@@ -34,12 +34,6 @@ export {
 export { useTurnTimer } from "./useTurnTimer";
 
 export {
-    useResponsiveTileSize,
-    getResponsiveTileSize,
-} from "./useResponsiveTileSize";
-export type { TileSize } from "./useResponsiveTileSize";
-
-export {
     usePrefersReducedMotion,
     getAnimationDuration,
     getMotionConfig,

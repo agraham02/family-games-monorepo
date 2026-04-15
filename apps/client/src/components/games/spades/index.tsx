@@ -115,6 +115,14 @@ export default function Spades({
 
     // Calculate blind bid eligibility
     const blindBidEligibility = useMemo(() => {
+        if (!gameData.teams) {
+            return {
+                isEligible: false,
+                canBlindNil: false,
+                canBlindBid: false,
+                teamScoreDeficit: 0,
+            };
+        }
         let playerTeamId: number | undefined;
         Object.entries(gameData.teams).forEach(([teamId, team]) => {
             if (team.players.includes(userId)) {
@@ -263,19 +271,23 @@ export default function Spades({
     );
 
     // Build team scores for scoreboard
-    const teamScores = Object.entries(gameData.teams).map(([teamId, team]) => ({
-        teamId,
-        teamName: `Team ${Number(teamId) + 1}`,
-        players: team.players.map((pid) => gameData.players[pid]?.name || pid),
-        score: team.score,
-        roundScore: gameData.roundTeamScores?.[Number(teamId)],
-    }));
+    const teamScores = Object.entries(gameData.teams ?? {}).map(
+        ([teamId, team]) => ({
+            teamId,
+            teamName: `Team ${Number(teamId) + 1}`,
+            players: team.players.map(
+                (pid) => gameData.players?.[pid]?.name || pid,
+            ),
+            score: team.score,
+            roundScore: gameData.roundTeamScores?.[Number(teamId)],
+        }),
+    );
 
     // Build player bids for scoreboard
     const playerBids = gameData.playOrder.map((playerId) => ({
         playerId,
-        playerName: gameData.players[playerId]?.name || playerId,
-        bid: gameData.bids[playerId]?.amount ?? null,
+        playerName: gameData.players?.[playerId]?.name || playerId,
+        bid: gameData.bids?.[playerId]?.amount ?? null,
         tricksWon: gameData.roundTrickCounts?.[playerId] ?? 0,
     }));
 
@@ -311,6 +323,11 @@ export default function Spades({
         gameData.leaderId,
         sendSystemAction,
     ]);
+
+    // Guard: stale cross-game data during debug page switching
+    if (!gameData.teams || !gameData.players || !gameData.bids) {
+        return null;
+    }
 
     return (
         <div className="h-screen w-full overflow-hidden">

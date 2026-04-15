@@ -7,12 +7,8 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
-    DominoBoardLayoutV3,
 } from "@shared/types";
-import {
-    computeDominoBoardLayoutV3,
-    orientDominoTileForEnd,
-} from "@shared/utils";
+import { orientDominoTileForEnd } from "@shared/utils";
 
 /**
  * Client-side optimistic reducers that mirror server logic
@@ -237,18 +233,6 @@ function optimisticDominoesPlaceTile(
             };
         }
     }
-
-    // Compute layout so the optimistic state doesn't fall back to a different layout
-    const layoutSeed = `${gameData.id}-r${gameData.round}`;
-    const prevV3 = gameData.board.layout as DominoBoardLayoutV3 | undefined;
-    const layoutResult = computeDominoBoardLayoutV3(
-        newBoard.tiles,
-        layoutSeed,
-        prevV3,
-    );
-    newBoard.layout = layoutResult.ok
-        ? layoutResult.layout
-        : layoutResult.previousLayout;
 
     // Update turn index
     const newTurnIndex =

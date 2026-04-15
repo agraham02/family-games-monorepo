@@ -6,9 +6,6 @@ import {
     SpadesPlayerData,
     PlayingCard,
     SpadesClientSettings,
-    DominoesData,
-    DominoesPlayerData,
-    Tile,
     LRCData,
     LRCPlayerData,
     LRCPlayer,
@@ -16,8 +13,12 @@ import {
     DieRoll,
     DieFace,
     DEFAULT_SPADES_SETTINGS,
-    DEFAULT_DOMINOES_SETTINGS,
     DEFAULT_LRC_SETTINGS,
+    DominoesData,
+    DominoesPlayerData,
+    Tile,
+    DominoesClientSettings,
+    DEFAULT_DOMINOES_SETTINGS,
 } from "@shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,133 +278,6 @@ export function generateSpadesMockData(options: SpadesMockOptions = {}): {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dominoes Mock Data
-// ─────────────────────────────────────────────────────────────────────────────
-
-function generateDominoSet(): Tile[] {
-    const tiles: Tile[] = [];
-    let id = 0;
-    for (let left = 0; left <= 6; left++) {
-        for (let right = left; right <= 6; right++) {
-            tiles.push({ left, right, id: `tile-${id++}` });
-        }
-    }
-    return tiles;
-}
-
-function dealTiles(tiles: Tile[], playerCount: number): Tile[][] {
-    const tilesPerPlayer = playerCount <= 2 ? 7 : playerCount <= 4 ? 7 : 5;
-    const hands: Tile[][] = Array.from({ length: playerCount }, () => []);
-
-    for (let i = 0; i < tilesPerPlayer * playerCount && i < tiles.length; i++) {
-        hands[i % playerCount].push(tiles[i]);
-    }
-
-    return hands;
-}
-
-export interface DominoesMockOptions {
-    playerCount?: number;
-    phase?: DominoesData["phase"];
-    round?: number;
-    currentTurnIndex?: number;
-    boardTileCount?: number;
-    settings?: Partial<typeof DEFAULT_DOMINOES_SETTINGS>;
-}
-
-export function generateDominoesMockData(options: DominoesMockOptions = {}): {
-    gameData: DominoesData;
-    playerData: DominoesPlayerData;
-    playerDataMap: Record<string, DominoesPlayerData>;
-} {
-    const {
-        playerCount = 4,
-        phase = "playing",
-        round = 1,
-        currentTurnIndex = 0,
-        boardTileCount = 0,
-        settings = {},
-    } = options;
-
-    const finalSettings = {
-        ...DEFAULT_DOMINOES_SETTINGS,
-        ...settings,
-    };
-
-    const allTiles = shuffle(generateDominoSet());
-    const hands = dealTiles(allTiles, playerCount);
-    const playOrder = Array.from({ length: playerCount }, (_, i) =>
-        generatePlayerId(i),
-    );
-    const players = generatePlayers(playerCount);
-    const localPlayerId = generatePlayerId(0);
-
-    // Generate hands counts
-    const handsCounts: Record<string, number> = {};
-    playOrder.forEach((playerId, idx) => {
-        handsCounts[playerId] = hands[idx]?.length || 0;
-    });
-
-    // Generate player scores
-    const playerScores: Record<string, number> = {};
-    playOrder.forEach((playerId) => {
-        playerScores[playerId] = Math.floor(Math.random() * 50);
-    });
-
-    // Generate board state
-    const boardTiles = allTiles.slice(
-        playerCount * 7,
-        playerCount * 7 + boardTileCount,
-    );
-    const board: DominoesData["board"] = {
-        tiles: boardTiles,
-        leftEnd:
-            boardTiles.length > 0
-                ? { value: boardTiles[0].left, tileId: boardTiles[0].id }
-                : null,
-        rightEnd:
-            boardTiles.length > 0
-                ? {
-                      value: boardTiles[boardTiles.length - 1].right,
-                      tileId: boardTiles[boardTiles.length - 1].id,
-                  }
-                : null,
-    };
-
-    const gameData: DominoesData = {
-        id: "mock-game-id",
-        roomId: "mock-room",
-        type: "dominoes",
-        players,
-        leaderId: localPlayerId,
-        playOrder,
-        currentTurnIndex,
-        startingPlayerIndex: 0,
-        handsCounts,
-        boneyardCount: 0,
-        board,
-        phase,
-        round,
-        consecutivePasses: 0,
-        gameMode: finalSettings.gameMode,
-        playerScores,
-        settings: finalSettings,
-    };
-
-    const playerDataMap: Record<string, DominoesPlayerData> = {};
-    playOrder.forEach((playerId, idx) => {
-        playerDataMap[playerId] = {
-            hand: hands[idx] || [],
-            localOrdering: playOrder,
-        };
-    });
-
-    const playerData = playerDataMap[localPlayerId];
-
-    return { gameData, playerData, playerDataMap };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Export Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -537,6 +411,139 @@ export function generateLRCMockData(options: LRCMockOptions = {}): {
             netWinningsCents: 0,
         };
     });
+
+    const playerData = playerDataMap[localPlayerId];
+
+    return { gameData, playerData, playerDataMap };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dominoes Mock Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+function generateDoubleSixSet(): Tile[] {
+    const tiles: Tile[] = [];
+    for (let i = 0; i <= 6; i++) {
+        for (let j = i; j <= 6; j++) {
+            tiles.push({ left: i, right: j, id: `${i}-${j}` });
+        }
+    }
+    return tiles;
+}
+
+export interface DominoesMockOptions {
+    playerCount?: number; // 2-4, default 4
+    phase?: "playing" | "round-summary" | "finished";
+    round?: number;
+    tilesOnBoard?: number; // How many tiles already placed
+    settings?: Partial<DominoesClientSettings>;
+}
+
+export function generateDominoesMockData(options: DominoesMockOptions = {}): {
+    gameData: DominoesData;
+    playerData: DominoesPlayerData;
+    playerDataMap: Record<string, DominoesPlayerData>;
+} {
+    const playerCount = Math.min(4, Math.max(2, options.playerCount ?? 4));
+    const phase = options.phase ?? "playing";
+    const round = options.round ?? 1;
+    const tilesOnBoard = options.tilesOnBoard ?? 3;
+
+    const playOrder = Array.from({ length: playerCount }, (_, i) =>
+        generatePlayerId(i),
+    );
+    const players = generatePlayers(playerCount);
+    const localPlayerId = playOrder[0];
+
+    const allTiles = shuffle(generateDoubleSixSet());
+
+    // Deal 7 tiles per player
+    const tilesPerPlayer = 7;
+    const hands: Record<string, Tile[]> = {};
+    let dealt = 0;
+    for (const pid of playOrder) {
+        hands[pid] = allTiles.slice(dealt, dealt + tilesPerPlayer);
+        dealt += tilesPerPlayer;
+    }
+    const boneyard = allTiles.slice(dealt);
+
+    // Build a small board from the boneyard so players keep full hands.
+    // Create a valid chain where each tile connects to the previous one.
+    const boardTiles: Tile[] = [];
+    let leftEnd = null;
+    let rightEnd = null;
+    const placed = Math.min(tilesOnBoard, boneyard.length);
+
+    if (placed > 0) {
+        // Place the first tile
+        const first = boneyard[0];
+        boardTiles.push(first);
+        leftEnd = { value: first.left, tileId: first.id };
+        rightEnd = { value: first.right, tileId: first.id };
+
+        // Try to chain subsequent tiles by finding one that connects
+        const remaining = boneyard.slice(1);
+        for (let count = 1; count < placed && remaining.length > 0; count++) {
+            const idx = remaining.findIndex(
+                (t) =>
+                    t.left === rightEnd!.value || t.right === rightEnd!.value,
+            );
+            if (idx === -1) break;
+            const tile = remaining.splice(idx, 1)[0];
+            // Orient: if tile.right matches, swap conceptually
+            const connectValue: number =
+                tile.left === rightEnd!.value ? tile.right : tile.left;
+            boardTiles.push(tile);
+            rightEnd = { value: connectValue, tileId: tile.id };
+        }
+    }
+
+    const handsCounts: Record<string, number> = {};
+    for (const pid of playOrder) {
+        handsCounts[pid] = hands[pid].length;
+    }
+
+    const playerScores: Record<string, number> = {};
+    for (const pid of playOrder) {
+        playerScores[pid] = Math.floor(Math.random() * 30);
+    }
+
+    const finalSettings: DominoesClientSettings = {
+        ...DEFAULT_DOMINOES_SETTINGS,
+        ...(options.settings ?? {}),
+    };
+
+    const gameData: DominoesData = {
+        type: "dominoes",
+        id: "debug-game",
+        roomId: "debug-room",
+        players,
+        leaderId: localPlayerId,
+        playOrder,
+        currentTurnIndex: 0,
+        startingPlayerIndex: 0,
+        handsCounts,
+        boneyardCount: boneyard.length,
+        board: {
+            tiles: boardTiles,
+            leftEnd,
+            rightEnd,
+        },
+        phase,
+        round,
+        consecutivePasses: 0,
+        gameMode: finalSettings.gameMode,
+        playerScores,
+        settings: finalSettings,
+    };
+
+    const playerDataMap: Record<string, DominoesPlayerData> = {};
+    for (const pid of playOrder) {
+        playerDataMap[pid] = {
+            hand: hands[pid],
+            localOrdering: playOrder,
+        };
+    }
 
     const playerData = playerDataMap[localPlayerId];
 
