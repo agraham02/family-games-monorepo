@@ -15,6 +15,7 @@ import { LRCData, LRCPlayerData, LRCPlayer } from "@shared/types";
 import {
     GameMenu,
     GameSettingToggle,
+    RotateDeviceOverlay,
     useGameSetting,
 } from "@/components/games/shared";
 import {
@@ -431,7 +432,8 @@ export default function LRC({
     }, [gameData.lrcPlayers, userId]);
 
     return (
-        <div className="h-screen w-full overflow-hidden bg-linear-to-b from-emerald-900 to-emerald-950">
+        <div className="h-[100dvh] w-full overflow-hidden bg-linear-to-b from-emerald-900 to-emerald-950">
+            <RotateDeviceOverlay />
             {/* Circular player layout */}
             <CircularPlayerLayout
                 playerCount={gameData.lrcPlayers.length}

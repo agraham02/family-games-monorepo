@@ -116,38 +116,49 @@ function EdgeRegion({
     };
 
     // Different padding based on position and layout mode
-    // Compact mode uses minimal padding to maximize card space
-    // Bottom edge needs extra padding to prevent clipping at screen edge
-    const paddingClasses = isCompact
-        ? {
-              bottom: "pb-1 pt-0.5", // Minimal bottom to maximize board space
-              top: "pt-1 pb-0.5", // Minimal top
-              left: "pl-0.5 pr-0.5",
-              right: "pr-0.5 pl-0.5",
-          }
-        : {
-              bottom: "pb-3 pt-4", // More padding for safe area
-              top: "pt-3 pb-4",
-              left: "pl-3 pr-4",
-              right: "pr-3 pl-4",
-          };
+    // Compact mode uses minimal padding to maximize card space.
+    // Comfortable/spacious add a small breathing gap so hands never sit flush
+    // against the viewport edge.
+    // Safe-area insets are merged into the base padding via max() so notched
+    // devices keep their inset without the utility class nuking our base
+    // padding to 0 on non-notched viewports.
+    const basePad = isCompact
+        ? { edge: "2px", cross: "2px" }
+        : { edge: "0.5rem", cross: "0.5rem" };
 
-    // For left/right positions, cards are rotated and need to overflow visually
-    // For top/bottom positions, we need overflow-hidden to prevent clipping issues
-    const isVerticalEdge = position === "left" || position === "right";
-    const overflowClass = isVerticalEdge
-        ? "overflow-visible"
-        : "overflow-visible";
+    const paddingStyles: Record<EdgePosition, React.CSSProperties> = {
+        bottom: {
+            paddingBottom: `max(${basePad.edge}, env(safe-area-inset-bottom))`,
+            paddingTop: basePad.cross,
+        },
+        top: {
+            paddingTop: `max(${basePad.edge}, env(safe-area-inset-top))`,
+            paddingBottom: basePad.cross,
+        },
+        left: {
+            paddingLeft: `max(${basePad.edge}, env(safe-area-inset-left))`,
+            paddingRight: basePad.cross,
+        },
+        right: {
+            paddingRight: `max(${basePad.edge}, env(safe-area-inset-right))`,
+            paddingLeft: basePad.cross,
+        },
+    };
+
+    // Cap the region so rotated opponent hands can never outgrow their grid
+    // cell — but only on compact, where badge mode is used and we need tight
+    // clipping to prevent side rails extending the viewport.
+    // On comfortable/spacious (desktop/tablet), keep overflow-visible so full
+    // fan hands (top/left/right) can bleed into the center cell as designed.
+    const overflowClass =
+        isCompact && position !== "bottom"
+            ? "overflow-hidden"
+            : "overflow-visible";
 
     return (
         <EdgeRegionContext.Provider value={contextValue}>
             <motion.div
-                className={cn(
-                    "flex gap-2 z-20",
-                    overflowClass,
-                    paddingClasses[position],
-                    className,
-                )}
+                className={cn("flex gap-2 z-20", overflowClass, className)}
                 style={{
                     gridArea: layout.gridArea,
                     flexDirection: layout.flexDirection,
@@ -156,6 +167,13 @@ function EdgeRegion({
                     // Allow grid item to shrink below content size
                     minWidth: 0,
                     minHeight: 0,
+                    // On compact, cap region to its assigned grid cell so
+                    // rotated fans/badges cannot outgrow the row/column.
+                    // On larger layouts, allow bleed into the center cell so
+                    // full fans render at their natural size.
+                    maxWidth: isCompact ? "100%" : undefined,
+                    maxHeight: isCompact ? "100%" : undefined,
+                    ...paddingStyles[position],
                 }}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{

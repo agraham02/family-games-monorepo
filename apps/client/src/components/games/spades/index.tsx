@@ -7,6 +7,7 @@ import {
     GameScoreboard,
     GameMenu,
     GameSettingToggle,
+    RotateDeviceOverlay,
     useGameSetting,
 } from "@/components/games/shared";
 import { SpadesData, SpadesPlayerData, PlayingCard } from "@shared/types";
@@ -330,7 +331,8 @@ export default function Spades({
     }
 
     return (
-        <div className="h-screen w-full overflow-hidden">
+        <div className="h-[100dvh] w-full overflow-hidden">
+            <RotateDeviceOverlay />
             <SpadesGameTable
                 gameData={gameData}
                 playerData={playerData}

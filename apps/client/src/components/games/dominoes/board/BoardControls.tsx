@@ -12,7 +12,7 @@ export default function BoardControls() {
     const disableAutoFit = useDominoesStore((s) => s.disableAutoFit);
 
     const btnBase =
-        "w-10 h-10 rounded-lg bg-card/80 backdrop-blur border border-border flex items-center justify-center hover:bg-card transition-colors text-foreground";
+        "w-8 h-8 md:w-10 md:h-10 rounded-lg bg-card/80 backdrop-blur border border-border flex items-center justify-center hover:bg-card transition-colors text-foreground";
 
     return (
         <motion.div
@@ -24,7 +24,7 @@ export default function BoardControls() {
                 damping: 20,
                 delay: 0.1,
             }}
-            className="absolute bottom-3 right-3 flex flex-col gap-1.5 z-10"
+            className="absolute bottom-2 right-2 flex flex-col gap-1.5 z-30"
         >
             <motion.button
                 whileTap={{ scale: 0.9 }}

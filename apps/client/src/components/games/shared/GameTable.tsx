@@ -30,16 +30,15 @@ function getLayoutMode(
     height: number,
     playerCount: number,
 ): LayoutMode {
-    const isLandscape = width > height;
-    const isMobileLandscape = isLandscape && height < 500;
-    const isMobilePortrait = !isLandscape && width < 500;
+    // Use the smaller dimension to detect cramped viewports regardless of
+    // orientation. Mobile landscape (e.g. 667×360) has a short side of 360
+    // and should always be treated as compact, not comfortable.
+    const minDim = Math.min(width, height);
+
+    // Compact: any short side under 500px (typical phone landscape or portrait)
+    if (minDim > 0 && minDim < 500) return "compact";
+
     const isTablet = width >= 500 && width < 1024 && height >= 500;
-
-    // Mobile landscape always compact
-    if (isMobileLandscape) return "compact";
-
-    // Mobile portrait always compact
-    if (isMobilePortrait) return "compact";
 
     // Tablet with 4 players → comfortable (may need badges for side players)
     if (isTablet && playerCount >= 4) return "comfortable";
@@ -106,6 +105,15 @@ export function useGameTable() {
         throw new Error("useGameTable must be used within a GameTable");
     }
     return context;
+}
+
+/**
+ * Optional variant that returns null when used outside a GameTable.
+ * Useful for shared components (like PlayerInfo) that want to adapt to
+ * GameTable layout state when present but still render standalone.
+ */
+export function useGameTableOptional() {
+    return useContext(GameTableContext);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,22 +251,25 @@ function GameTable({
                             "left  center right"
                             ".     bottom ."
                         `,
-                        // Rows: compact mode uses smaller edge fractions to maximize
-                        // center play area on small screens; spacious/comfortable
-                        // keeps symmetric 1fr/3fr/1fr.
+                        // Rows: compact mode reserves symmetric minimum edges
+                        // so the top seat's info+badge always have room (fixes
+                        // top opponent clipping on short landscape). Top row
+                        // gets a slightly larger minimum than side cols because
+                        // it stacks OpponentTiles badge + avatar + stats.
+                        // Comfortable/spacious use content-sized edges so full
+                        // rotated fans can fit without clipping.
                         gridTemplateRows:
                             layoutMode === "compact"
-                                ? "minmax(0, 0.8fr) minmax(0, 3fr) minmax(0, 1fr)"
-                                : "minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr)",
-                        // Columns: when side players exist (3+), give sides a fixed fraction
-                        // so the center never shifts when edge content appears/animates.
-                        // Compact mode uses smaller minimum to avoid squeezing the center.
-                        // For 2-player (no side edges), sides collapse to content-based auto.
+                                ? "minmax(76px, 1fr) minmax(0, 2.4fr) minmax(64px, 1fr)"
+                                : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                        // Columns: on compact with side players, reserve a
+                        // minimum for the side badge chip so center never
+                        // shifts when edge content appears. Comfortable/
+                        // spacious use content-sized edges so rotated side
+                        // fans fit at natural width.
                         gridTemplateColumns:
-                            playerCount >= 3
-                                ? layoutMode === "compact"
-                                    ? "minmax(3rem, 0.8fr) minmax(0, 3fr) minmax(3rem, 0.8fr)"
-                                    : "minmax(5rem, 1fr) minmax(0, 3fr) minmax(5rem, 1fr)"
+                            playerCount >= 3 && layoutMode === "compact"
+                                ? "minmax(3.5rem, 0.8fr) minmax(0, 3fr) minmax(3.5rem, 0.8fr)"
                                 : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
                     }}
                 >

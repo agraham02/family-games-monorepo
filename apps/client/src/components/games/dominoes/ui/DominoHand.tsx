@@ -293,19 +293,21 @@ export function OpponentTiles({
     const rotation = edgeContext?.cardRotation ?? 0;
     const count = Math.max(0, tileCount);
     const gap = 4;
+    const isRotatedSideways = Math.abs(rotation) === 90;
 
     return (
         <div
             className={cn("flex items-center justify-center", className)}
             style={{
-                width:
-                    Math.abs(rotation) === 90
-                        ? tileDims.height
-                        : count * tileDims.width + (count - 1) * gap,
-                height:
-                    Math.abs(rotation) === 90
-                        ? count * tileDims.width + (count - 1) * gap
-                        : tileDims.height,
+                width: isRotatedSideways
+                    ? tileDims.height
+                    : count * tileDims.width + (count - 1) * gap,
+                height: isRotatedSideways
+                    ? count * tileDims.width + (count - 1) * gap
+                    : tileDims.height,
+                // Cap so opponent rails never outgrow their grid cell.
+                maxWidth: "100%",
+                maxHeight: "100%",
             }}
         >
             <div

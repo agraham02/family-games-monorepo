@@ -13,6 +13,7 @@ import {
     ActionConfirmationBar,
     GameScoreboard,
     GameMenu,
+    RotateDeviceOverlay,
     type EdgePosition,
 } from "@/components/games/shared";
 import { Badge } from "@/components/ui/badge";
@@ -247,7 +248,8 @@ export default function Dominoes({
     const showDualChoice = tileSelected && ghostPlacements.length === 2;
 
     return (
-        <div className="h-screen w-full overflow-hidden">
+        <div className="h-[100dvh] w-full overflow-hidden">
+            <RotateDeviceOverlay />
             <LayoutGroup>
                 <GameTable
                     playerCount={playerCount}

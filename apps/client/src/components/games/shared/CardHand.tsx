@@ -448,8 +448,14 @@ function CardHand({
     // Calculate the card dimensions first (needed for spacing calculations)
     const cardDimensions = SIZE_DIMENSIONS[responsiveSize];
 
+    // On compact layouts the hero hand must fit the remaining viewport width
+    // after side-seat reservations. Allow the bottom-hand padding to breathe.
+    const heroWidthReservation =
+        layoutConfig.layoutMode === "compact" ? 16 : 32;
     // Calculate available width for the hero's hand (account for some padding)
-    const availableWidth = isLocalPlayer ? dimensions.width - 32 : undefined;
+    const availableWidth = isLocalPlayer
+        ? dimensions.width - heroWidthReservation
+        : undefined;
 
     // Normal spacing (auto-calculated to fit available width)
     const normalSpacing = getCardSpacing(
@@ -493,9 +499,12 @@ function CardHand({
                 // Set explicit dimensions so the container centers properly
                 width: isRotatedSideways ? totalHandHeight : totalHandWidth,
                 height: isRotatedSideways ? totalHandWidth : totalHandHeight,
-                // Ensure the hand never overflows the viewport for the hero
+                // Only cap on compact — desktop/tablet allow fans to bleed
+                // into the center cell so full hands render at natural size.
                 maxWidth:
-                    isLocalPlayer && !isRotatedSideways ? "100%" : undefined,
+                    layoutConfig.layoutMode === "compact" ? "100%" : undefined,
+                maxHeight:
+                    layoutConfig.layoutMode === "compact" ? "100%" : undefined,
             }}
         >
             <div

@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SeatPosition } from "@/hooks";
 import { TurnTimer } from "./TurnTimer";
+import { useGameTableOptional } from "./GameTable";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -156,6 +157,29 @@ function PlayerInfo({
     const layout = getLayoutConfig(seatPosition);
     const initials = getInitials(playerName);
 
+    // When inside a GameTable, shrink the info block on compact layouts so
+    // side seats (left/right) don't overflow their narrow column.
+    const tableCtx = useGameTableOptional();
+    const isCompact = tableCtx?.layoutConfig.layoutMode === "compact";
+    const isSideSeat =
+        seatPosition === "left" ||
+        seatPosition === "right" ||
+        seatPosition === "top-left" ||
+        seatPosition === "top-right" ||
+        seatPosition === "bottom-left" ||
+        seatPosition === "bottom-right";
+    const isTopSeat = seatPosition === "top" || seatPosition === "top-left" || seatPosition === "top-right";
+    // On compact side seats, collapse name + stats to keep the column narrow.
+    // The count badge next to the avatar already conveys hand size.
+    const hideTextBlock = !isLocalPlayer && isCompact && isSideSeat;
+    // On compact top seat, hide the name label to keep the stacked top region
+    // (hand + info) within its grid row. The avatar initials already identify
+    // the player; stats (bid/won, pts/tiles) remain useful and stay visible.
+    const hideTopName = !isLocalPlayer && isCompact && isTopSeat;
+    // On compact mobile the hero's own avatar adds little value (the hand is
+    // face-up) and steals vertical space from the trick pile. Hide it.
+    const hideHeroAvatar = isLocalPlayer && isCompact;
+
     // Responsive avatar size
     const avatarSize = isLocalPlayer
         ? "h-10 w-10 md:h-12 md:w-12"
@@ -173,13 +197,21 @@ function PlayerInfo({
                 !connected && "opacity-50",
                 className,
             )}
-            style={{ flexDirection: layout.direction }}
+            style={{
+                // On compact top seat, stack avatar + stats horizontally so
+                // the whole seat fits under the OpponentTiles badge within
+                // the top grid row.
+                flexDirection:
+                    isCompact && isTopSeat && !isLocalPlayer
+                        ? "row"
+                        : layout.direction,
+            }}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
             {/* Avatar with turn indicator or timer */}
-            <div className="relative">
+            <div className={cn("relative", hideHeroAvatar && "hidden")}>
                 {/* Show pulse indicator when it's current turn but no active timer */}
                 {/* Timer takes precedence when active */}
                 {isCurrentTurn && !(turnTimer && turnTimer.totalMs > 0) && (
@@ -265,6 +297,7 @@ function PlayerInfo({
                 className={cn(
                     "flex flex-col min-w-0",
                     layout.textAlign === "right" && "items-end",
+                    hideTextBlock && "hidden",
                 )}
                 style={{ textAlign: layout.textAlign }}
             >
@@ -273,6 +306,7 @@ function PlayerInfo({
                     className={cn(
                         "text-white font-medium truncate max-w-25 text-sm",
                         isCurrentTurn && "text-amber-300",
+                        hideTopName && "hidden",
                     )}
                 >
                     {playerName}

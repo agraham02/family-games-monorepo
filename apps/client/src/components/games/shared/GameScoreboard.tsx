@@ -237,7 +237,7 @@ function MobileScoreboard({
                 <Button
                     variant="outline"
                     size="sm"
-                    className="md:hidden fixed bottom-20 right-4 z-50 bg-slate-900/90 border-white/20 text-white hover:bg-slate-800"
+                    className="md:hidden fixed top-3 right-14 z-50 bg-slate-900/90 border-white/20 text-white hover:bg-slate-800 h-8 px-2 pt-safe pr-safe"
                 >
                     <Trophy className="w-4 h-4 mr-1 text-amber-400" />
                     Scores
