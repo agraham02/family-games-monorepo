@@ -4,6 +4,7 @@
 export * from "./room";
 export * from "./teams";
 export * from "./spades";
+export * from "./rummy";
 
 // Export all Zod schemas
 export * from "./schemas";

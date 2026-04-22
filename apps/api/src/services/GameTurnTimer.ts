@@ -30,6 +30,12 @@ import {
 } from "../games/dominoes";
 import { DominoesState } from "../games/dominoes";
 
+import {
+    getAutoAction as getRummyAutoAction,
+    shouldTimerBeActive as rummyTimerActive,
+} from "../games/rummy";
+import { RummyState } from "@family-games/shared";
+
 let io: SocketIOServer | null = null;
 
 /**
@@ -211,6 +217,53 @@ function handleDominoesTimeout(
 }
 
 /**
+ * Handle a timeout for a Rummy game.
+ * Asks the auto-action helper for an action and dispatches it.
+ */
+function handleRummyTimeout(
+    gameId: string,
+    room: Room,
+    state: RummyState,
+): void {
+    const currentPlayerId = state.playOrder[state.currentTurnIndex];
+    const player = state.players[currentPlayerId];
+    const playerName = player?.name || "Unknown";
+
+    console.log(
+        `⏰ Handling Rummy timeout for ${playerName} in substate ${state.turnSubstate}`,
+    );
+
+    const autoAction = getRummyAutoAction(state, currentPlayerId);
+    if (!autoAction) {
+        console.log(`No auto-action available for Rummy in current state`);
+        return;
+    }
+
+    const action: GameAction = {
+        type: autoAction.type,
+        userId: currentPlayerId,
+        payload: autoAction as unknown as Record<string, unknown>,
+    };
+
+    try {
+        const newState = gameManager.dispatch(gameId, action);
+        emitTurnTimeout(
+            room.id,
+            {
+                playerId: currentPlayerId,
+                playerName,
+                action: "auto-play",
+                gameId,
+            },
+            newState,
+        );
+        maybeStartTimer(gameId, room, newState);
+    } catch (err) {
+        console.error("Error dispatching Rummy auto-action:", err);
+    }
+}
+
+/**
  * Maybe start a timer based on the current game state.
  * Only starts if the phase requires a timer (bidding or playing).
  */
@@ -286,6 +339,40 @@ export function maybeStartTimer(
                         gameId,
                         room,
                         freshState as DominoesState,
+                    );
+                }
+            },
+        );
+        return;
+    }
+
+    // ========================================================================
+    // RUMMY
+    // ========================================================================
+    if (state.type === "rummy") {
+        const rummyState = state as unknown as RummyState;
+        const turnTimeLimit = rummyState.settings?.turnTimeLimit;
+
+        if (!turnTimeLimit || turnTimeLimit <= 0) return;
+        if (!rummyTimerActive(rummyState)) {
+            turnTimerService.cancelTurn(gameId);
+            return;
+        }
+
+        const currentPlayerId =
+            rummyState.playOrder[rummyState.currentTurnIndex];
+
+        turnTimerService.startTurn(
+            gameId,
+            currentPlayerId,
+            turnTimeLimit,
+            () => {
+                const freshState = gameManager.getGame(gameId);
+                if (freshState && freshState.type === "rummy") {
+                    handleRummyTimeout(
+                        gameId,
+                        room,
+                        freshState as unknown as RummyState,
                     );
                 }
             },

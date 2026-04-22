@@ -499,6 +499,7 @@ export function DebugEngine() {
                     }
 
                     return {
+                        ...prevState,
                         gameData: newGameData as GameData,
                         playerDataMap: newPlayerDataMap as Record<
                             string,

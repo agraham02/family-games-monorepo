@@ -5,6 +5,7 @@ import { ComponentType } from "react";
 import Spades from "./spades";
 import LRC from "./lrc";
 import Dominoes from "./dominoes";
+import Rummy from "./rummy";
 import { GameData, PlayerData } from "@shared/types";
 import {
     generateSpadesMockData,
@@ -14,6 +15,7 @@ import {
     LRCMockOptions,
     DominoesMockOptions,
 } from "./mockData";
+import { generateRummyMockData, RummyMockOptions } from "./rummy/mockData";
 
 /**
  * Base props interface that all game components must implement
@@ -104,6 +106,21 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             phase: "playing",
             round: 1,
             tilesOnBoard: 3,
+        },
+    },
+    rummy: {
+        component: Rummy,
+        displayName: "Rummy",
+        generateMockData:
+            generateRummyMockData as MockDataGenerator<RummyMockOptions>,
+        defaultMockOptions: {
+            playerCount: 3,
+            phase: "playing",
+            turnSubstate: "awaiting-draw",
+            round: 1,
+            discardPileSize: 4,
+            meldsPerPlayer: 1,
+            handSize: 9,
         },
     },
 };

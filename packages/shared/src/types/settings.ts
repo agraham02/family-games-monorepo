@@ -97,15 +97,47 @@ export const DEFAULT_LRC_SETTINGS: LRCSettings = {
 };
 
 // ============================================================================
+// Rummy Settings
+// ============================================================================
+
+export interface RummySettings extends BaseGameSettings {
+    /** First player to reach this score wins. Default 500. */
+    winTarget: number;
+    /** Bonus added to round score for the player who goes out. Default 0. */
+    goingOutBonus: number;
+    /** How long the "Rummy!" call window stays open after each discard, in ms. */
+    rummyCallWindowMs: number;
+    /** Minimum allowed deal size (must be odd). */
+    dealSizeMin: number;
+    /** Maximum allowed deal size (must be odd). */
+    dealSizeMax: number;
+}
+
+export const DEFAULT_RUMMY_SETTINGS: RummySettings = {
+    winTarget: 500,
+    roundLimit: null,
+    turnTimeLimit: null,
+    goingOutBonus: 0,
+    rummyCallWindowMs: 4000,
+    dealSizeMin: 7,
+    dealSizeMax: 13,
+};
+
+// ============================================================================
 // Union Type
 // ============================================================================
 
-export type GameSettings = SpadesSettings | DominoesSettings | LRCSettings;
+export type GameSettings =
+    | SpadesSettings
+    | DominoesSettings
+    | LRCSettings
+    | RummySettings;
 
 // For partial updates (all properties optional)
 export type PartialGameSettings = Partial<SpadesSettings> &
     Partial<DominoesSettings> &
-    Partial<LRCSettings>;
+    Partial<LRCSettings> &
+    Partial<RummySettings>;
 
 // ============================================================================
 // Setting Definition (for dynamic UI generation)
@@ -377,5 +409,101 @@ export const LRC_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         type: "boolean",
         default: false,
         category: "rules",
+    },
+];
+
+// ============================================================================
+// Rummy Settings Definitions
+// ============================================================================
+
+export const RUMMY_SETTINGS_DEFINITIONS: SettingDefinition[] = [
+    {
+        key: "winTarget",
+        label: "Win Target",
+        description: "First player to reach this score wins the game.",
+        type: "number",
+        default: 500,
+        category: "scoring",
+        min: 100,
+        max: 1500,
+        step: 50,
+        suffix: "points",
+    },
+    {
+        key: "goingOutBonus",
+        label: "Going-Out Bonus",
+        description:
+            "Bonus added to the round score for the player who empties their hand. Default 0 (going out is its own reward).",
+        type: "number",
+        default: 0,
+        category: "scoring",
+        min: 0,
+        max: 100,
+        step: 5,
+        suffix: "points",
+    },
+    {
+        key: "rummyCallWindowMs",
+        label: "Rummy Call Window",
+        description:
+            'How long other players have to call "Rummy!" after a discard that could have been laid off.',
+        type: "number",
+        default: 4000,
+        category: "rules",
+        min: 2000,
+        max: 10000,
+        step: 500,
+        suffix: "ms",
+    },
+    {
+        key: "dealSizeMin",
+        label: "Minimum Deal Size",
+        description: "Smallest hand size the dealer may choose. Must be odd.",
+        type: "number",
+        default: 7,
+        category: "advanced",
+        min: 3,
+        max: 13,
+        step: 2,
+        suffix: "cards",
+    },
+    {
+        key: "dealSizeMax",
+        label: "Maximum Deal Size",
+        description:
+            "Largest hand size the dealer may choose. Must be odd. Must allow at least 2 cards left in stock after dealing.",
+        type: "number",
+        default: 13,
+        category: "advanced",
+        min: 5,
+        max: 15,
+        step: 2,
+        suffix: "cards",
+    },
+    {
+        key: "roundLimit",
+        label: "Round Limit",
+        description:
+            "End the game after a fixed number of rounds. Highest score wins.",
+        type: "nullableNumber",
+        default: null,
+        category: "general",
+        min: 1,
+        max: 20,
+        step: 1,
+        suffix: "rounds",
+    },
+    {
+        key: "turnTimeLimit",
+        label: "Turn Time Limit",
+        description:
+            "Maximum seconds allowed per turn. Player auto-plays if time expires.",
+        type: "nullableNumber",
+        default: null,
+        category: "general",
+        min: 10,
+        max: 180,
+        step: 5,
+        suffix: "seconds",
     },
 ];

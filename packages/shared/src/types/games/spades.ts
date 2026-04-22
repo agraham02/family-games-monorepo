@@ -3,52 +3,15 @@
 
 import { BaseGameData, BasePlayerData, GameState, TurnTimerInfo } from "./base";
 import { SpadesSettings } from "../settings";
+import { Suit, Rank, Card, PlayingCard } from "./cards";
 
 // ============================================================================
-// Card Types
+// Card Types — re-exported from cards.ts for backward compatibility.
+// New code should import these directly from "@shared/types" (cards.ts).
 // ============================================================================
 
-export enum Suit {
-    Hearts = "Hearts",
-    Diamonds = "Diamonds",
-    Clubs = "Clubs",
-    Spades = "Spades",
-}
-
-export enum Rank {
-    Ace = "A",
-    Two = "2",
-    Three = "3",
-    Four = "4",
-    Five = "5",
-    Six = "6",
-    Seven = "7",
-    Eight = "8",
-    Nine = "9",
-    Ten = "10",
-    Jack = "J",
-    Queen = "Q",
-    King = "K",
-    LittleJoker = "LJ",
-    BigJoker = "BJ",
-}
-
-/**
- * Represents a playing card (API version with readonly).
- */
-export interface Card {
-    readonly rank: Rank;
-    readonly suit: Suit;
-}
-
-/**
- * Playing card interface for client-side use.
- * Uses string for rank to allow flexible rendering.
- */
-export interface PlayingCard {
-    readonly rank: string;
-    readonly suit: "Spades" | "Hearts" | "Diamonds" | "Clubs";
-}
+export { Suit, Rank };
+export type { Card, PlayingCard };
 
 // ============================================================================
 // Bid Types
