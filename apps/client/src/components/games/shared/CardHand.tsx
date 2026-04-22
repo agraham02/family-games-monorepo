@@ -457,9 +457,16 @@ function CardHand({
         ? dimensions.width - heroWidthReservation
         : undefined;
 
+    // Layout count: during the deal, `cards` grows incrementally 1→N but we
+    // want the fan to keep its FINAL width so revealed cards slot into their
+    // end positions instead of visibly spreading outward on each new arrival.
+    // When the caller passes a `cardCount` that exceeds `cards.length` (which
+    // happens while dealing), use the larger value for spacing/width only.
+    const layoutNumCards = Math.max(displayCards.length, cardCount ?? 0);
+
     // Normal spacing (auto-calculated to fit available width)
     const normalSpacing = getCardSpacing(
-        displayCards.length,
+        layoutNumCards,
         responsiveSize,
         isHorizontal,
         availableWidth,
@@ -476,8 +483,10 @@ function CardHand({
     // For 90/-90 degree rotations, the hand will appear vertical
     const isRotatedSideways = Math.abs(rotation) === 90;
 
-    // Calculate the actual width/height of the fanned card hand
-    const numCards = displayCards.length;
+    // Calculate the actual width/height of the fanned card hand.
+    // Uses layoutNumCards (max of displayed + reserved) so the container
+    // stays at its final size during the deal, preventing visible shift.
+    const numCards = layoutNumCards;
     // First card full width + (remaining cards * spacing)
     const totalHandWidth = isHorizontal
         ? cardDimensions.width +

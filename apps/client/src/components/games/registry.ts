@@ -77,7 +77,7 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             playerCount: 4,
             phase: "playing",
             round: 1,
-            includeCurrentTrick: true,
+            includeCurrentTrick: false,
         },
     },
     lrc: {

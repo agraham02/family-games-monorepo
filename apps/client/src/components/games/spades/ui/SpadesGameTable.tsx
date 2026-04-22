@@ -349,6 +349,12 @@ function SpadesGameTable({
         if (!isDealing) {
             return gameData.handsCounts?.[playerId] ?? 0;
         }
+        // For the LOCAL hero during dealing, report the FINAL count so the
+        // fan reserves its end-state width. Cards reveal into stable
+        // positions instead of visibly spreading outward on each arrival.
+        if (playerId === playerData.localOrdering[0]) {
+            return 13;
+        }
         return visibleCardCounts[playerId] || 0;
     };
 
