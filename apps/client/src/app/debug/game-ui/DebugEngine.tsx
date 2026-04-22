@@ -105,7 +105,8 @@ export function DebugEngine() {
     const [masterGameState, setMasterGameState] = useState<{
         gameData: GameData | null;
         playerDataMap: Record<string, PlayerData>;
-    }>({ gameData: null, playerDataMap: {} });
+        loadedGameId: string | null;
+    }>({ gameData: null, playerDataMap: {}, loadedGameId: null });
 
     const [actionLog, setActionLog] = useState<
         Array<{ event: string; payload: unknown; time: string }>
@@ -190,6 +191,7 @@ export function DebugEngine() {
         setMasterGameState({
             gameData: gameDataWithLayout,
             playerDataMap: mockData.playerDataMap || {},
+            loadedGameId: selectedGameId,
         });
 
         // Select first player by default
@@ -515,7 +517,10 @@ export function DebugEngine() {
             if (parsed?.gameData) {
                 // Game data used as-is; layout computed client-side
             }
-            setMasterGameState(parsed);
+            setMasterGameState((prev) => ({
+                ...parsed,
+                loadedGameId: parsed?.loadedGameId ?? prev.loadedGameId,
+            }));
         } catch (e) {
             console.error("Failed to parse game state JSON", e);
             throw e;
@@ -726,7 +731,11 @@ export function DebugEngine() {
         };
     }, [masterGameState, selectedPlayerId]);
 
-    if (!GameComponent || !masterGameState.gameData) {
+    if (
+        !GameComponent ||
+        !masterGameState.gameData ||
+        masterGameState.loadedGameId !== selectedGameId
+    ) {
         return <div>Loading...</div>;
     }
 
