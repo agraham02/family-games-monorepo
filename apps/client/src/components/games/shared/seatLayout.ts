@@ -86,10 +86,12 @@ const SEAT_TEMPLATES: Record<number, SeatTemplate[]> = {
     ],
     // 6p: hero, left-bottom, left-top, top, right-top, right-bottom.
     // Left and right edges each stack 2 seats; rotation stays uniform per side.
+    // offset 1 (first clockwise from hero) sits at the bottom of the left edge
+    // (closest to hero), offset 2 sits at the top.
     6: [
         { edge: "bottom", slotIndex: 0, slotCount: 1, cardRotation: 0 },
-        { edge: "left", slotIndex: 0, slotCount: 2, cardRotation: 90 },
         { edge: "left", slotIndex: 1, slotCount: 2, cardRotation: 90 },
+        { edge: "left", slotIndex: 0, slotCount: 2, cardRotation: 90 },
         { edge: "top", slotIndex: 0, slotCount: 1, cardRotation: 180 },
         { edge: "right", slotIndex: 0, slotCount: 2, cardRotation: -90 },
         { edge: "right", slotIndex: 1, slotCount: 2, cardRotation: -90 },

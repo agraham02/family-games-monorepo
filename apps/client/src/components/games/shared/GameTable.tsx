@@ -131,6 +131,12 @@ interface GameTableProps {
     showDebugGrid?: boolean;
     /** Callback when the table background is clicked (for closing spread hands) */
     onTableClick?: () => void;
+    /**
+     * When true, collapse all edge grid tracks to 0 so the center region
+     * fills the entire viewport. Used for bento-style full-screen scenes
+     * (e.g. Rummy DRAW / MELD) where opponent tiles are not shown.
+     */
+    bentoMode?: boolean;
 }
 
 /**
@@ -155,6 +161,7 @@ function GameTable({
     feltGradient = "from-emerald-800 via-emerald-700 to-teal-800",
     showDebugGrid = false,
     onTableClick,
+    bentoMode = false,
 }: GameTableProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const dimensions = useContainerDimensions(containerRef);
@@ -251,26 +258,16 @@ function GameTable({
                             "left  center right"
                             ".     bottom ."
                         `,
-                        // Rows: compact mode reserves symmetric minimum edges
-                        // so the top seat's info+badge always have room (fixes
-                        // top opponent clipping on short landscape). Top row
-                        // gets a slightly larger minimum than side cols because
-                        // it stacks OpponentTiles badge + avatar + stats.
-                        // Comfortable/spacious use content-sized edges so full
-                        // rotated fans can fit without clipping.
-                        gridTemplateRows:
-                            layoutMode === "compact"
-                                ? "minmax(76px, 1fr) minmax(0, 2.4fr) minmax(64px, 1fr)"
-                                : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
-                        // Columns: on compact with side players, reserve a
-                        // minimum for the side badge chip so center never
-                        // shifts when edge content appears. Comfortable/
-                        // spacious use content-sized edges so rotated side
-                        // fans fit at natural width.
-                        gridTemplateColumns:
-                            playerCount >= 3 && layoutMode === "compact"
-                                ? "minmax(3.5rem, 0.8fr) minmax(0, 3fr) minmax(3.5rem, 0.8fr)"
-                                : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                        gridTemplateRows: bentoMode
+                            ? "0px 1fr 0px"
+                            : layoutMode === "compact"
+                              ? "minmax(76px, 1fr) minmax(0, 2.4fr) minmax(64px, 1fr)"
+                              : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                        gridTemplateColumns: bentoMode
+                            ? "0px 1fr 0px"
+                            : playerCount >= 3 && layoutMode === "compact"
+                              ? "minmax(3.5rem, 0.8fr) minmax(0, 3fr) minmax(3.5rem, 0.8fr)"
+                              : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
                     }}
                 >
                     {children}

@@ -118,9 +118,11 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
             phase: "playing",
             turnSubstate: "awaiting-draw",
             round: 1,
-            discardPileSize: 4,
-            meldsPerPlayer: 1,
-            handSize: 9,
+            // Fresh deal: no melds yet, one face-up card in the discard, full
+            // 10-card hand. Matches server state at the start of round 1.
+            discardPileSize: 1,
+            meldsPerPlayer: 0,
+            handSize: 10,
         },
     },
 };

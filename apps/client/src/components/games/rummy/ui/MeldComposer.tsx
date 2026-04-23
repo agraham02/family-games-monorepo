@@ -18,6 +18,15 @@ export interface MeldComposerProps {
     onConfirm: (cards: PlayingCard[], kind: "set" | "run") => void;
     onCancel: () => void;
     disabled?: boolean;
+    /**
+     * Optional card that MUST be included in the meld (e.g. the just-picked
+     * discard during `awaiting-discard-play`). Rendered pinned at the start
+     * of the selection row and included in validation alongside hand
+     * selections.
+     */
+    seedCard?: PlayingCard | null;
+    /** Optional help text shown instead of the default empty-state hint. */
+    helpText?: string;
 }
 
 const SUIT_TO_ENUM: Record<string, Suit> = {
@@ -68,21 +77,29 @@ export default function MeldComposer({
     onConfirm,
     onCancel,
     disabled,
+    seedCard = null,
+    helpText,
 }: MeldComposerProps) {
     const selectedCards = useMemo(
         () => selectedIndices.map((i) => hand[i]).filter(Boolean),
         [selectedIndices, hand],
     );
 
+    /** Cards used for validation — seed card (if any) is always first. */
+    const validationCards = useMemo(
+        () => (seedCard ? [seedCard, ...selectedCards] : selectedCards),
+        [seedCard, selectedCards],
+    );
+
     const validation = useMemo(() => {
-        if (selectedCards.length < 3) {
+        if (validationCards.length < 3) {
             return {
                 kind: null as null | "set" | "run",
                 reason: "Select at least 3 cards.",
             };
         }
-        const serverCards = toServerCards(selectedCards);
-        if (serverCards.length !== selectedCards.length) {
+        const serverCards = toServerCards(validationCards);
+        if (serverCards.length !== validationCards.length) {
             return { kind: null, reason: "Unsupported card." };
         }
         if (isValidSet(serverCards))
@@ -90,7 +107,7 @@ export default function MeldComposer({
         if (isValidRun(serverCards))
             return { kind: "run" as const, reason: null };
         return { kind: null, reason: "Not a valid set or run." };
-    }, [selectedCards]);
+    }, [validationCards]);
 
     return (
         <motion.div
@@ -133,7 +150,7 @@ export default function MeldComposer({
                         size="sm"
                         onClick={() =>
                             validation.kind &&
-                            onConfirm(selectedCards, validation.kind)
+                            onConfirm(validationCards, validation.kind)
                         }
                         disabled={disabled || !validation.kind}
                     >
@@ -141,10 +158,26 @@ export default function MeldComposer({
                     </Button>
                 </div>
             </div>
-            <div className="flex items-center gap-1 min-h-[3rem]">
-                {selectedCards.length === 0 ? (
+            <div className="flex items-center gap-1 min-h-12">
+                {seedCard && (
+                    <div
+                        className="relative shrink-0"
+                        aria-label={`Locked: ${seedCard.rank} of ${seedCard.suit}`}
+                    >
+                        <PlayingCardView card={seedCard} size="sm" />
+                        <Badge className="absolute -top-2 -right-2 text-[9px] bg-amber-500 text-black border-amber-300">
+                            picked
+                        </Badge>
+                    </div>
+                )}
+                {selectedCards.length === 0 && !seedCard ? (
                     <span className="text-white/40 text-xs italic">
-                        Tap cards in your hand to add them.
+                        {helpText ?? "Tap cards in your hand to add them."}
+                    </span>
+                ) : selectedCards.length === 0 && seedCard ? (
+                    <span className="text-white/50 text-xs italic ml-1">
+                        {helpText ??
+                            "Add 2+ cards from your hand to form a set or run with the picked card."}
                     </span>
                 ) : (
                     selectedCards.map((c, i) => (

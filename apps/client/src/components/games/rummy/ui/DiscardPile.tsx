@@ -1,10 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { PlayingCard, RummyData } from "@shared/types";
 import PlayingCardView from "@/components/games/shared/PlayingCard";
 import { Badge } from "@/components/ui/badge";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 export interface DiscardPileProps {
@@ -17,15 +24,21 @@ export interface DiscardPileProps {
     interactive?: boolean;
     /** Click handler for a card in the pile (passes index). */
     onCardClick?: (pickIndex: number) => void;
-    /** Click handler for the "Pile (N)" badge in compact mode. */
-    onExpandClick?: () => void;
+    /**
+     * Optional cap on how many cards from the top render in the live fan.
+     * Cards older than this are accessible via the overflow sheet. Defaults
+     * to 10 (spacious) / 8 (comfortable) / 1 (compact).
+     */
+    maxFanCards?: number;
     className?: string;
 }
 
 /**
- * DiscardPile renders the discard pile as a fan or stack depending on layout
- * mode. In compact mode shows only the top card + a count badge; tapping the
- * badge fires `onExpandClick` (caller is responsible for opening a sheet).
+ * DiscardPile renders the top of the pile as a fan (or the top card in
+ * compact mode). When the pile grows past `maxFanCards`, an overflow chip is
+ * surfaced — tapping it opens an internal sheet that lists the entire pile so
+ * the player can still pick deep cards (Rummy lets you pick any card and take
+ * everything above it).
  */
 export default function DiscardPile({
     discard,
@@ -33,11 +46,18 @@ export default function DiscardPile({
     previewPickIndex = null,
     interactive = false,
     onCardClick,
-    onExpandClick,
+    maxFanCards,
     className,
 }: DiscardPileProps) {
     const cards = discard.cards;
     const count = cards.length;
+    const [sheetOpen, setSheetOpen] = useState(false);
+
+    const handleSheetPick = (pickIndex: number) => {
+        if (!interactive) return;
+        onCardClick?.(pickIndex);
+        setSheetOpen(false);
+    };
 
     if (count === 0) {
         return (
@@ -56,37 +76,49 @@ export default function DiscardPile({
     if (layoutMode === "compact") {
         const top = cards[count - 1];
         return (
-            <div className={cn("relative", className)}>
-                <button
-                    type="button"
-                    onClick={() => interactive && onCardClick?.(count - 1)}
-                    disabled={!interactive}
-                    className={cn("block", interactive && "cursor-pointer")}
-                    aria-label={`Discard top: ${top.rank} of ${top.suit}`}
-                >
-                    <PlayingCardView card={top} size="sm" />
-                </button>
-                {count > 1 && (
+            <>
+                <div className={cn("relative", className)}>
                     <button
                         type="button"
-                        onClick={onExpandClick}
-                        className="absolute -bottom-2 left-1/2 -translate-x-1/2"
+                        onClick={() => interactive && onCardClick?.(count - 1)}
+                        disabled={!interactive}
+                        className={cn("block", interactive && "cursor-pointer")}
+                        aria-label={`Discard top: ${top.rank} of ${top.suit}`}
                     >
-                        <Badge
-                            variant="secondary"
-                            className="text-[10px] cursor-pointer bg-black/70 text-white border-white/20 hover:bg-black/90"
-                        >
-                            Pile ({count})
-                        </Badge>
+                        <PlayingCardView card={top} size="sm" />
                     </button>
-                )}
-            </div>
+                    {count > 1 && (
+                        <button
+                            type="button"
+                            onClick={() => setSheetOpen(true)}
+                            className="absolute -bottom-2 left-1/2 -translate-x-1/2"
+                            aria-label={`See full discard pile (${count} cards)`}
+                        >
+                            <Badge
+                                variant="secondary"
+                                className="text-[10px] cursor-pointer bg-black/70 text-white border-white/20 hover:bg-black/90"
+                            >
+                                Pile ({count})
+                            </Badge>
+                        </button>
+                    )}
+                </div>
+                <DiscardPileSheet
+                    open={sheetOpen}
+                    onOpenChange={setSheetOpen}
+                    cards={cards}
+                    interactive={interactive}
+                    onPick={handleSheetPick}
+                    previewPickIndex={previewPickIndex}
+                />
+            </>
         );
     }
 
-    // ---- Spacious / comfortable: cascading fan ----
-    const maxVisible = layoutMode === "spacious" ? 12 : 8;
-    const visibleStart = Math.max(0, count - maxVisible);
+    // ---- Spacious / comfortable: cascading fan with overflow sheet ----
+    const fanCap = maxFanCards ?? (layoutMode === "spacious" ? 10 : 8);
+    const visibleCount = Math.min(count, fanCap);
+    const visibleStart = count - visibleCount;
     const visibleCards = cards.slice(visibleStart);
     const hiddenBelow = visibleStart;
     const offsetPct = layoutMode === "spacious" ? 22 : 16;
@@ -94,73 +126,190 @@ export default function DiscardPile({
     const cardWidth = cardSize === "md" ? 70 : 52;
 
     const previewLocalIdx =
-        previewPickIndex != null ? previewPickIndex - visibleStart : null;
+        previewPickIndex != null && previewPickIndex >= visibleStart
+            ? previewPickIndex - visibleStart
+            : null;
 
     return (
-        <div className={cn("relative inline-block", className)}>
-            {hiddenBelow > 0 && (
-                <Badge
-                    variant="secondary"
-                    className="absolute -top-2 -left-2 z-30 text-[10px] bg-black/70 text-white border-white/20"
+        <>
+            <div className={cn("relative inline-block", className)}>
+                {hiddenBelow > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => setSheetOpen(true)}
+                        className="absolute -top-2 -left-2 z-30"
+                        aria-label={`Show ${hiddenBelow} older discarded card${hiddenBelow === 1 ? "" : "s"}`}
+                    >
+                        <Badge
+                            variant="secondary"
+                            className="text-[10px] bg-black/70 text-white border-white/20 cursor-pointer hover:bg-black/90"
+                        >
+                            +{hiddenBelow}
+                        </Badge>
+                    </button>
+                )}
+                <div
+                    className="relative"
+                    style={{
+                        width:
+                            cardWidth + (visibleCards.length - 1) * offsetPct,
+                        height: cardSize === "md" ? 98 : 73,
+                    }}
                 >
-                    +{hiddenBelow}
-                </Badge>
-            )}
-            <div
-                className="relative"
-                style={{
-                    width: cardWidth + (visibleCards.length - 1) * offsetPct,
-                    height: cardSize === "md" ? 98 : 73,
-                }}
-            >
-                <AnimatePresence>
-                    {visibleCards.map((card, localIdx) => {
-                        const pileIndex = visibleStart + localIdx;
-                        const isTop = pileIndex === count - 1;
-                        const isPreview =
-                            previewLocalIdx != null &&
-                            localIdx >= previewLocalIdx;
-                        return (
-                            <motion.button
-                                key={`${pileIndex}-${card.rank}-${card.suit}`}
-                                type="button"
-                                onClick={() =>
-                                    interactive && onCardClick?.(pileIndex)
-                                }
-                                disabled={!interactive}
-                                initial={{ opacity: 0, y: -8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 8 }}
-                                transition={{
-                                    type: "spring",
-                                    stiffness: 320,
-                                    damping: 26,
-                                }}
-                                className={cn(
-                                    "absolute top-0",
-                                    interactive && "cursor-pointer",
-                                    isPreview &&
-                                        "ring-2 ring-amber-400 rounded-md z-20",
-                                )}
-                                style={{
-                                    left: localIdx * offsetPct,
-                                    zIndex: isPreview ? 30 : localIdx,
-                                }}
-                                aria-label={`${card.rank} of ${card.suit}${isTop ? " (top)" : ""}`}
-                            >
-                                <PlayingCardView card={card} size={cardSize} />
-                            </motion.button>
-                        );
-                    })}
-                </AnimatePresence>
+                    <AnimatePresence>
+                        {visibleCards.map((card, localIdx) => {
+                            const pileIndex = visibleStart + localIdx;
+                            const isTop = pileIndex === count - 1;
+                            const isPreview =
+                                previewLocalIdx != null &&
+                                localIdx >= previewLocalIdx;
+                            return (
+                                <motion.button
+                                    key={`${pileIndex}-${card.rank}-${card.suit}`}
+                                    type="button"
+                                    onClick={() =>
+                                        interactive && onCardClick?.(pileIndex)
+                                    }
+                                    disabled={!interactive}
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 8 }}
+                                    transition={{
+                                        type: "spring",
+                                        stiffness: 320,
+                                        damping: 26,
+                                    }}
+                                    className={cn(
+                                        "absolute top-0",
+                                        interactive && "cursor-pointer",
+                                        isPreview &&
+                                            "ring-2 ring-amber-400 rounded-md z-20",
+                                    )}
+                                    style={{
+                                        left: localIdx * offsetPct,
+                                        zIndex: isPreview ? 30 : localIdx,
+                                    }}
+                                    aria-label={`${card.rank} of ${card.suit}${isTop ? " (top)" : ""}`}
+                                >
+                                    <PlayingCardView
+                                        card={card}
+                                        size={cardSize}
+                                    />
+                                </motion.button>
+                            );
+                        })}
+                    </AnimatePresence>
+                </div>
             </div>
-        </div>
+            <DiscardPileSheet
+                open={sheetOpen}
+                onOpenChange={setSheetOpen}
+                cards={cards}
+                interactive={interactive}
+                onPick={handleSheetPick}
+                previewPickIndex={previewPickIndex}
+            />
+        </>
+    );
+}
+
+// ─── Internal sheet ───────────────────────────────────────────────────────────
+
+interface DiscardPileSheetProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    cards: PlayingCard[];
+    interactive: boolean;
+    onPick: (pickIndex: number) => void;
+    previewPickIndex?: number | null;
+}
+
+/**
+ * Bottom-sheet listing the entire discard pile so the player can pick a deep
+ * card (Rummy: picking index `i` takes card `i` plus every card above it).
+ * Cards are listed newest-first so the most-recent options are at the top.
+ */
+function DiscardPileSheet({
+    open,
+    onOpenChange,
+    cards,
+    interactive,
+    onPick,
+    previewPickIndex = null,
+}: DiscardPileSheetProps) {
+    const count = cards.length;
+
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent side="bottom" className="p-0">
+                <SheetHeader className="px-5 pt-5 pb-3 border-b border-white/10">
+                    <SheetTitle className="flex items-center gap-2">
+                        Discard pile
+                        <Badge
+                            variant="secondary"
+                            className="font-mono bg-white/10 border-white/10"
+                        >
+                            {count}
+                        </Badge>
+                    </SheetTitle>
+                    <SheetDescription>
+                        {interactive
+                            ? "Oldest on the left, newest on the right. Tap any card to take it plus every card above it."
+                            : "Oldest on the left, newest on the right."}
+                    </SheetDescription>
+                </SheetHeader>
+                <div
+                    className="overflow-x-auto overflow-y-hidden px-4 py-6"
+                    // Snap newest card into view on open so the most-recent
+                    // option is immediately visible without scrolling.
+                    ref={(el) => {
+                        if (el && open) {
+                            // Defer to next paint so layout is settled.
+                            requestAnimationFrame(() => {
+                                el.scrollLeft = el.scrollWidth;
+                            });
+                        }
+                    }}
+                >
+                    <div className="flex items-center gap-2 w-max">
+                        {cards.map((card, pileIndex) => {
+                            const isTop = pileIndex === count - 1;
+                            const isPreview = pileIndex === previewPickIndex;
+                            return (
+                                <button
+                                    key={`sheet-${pileIndex}-${card.rank}-${card.suit}`}
+                                    type="button"
+                                    onClick={() => onPick(pileIndex)}
+                                    disabled={!interactive}
+                                    className={cn(
+                                        "relative shrink-0 rounded-md transition-transform",
+                                        interactive &&
+                                            "cursor-pointer hover:scale-105",
+                                        !interactive && "cursor-default",
+                                        isPreview &&
+                                            "ring-2 ring-amber-400 rounded-md",
+                                    )}
+                                    aria-label={`Take ${card.rank} of ${card.suit}${isTop ? " (top of pile)" : ` (and ${count - 1 - pileIndex} above)`}`}
+                                >
+                                    <PlayingCardView card={card} size="sm" />
+                                    {isTop && (
+                                        <Badge className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-black border-amber-300">
+                                            Top
+                                        </Badge>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </SheetContent>
+        </Sheet>
     );
 }
 
 /**
- * Modal-like sheet body used when a compact-mode user taps the pile badge.
- * The caller wraps this in their own Dialog/Sheet component.
+ * Read-only grid version of the discard pile, exported for callers that want
+ * to embed the cards inside their own dialog/sheet container.
  */
 export function DiscardPileSheetContent({
     cards,

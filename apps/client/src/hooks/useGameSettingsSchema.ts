@@ -15,6 +15,8 @@ import {
     DEFAULT_DOMINOES_SETTINGS,
     LRC_SETTINGS_DEFINITIONS,
     DEFAULT_LRC_SETTINGS,
+    RUMMY_SETTINGS_DEFINITIONS,
+    DEFAULT_RUMMY_SETTINGS,
 } from "@shared/types";
 
 interface UseGameSettingsSchemaResult {
@@ -110,6 +112,9 @@ export function useGameSettingsSchema(
             } else if (type === "lrc") {
                 setDefinitions(LRC_SETTINGS_DEFINITIONS);
                 setDefaults(DEFAULT_LRC_SETTINGS);
+            } else if (type === "rummy") {
+                setDefinitions(RUMMY_SETTINGS_DEFINITIONS);
+                setDefaults(DEFAULT_RUMMY_SETTINGS);
             } else {
                 setError(
                     err instanceof Error

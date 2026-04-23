@@ -13,14 +13,12 @@ import {
     PlayingCard,
 } from "@shared/types";
 import { findAllLayoffTargets } from "@shared/validation/rummy";
-import { GameMenu, RotateDeviceOverlay } from "@/components/games/shared";
-import { Button } from "@/components/ui/button";
-import RummyGameTable from "./ui/RummyGameTable";
-import HandToolbar from "./ui/HandToolbar";
-import MeldComposer from "./ui/MeldComposer";
+import { GameMenu } from "@/components/games/shared";
+import RummyStage from "./ui/RummyStage";
 import RummyCallToast from "./ui/RummyCallToast";
 import DealSizePrompt from "./ui/DealSizePrompt";
 import RoundRevealOverlay from "./ui/RoundRevealOverlay";
+import type { RummyController } from "./ui/types";
 
 const SUIT_TO_ENUM: Record<string, Suit> = {
     Hearts: Suit.Hearts,
@@ -53,19 +51,27 @@ function toServerCard(c: PlayingCard) {
 
 interface RummyProps {
     gameData: RummyData;
-    playerData: RummyPlayerData;
+    /** Null when the viewer is a spectator. */
+    playerData: RummyPlayerData | null;
     dispatchOptimisticAction?: (type: string, payload: unknown) => void;
     isSpectator?: boolean;
     roomCode?: string;
 }
 
+/** Empty-hand spectator stand-in so downstream code can read .hand/.localOrdering safely. */
+const SPECTATOR_PLAYER_DATA: RummyPlayerData = {
+    hand: [],
+    localOrdering: [],
+};
+
 export default function Rummy({
     gameData,
-    playerData,
+    playerData: rawPlayerData,
     dispatchOptimisticAction,
     isSpectator,
     roomCode,
 }: RummyProps) {
+    const playerData = rawPlayerData ?? SPECTATOR_PLAYER_DATA;
     const { socket, connected } = useWebSocket();
     const { roomId, userId } = useSession();
     useWebSocketError();
@@ -98,8 +104,10 @@ export default function Rummy({
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // ---- Derived flags ---------------------------------------------------------
-    const heroId = playerData.localOrdering[0];
+    // For spectators (no playerData), heroId is empty -> isMyTurn naturally false.
+    const heroId = playerData.localOrdering[0] ?? "";
     const isMyTurn =
+        !!heroId &&
         gameData.playOrder[gameData.currentTurnIndex] === heroId &&
         !isSpectator;
     const dealerId = gameData.playOrder[gameData.dealerIndex];
@@ -123,6 +131,43 @@ export default function Rummy({
         }));
         return findAllLayoffTargets(card, serverMelds).length > 0;
     }, [gameData.rummyCall, gameData.melds]);
+
+    /**
+     * When the hero has exactly one hand card selected and is in `may-meld`,
+     * compute the meld ids that card can lay off onto. Drives the pulsing
+     * "tap to lay off" affordance on MeldBoard so non-tech-savvy players can
+     * see the move is available.
+     */
+    const eligibleLayoffMeldIds = useMemo<readonly string[]>(() => {
+        if (
+            isSpectator ||
+            !isMyTurn ||
+            gameData.turnSubstate !== "may-meld" ||
+            meldComposerOpen ||
+            selectedHandIndices.length !== 1
+        ) {
+            return [];
+        }
+        const card = playerData.hand[selectedHandIndices[0]];
+        if (!card) return [];
+        const serverCard = toServerCard(card);
+        const serverMelds = gameData.melds.map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            ownerId: m.ownerId,
+            round: m.round,
+            cards: m.cards.map(toServerCard),
+        }));
+        return findAllLayoffTargets(serverCard, serverMelds);
+    }, [
+        isSpectator,
+        isMyTurn,
+        gameData.turnSubstate,
+        gameData.melds,
+        meldComposerOpen,
+        selectedHandIndices,
+        playerData.hand,
+    ]);
 
     // ---- Handlers --------------------------------------------------------------
     const resetSelection = useCallback(() => {
@@ -205,6 +250,24 @@ export default function Rummy({
                 resetSelection();
                 return;
             }
+            // In awaiting-discard-play, allow laying the picked card off onto
+            // an existing meld. Server already has pendingDiscardPick; it
+            // resolves the play atomically when intoMeldId is provided.
+            if (
+                isMyTurn &&
+                gameData.turnSubstate === "awaiting-discard-play" &&
+                playerData.pendingDiscardPick
+            ) {
+                setIsSubmitting(true);
+                sendAction("TAKE_DISCARD", {
+                    playerId: heroId,
+                    pickIndex: 0,
+                    intoMeldId: meldId,
+                });
+                setIsSubmitting(false);
+                resetSelection();
+                return;
+            }
             setActiveMeldId((prev) => (prev === meldId ? null : meldId));
         },
         [
@@ -212,6 +275,7 @@ export default function Rummy({
             gameData.turnSubstate,
             selectedHandIndices,
             playerData.hand,
+            playerData.pendingDiscardPick,
             sendAction,
             heroId,
             discardPickIndex,
@@ -222,14 +286,33 @@ export default function Rummy({
     const handleConfirmMeld = useCallback(
         (cards: PlayingCard[], _kind: "set" | "run") => {
             setIsSubmitting(true);
-            sendAction("LAY_MELD", {
-                playerId: heroId,
-                cards: cards.map(toServerCard),
-            });
+            // If a discard pick is staged (DRAW scene), commit TAKE_DISCARD
+            // with a freshly-formed meld containing the picked card.
+            if (
+                gameData.turnSubstate === "awaiting-draw" &&
+                discardPickIndex != null
+            ) {
+                sendAction("TAKE_DISCARD", {
+                    playerId: heroId,
+                    pickIndex: discardPickIndex,
+                    newMeld: cards.map(toServerCard),
+                });
+            } else {
+                sendAction("LAY_MELD", {
+                    playerId: heroId,
+                    cards: cards.map(toServerCard),
+                });
+            }
             setIsSubmitting(false);
             resetSelection();
         },
-        [sendAction, heroId, resetSelection],
+        [
+            sendAction,
+            heroId,
+            resetSelection,
+            gameData.turnSubstate,
+            discardPickIndex,
+        ],
     );
 
     const handleDiscard = useCallback(() => {
@@ -268,127 +351,97 @@ export default function Rummy({
         [sendAction, heroId],
     );
 
+    // ---- Controller bundle for stage -----------------------------------------
+    const controller: RummyController = useMemo(
+        () => ({
+            selectedHandIndices,
+            activeMeldId,
+            eligibleLayoffMeldIds,
+            discardPickIndex,
+            meldComposerOpen,
+            isSubmitting,
+            onSelectHandCard: handleSelectHandCard,
+            onClearSelection: () => setSelectedHandIndices([]),
+            onDrawStock: handleDrawStock,
+            onClickDiscardCard: handleClickDiscardCard,
+            onSelectMeld: handleSelectMeld,
+            onOpenMeldComposer: () => {
+                setMeldComposerOpen(true);
+                setSelectedHandIndices([]);
+            },
+            onCancelMeldComposer: () => {
+                setMeldComposerOpen(false);
+                setSelectedHandIndices([]);
+            },
+            onConfirmMeld: handleConfirmMeld,
+            onDiscard: handleDiscard,
+        }),
+        [
+            selectedHandIndices,
+            activeMeldId,
+            eligibleLayoffMeldIds,
+            discardPickIndex,
+            meldComposerOpen,
+            isSubmitting,
+            handleSelectHandCard,
+            handleDrawStock,
+            handleClickDiscardCard,
+            handleSelectMeld,
+            handleConfirmMeld,
+            handleDiscard,
+        ],
+    );
+
     // ---- Render ---------------------------------------------------------------
     return (
-        <>
-            <RotateDeviceOverlay />
-            <div className="relative w-full h-full flex flex-col bg-gradient-to-br from-emerald-950 via-emerald-900 to-stone-900">
-                <div className="absolute top-2 left-2 z-30">
-                    <GameMenu roomCode={roomCode ?? ""} />
-                </div>
+        <div className="relative w-full h-full flex flex-col bg-linear-to-br from-emerald-950 via-emerald-900 to-stone-900">
+            <div className="absolute top-2 left-2 z-40">
+                <GameMenu roomCode={roomCode ?? ""} />
+            </div>
 
-                <div className="flex-1 min-h-0 relative">
-                    <RummyGameTable
-                        gameData={gameData}
-                        playerData={playerData}
-                        isMyTurn={isMyTurn}
-                        selectedHandIndices={selectedHandIndices}
-                        onSelectHandCard={handleSelectHandCard}
-                        onClickDiscardCard={handleClickDiscardCard}
-                        onSelectMeld={handleSelectMeld}
-                        activeMeldId={activeMeldId}
-                        discardPickIndex={discardPickIndex}
-                        onDrawStock={handleDrawStock}
-                        disabledHand={isSubmitting}
-                    />
-                </div>
-
-                {/* Meld composer (shown above toolbar when active). */}
-                {isMyTurn &&
-                    gameData.turnSubstate === "may-meld" &&
-                    meldComposerOpen && (
-                        <div className="px-3 pb-1">
-                            <MeldComposer
-                                hand={playerData.hand}
-                                selectedIndices={selectedHandIndices}
-                                onToggleSelect={handleSelectHandCard}
-                                onClear={() => setSelectedHandIndices([])}
-                                onConfirm={handleConfirmMeld}
-                                onCancel={() => {
-                                    setMeldComposerOpen(false);
-                                    setSelectedHandIndices([]);
-                                }}
-                                disabled={isSubmitting}
-                            />
-                        </div>
-                    )}
-
-                {/* Toolbar — substate-driven actions. */}
-                <div className="px-3 pb-3 flex items-center justify-center gap-2">
-                    <HandToolbar
-                        turnSubstate={gameData.turnSubstate}
-                        isMyTurn={isMyTurn}
-                        stagedDiscardPickIndex={discardPickIndex}
-                        isMeldComposerOpen={meldComposerOpen}
-                        disabled={isSubmitting}
-                        onDrawStock={handleDrawStock}
-                        onTakeDiscard={() => {
-                            // Without a target meld we can't commit TAKE_DISCARD.
-                            // Surface a hint so the user knows to tap a meld.
-                            toast.info(
-                                "Tap a meld to lay the picked card off, or pick a card you can immediately use in a new set/run.",
-                            );
-                        }}
-                        onOpenMeldComposer={() => {
-                            setMeldComposerOpen(true);
-                            setSelectedHandIndices([]);
-                        }}
-                        onCancelMeldComposer={() => {
-                            setMeldComposerOpen(false);
-                            setSelectedHandIndices([]);
-                        }}
-                    />
-                    {isMyTurn &&
-                        gameData.turnSubstate === "may-meld" &&
-                        !meldComposerOpen &&
-                        selectedHandIndices.length === 1 && (
-                            <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={handleDiscard}
-                                disabled={isSubmitting}
-                            >
-                                Discard selected
-                            </Button>
-                        )}
-                </div>
-
-                {/* Rummy-window toast (non-blocking). */}
-                <RummyCallToast
-                    isOpen={rummyCallActive}
-                    card={gameData.rummyCall?.card ?? null}
-                    closesAt={gameData.rummyCall?.closesAt ?? null}
-                    canCall={canCallRummy}
-                    onCall={handleCallRummy}
-                />
-
-                {/* Deal-size prompt (round start). */}
-                <DealSizePrompt
-                    isOpen={gameData.phase === "deal-size-prompt"}
-                    isDealer={isDealer}
-                    dealerName={gameData.players[dealerId]?.name ?? "Dealer"}
-                    minSize={gameData.settings.dealSizeMin}
-                    maxSize={gameData.settings.dealSizeMax}
-                    onConfirm={handleConfirmDealSize}
-                />
-
-                {/* Round reveal overlay. */}
-                <RoundRevealOverlay
-                    isOpen={
-                        gameData.phase === "round-summary" &&
-                        Boolean(gameData.lastRoundSummary)
-                    }
-                    summary={gameData.lastRoundSummary ?? null}
-                    melds={gameData.melds}
-                    players={gameData.players}
-                    totals={gameData.scores}
-                    onContinue={() => {
-                        sendAction("CONTINUE_AFTER_ROUND_SUMMARY", {
-                            playerId: heroId,
-                        });
-                    }}
+            <div className="flex-1 min-h-0 relative">
+                <RummyStage
+                    gameData={gameData}
+                    playerData={playerData}
+                    heroId={heroId}
+                    isSpectator={!!isSpectator}
+                    controller={controller}
                 />
             </div>
-        </>
+
+            {/* Rummy-window toast (non-blocking). */}
+            <RummyCallToast
+                isOpen={rummyCallActive}
+                card={gameData.rummyCall?.card ?? null}
+                closesAt={gameData.rummyCall?.closesAt ?? null}
+                canCall={canCallRummy}
+                onCall={handleCallRummy}
+            />
+
+            {/* Deal-size prompt (round start). */}
+            <DealSizePrompt
+                isOpen={gameData.phase === "deal-size-prompt"}
+                isDealer={isDealer}
+                dealerName={gameData.players[dealerId]?.name ?? "Dealer"}
+                minSize={gameData.settings.dealSizeMin}
+                maxSize={gameData.settings.dealSizeMax}
+                onConfirm={handleConfirmDealSize}
+            />
+
+            {/* Round reveal overlay. */}
+            <RoundRevealOverlay
+                isOpen={
+                    gameData.phase === "round-summary" &&
+                    Boolean(gameData.lastRoundSummary)
+                }
+                summary={gameData.lastRoundSummary ?? null}
+                melds={gameData.melds}
+                players={gameData.players}
+                totals={gameData.scores}
+                onContinue={() => {
+                    sendAction("NEXT_ROUND", { playerId: heroId });
+                }}
+            />
+        </div>
     );
 }

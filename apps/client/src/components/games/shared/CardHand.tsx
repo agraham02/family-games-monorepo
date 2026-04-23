@@ -30,8 +30,14 @@ interface CardHandProps {
     size?: CardSize;
     /** Is this hand interactive? */
     interactive?: boolean;
-    /** Currently selected card index */
+    /** Currently selected card index (single-select). */
     selectedIndex?: number | null;
+    /**
+     * Indices of multiple selected cards. Use for multi-select flows like
+     * meld composition. Cards at these indices get the same lifted /
+     * highlighted treatment as `selectedIndex` would.
+     */
+    selectedIndices?: number[];
     /** Indices of disabled cards */
     disabledIndices?: number[];
     /** Callback when a card is clicked */
@@ -46,6 +52,24 @@ interface CardHandProps {
     rotation?: number;
     /** Enable tap-to-spread on cramped screens (auto-enabled on compact layout) */
     enableTapToSpread?: boolean;
+    /**
+     * How the hand reacts when the user wants to see overlapping cards.
+     *
+     * - `"hover-zoom"`: Mouse hover (or touch press-and-drag) expands a small
+     *   "lens" of cards around the cursor while the rest stay packed. Mimics
+     *   how UNO on PC handles big hands.
+     * - `"tap-spread"`: A single tap spreads ALL cards (legacy behaviour used
+     *   by the meld scene). Use when you want a deliberate spread gesture.
+     * - `"off"`: No expansion behaviour.
+     *
+     * Default: `"hover-zoom"` for the local player, `"off"` for opponents.
+     */
+    expansionMode?: "hover-zoom" | "tap-spread" | "off";
+    /**
+     * Number of cards on each side of the hovered card that share the
+     * expansion (the "lens" radius). Default 2 → 5-card lens.
+     */
+    expandRadius?: number;
     /** Duration in ms before auto-collapsing spread (default: 3000) */
     spreadAutoCollapseMs?: number;
     /** Controlled spread state (optional - for outside click handling) */
@@ -119,8 +143,12 @@ interface CardInHandProps {
     isHorizontal: boolean;
     size: CardSize;
     spacing: number;
+    isHovered: boolean;
     playerId?: string;
     onClick?: () => void;
+    onHoverChange?: (index: number | null) => void;
+    /** Whether to release pointer capture on touch so pointerenter fires on neighbours. */
+    enableTouchHoverDrag?: boolean;
     prefersReducedMotion: boolean;
 }
 
@@ -135,15 +163,19 @@ function CardInHand({
     isHorizontal,
     size,
     spacing,
+    isHovered,
     playerId,
     onClick,
+    onHoverChange,
+    enableTouchHoverDrag,
     prefersReducedMotion,
 }: CardInHandProps) {
     const dimensions = SIZE_DIMENSIONS[size];
     const showBack = card === null || isHidden;
 
-    // Calculate z-index: selected card on top, focused next, otherwise by position
-    const zIndex = isSelected ? 100 : isFocused ? 99 : index;
+    // Keep stable stacking order in fanned hands so selecting/lifting a card
+    // does not cover neighboring cards in unnatural ways.
+    const zIndex = index;
 
     // Selection lift - different direction for vertical vs horizontal
     const yOffset = isHorizontal ? (isSelected ? -20 : 0) : 0;
@@ -223,6 +255,41 @@ function CardInHand({
             }
             whileHover={hoverAnimation}
             whileTap={tapAnimation}
+            onPointerEnter={
+                onHoverChange ? () => onHoverChange(index) : undefined
+            }
+            onPointerDown={
+                onHoverChange
+                    ? (e) => {
+                          // On touch, the browser implicitly captures the pointer
+                          // to the original target so pointerenter on sibling cards
+                          // never fires while dragging. Releasing the capture lets
+                          // the lens follow the finger across cards.
+                          if (
+                              enableTouchHoverDrag &&
+                              e.pointerType === "touch" &&
+                              e.currentTarget.hasPointerCapture(e.pointerId)
+                          ) {
+                              e.currentTarget.releasePointerCapture(
+                                  e.pointerId,
+                              );
+                          }
+                          onHoverChange(index);
+                      }
+                    : undefined
+            }
+            onPointerLeave={
+                onHoverChange
+                    ? (e) => {
+                          // Only mouse pointers should clear on leave — touch
+                          // sliding through cards constantly enters/leaves and we
+                          // want the lens to track the finger, not collapse.
+                          if (e.pointerType === "mouse") {
+                              onHoverChange(null);
+                          }
+                      }
+                    : undefined
+            }
             onClick={
                 isInteractive && !isDisabled
                     ? (e) => {
@@ -296,6 +363,7 @@ function CardHand({
     size,
     interactive = false,
     selectedIndex = null,
+    selectedIndices,
     disabledIndices = [],
     onCardClick,
     playerId,
@@ -303,6 +371,8 @@ function CardHand({
     isDealing = false,
     rotation: rotationProp,
     enableTapToSpread,
+    expansionMode,
+    expandRadius = 2,
     spreadAutoCollapseMs = 3000,
     isSpreadControlled,
     onSpreadChange,
@@ -313,6 +383,10 @@ function CardHand({
 
     // Keyboard navigation state
     const [focusedIndex, setFocusedIndex] = useState(-1);
+
+    // Hover-zoom "lens" state — index of the card currently under the pointer
+    // (or focused via keyboard). Drives the per-card spacing computation below.
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
     // Tap-to-spread state
     const [isSpreadInternal, setIsSpreadInternal] = useState(false);
@@ -353,6 +427,19 @@ function CardHand({
         enableTapToSpread ??
         (isLocalPlayer && layoutConfig.layoutMode === "compact");
 
+    // Resolve which expansion mode is active. Tap-to-spread takes precedence
+    // when explicitly enabled (legacy meld scene); otherwise hover-zoom is the
+    // default for the local player. Opponents never get any expansion.
+    const resolvedExpansionMode: "hover-zoom" | "tap-spread" | "off" =
+        expansionMode ??
+        (shouldEnableTapToSpread
+            ? "tap-spread"
+            : isLocalPlayer
+              ? "hover-zoom"
+              : "off");
+
+    const hoverZoomActive = resolvedExpansionMode === "hover-zoom";
+
     // Auto-collapse spread after timeout
     useEffect(() => {
         if (isSpread && spreadAutoCollapseMs > 0) {
@@ -387,6 +474,15 @@ function CardHand({
         enabled: isLocalPlayer && interactive && cards.length > 0,
         wrap: true,
     });
+
+    // Mirror keyboard focus into the hover lens so arrow-key navigation also
+    // expands the same neighbourhood as a mouse hover would.
+    useEffect(() => {
+        if (!hoverZoomActive) return;
+        if (focusedIndex >= 0) {
+            setHoveredIndex(focusedIndex);
+        }
+    }, [focusedIndex, hoverZoomActive]);
 
     // Handle tap on card area (for spread)
     const handleSpreadTap = useCallback(
@@ -479,6 +575,31 @@ function CardHand({
 
     const spacing = isSpread ? spreadSpacing : normalSpacing;
 
+    // Per-card spacing for the hover-zoom "lens". `marginLeft[i]` controls the
+    // gap between card `i-1` and card `i`, so a gap should open whenever
+    // either neighbour is close to the hovered index. Using
+    // `min(dist(i-1), dist(i))` makes the lens symmetric around the hover.
+    const perCardSpacing: number[] = (() => {
+        if (
+            isSpread ||
+            !hoverZoomActive ||
+            hoveredIndex == null ||
+            displayCards.length === 0
+        ) {
+            return new Array(displayCards.length).fill(spacing);
+        }
+        const radius = Math.max(0, expandRadius);
+        return displayCards.map((_, i) => {
+            const distLeft = Math.abs(i - 1 - hoveredIndex);
+            const distRight = Math.abs(i - hoveredIndex);
+            const dist = Math.min(distLeft, distRight);
+            if (dist > radius) return normalSpacing;
+            // Linear blend: dist 0 → spreadSpacing, dist == radius → normalSpacing.
+            const t = radius === 0 ? 0 : dist / radius;
+            return spreadSpacing + (normalSpacing - spreadSpacing) * t;
+        });
+    })();
+
     // Calculate if the hand container needs different sizing based on rotation
     // For 90/-90 degree rotations, the hand will appear vertical
     const isRotatedSideways = Math.abs(rotation) === 90;
@@ -527,16 +648,50 @@ function CardHand({
                     transform:
                         rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
                     transformOrigin: "center center",
+                    // Stop touch sliding from triggering page scroll while the
+                    // user drags through their hand to inspect cards.
+                    touchAction: hoverZoomActive ? "none" : undefined,
                 }}
+                onPointerLeave={
+                    hoverZoomActive
+                        ? (e) => {
+                              // Mouse leaving the hand collapses the lens.
+                              // Touch sliding through cards constantly
+                              // crosses card edges; rely on pointer-up
+                              // (handled below) to clear instead.
+                              if (e.pointerType === "mouse") {
+                                  setHoveredIndex(null);
+                              }
+                          }
+                        : undefined
+                }
+                onPointerUp={
+                    hoverZoomActive
+                        ? (e) => {
+                              if (e.pointerType !== "mouse") {
+                                  setHoveredIndex(null);
+                              }
+                          }
+                        : undefined
+                }
+                onPointerCancel={
+                    hoverZoomActive ? () => setHoveredIndex(null) : undefined
+                }
             >
                 <AnimatePresence mode="popLayout">
                     {displayCards.map((card, index) => {
                         // In spread mode, the tapped card is highlighted
                         const isHighlighted =
                             isSpread && spreadTappedIndex === index;
-                        // Use spread-tap highlighting OR normal selection
+                        // Multi-select (meld composer) takes precedence,
+                        // then spread-tap highlight, then single-select.
+                        const isMultiSelected =
+                            !!selectedIndices &&
+                            selectedIndices.includes(index);
                         const effectivelySelected =
-                            isHighlighted || selectedIndex === index;
+                            isMultiSelected ||
+                            isHighlighted ||
+                            selectedIndex === index;
 
                         return (
                             <CardInHand
@@ -555,10 +710,19 @@ function CardHand({
                                 }
                                 isFocused={focusedIndex === index}
                                 size={responsiveSize}
-                                spacing={spacing}
+                                spacing={perCardSpacing[index] ?? spacing}
+                                isHovered={
+                                    hoverZoomActive && hoveredIndex === index
+                                }
                                 playerId={playerId}
                                 isHorizontal={isHorizontal}
                                 prefersReducedMotion={prefersReducedMotion}
+                                onHoverChange={
+                                    hoverZoomActive
+                                        ? setHoveredIndex
+                                        : undefined
+                                }
+                                enableTouchHoverDrag={hoverZoomActive}
                                 onClick={
                                     card
                                         ? () => handleSpreadTap(index, card)

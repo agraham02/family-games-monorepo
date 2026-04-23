@@ -74,15 +74,29 @@ export default function SeatLayoutDebugPage() {
                                 edge === "top" || edge === "bottom"
                                     ? "flex-row"
                                     : "flex-col";
+                            const isMultiSlot = slots.length > 1;
+                            const containerCls = [
+                                "flex items-center",
+                                stackDirection,
+                                isMultiSlot
+                                    ? "justify-around"
+                                    : "justify-center gap-3",
+                                isMultiSlot &&
+                                    (edge === "top" || edge === "bottom") &&
+                                    "w-full",
+                                isMultiSlot &&
+                                    (edge === "left" || edge === "right") &&
+                                    "self-stretch",
+                            ]
+                                .filter(Boolean)
+                                .join(" ");
                             return (
                                 <EdgeRegion
                                     key={edge}
                                     position={edge}
                                     isHero={slots.some((s) => s.isHero)}
                                 >
-                                    <div
-                                        className={`flex ${stackDirection} gap-3 items-center justify-center`}
-                                    >
+                                    <div className={containerCls}>
                                         {slots.map((slot) => {
                                             const playerIdx =
                                                 seats.indexOf(slot);

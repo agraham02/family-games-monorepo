@@ -7,6 +7,9 @@ import {
     DominoesData,
     DominoesPlayerData,
     Tile,
+    RummyData,
+    RummyPlayerData,
+    RummyMeldView,
 } from "@shared/types";
 import { orientDominoTileForEnd } from "@shared/utils";
 
@@ -288,9 +291,176 @@ function optimisticDominoesPass(
 }
 
 // =====================
-// MAIN REDUCER ROUTER
+// RUMMY REDUCERS
 // =====================
 
+type RummyCardLite = { suit: string; rank: string };
+
+function cardKey(c: { suit: string; rank: string }): string {
+    return `${c.suit}|${c.rank}`;
+}
+
+function findCardIndex(hand: PlayingCard[], target: RummyCardLite): number {
+    const key = cardKey(target);
+    return hand.findIndex((c) => cardKey(c) === key);
+}
+
+/**
+ * Optimistic LAY_MELD: remove cards from hand, append a placeholder meld,
+ * decrement handCounts. Does NOT advance turn (substate stays may-meld).
+ */
+function optimisticRummyLayMeld(
+    gameData: RummyData,
+    playerData: RummyPlayerData,
+    action: {
+        type: string;
+        payload: { cards: RummyCardLite[]; playerId?: string };
+        userId: string;
+    },
+): OptimisticUpdateResult | null {
+    const { userId } = action;
+    const cards = action.payload.cards;
+    if (!Array.isArray(cards) || cards.length < 3) return null;
+
+    // Verify it's the player's turn and substate allows melding
+    const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
+    if (currentPlayerId !== userId) return null;
+    if (gameData.turnSubstate !== "may-meld") return null;
+
+    // Remove each card from hand (one occurrence per requested card).
+    const newHand = [...playerData.hand];
+    const removedDisplay: PlayingCard[] = [];
+    for (const target of cards) {
+        const idx = findCardIndex(newHand, target);
+        if (idx === -1) return null; // card not in hand → bail
+        removedDisplay.push(newHand[idx]);
+        newHand.splice(idx, 1);
+    }
+
+    // Pick a meld kind heuristically (server is authoritative; this is just
+    // for the placeholder render until sync arrives).
+    const allSameRank = removedDisplay.every(
+        (c) => c.rank === removedDisplay[0].rank,
+    );
+    const kind: "set" | "run" = allSameRank ? "set" : "run";
+
+    const placeholderMeld: RummyMeldView = {
+        id: `optimistic-${Date.now()}`,
+        kind,
+        cards: removedDisplay,
+        ownerId: userId,
+        round: gameData.round,
+    };
+
+    const newHandCounts = { ...gameData.handCounts };
+    newHandCounts[userId] =
+        (newHandCounts[userId] ?? newHand.length + cards.length) - cards.length;
+
+    return {
+        gameData: {
+            melds: [...gameData.melds, placeholderMeld],
+            handCounts: newHandCounts,
+        } as Partial<RummyData>,
+        playerData: { hand: newHand },
+    };
+}
+
+/**
+ * Optimistic LAY_OFF: append card to target meld and remove from hand.
+ */
+function optimisticRummyLayOff(
+    gameData: RummyData,
+    playerData: RummyPlayerData,
+    action: {
+        type: string;
+        payload: { meldId: string; card: RummyCardLite; playerId?: string };
+        userId: string;
+    },
+): OptimisticUpdateResult | null {
+    const { userId } = action;
+    const { meldId, card } = action.payload;
+
+    const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
+    if (currentPlayerId !== userId) return null;
+    if (gameData.turnSubstate !== "may-meld") return null;
+
+    const meldIndex = gameData.melds.findIndex((m) => m.id === meldId);
+    if (meldIndex === -1) return null;
+
+    const handIdx = findCardIndex(playerData.hand, card);
+    if (handIdx === -1) return null;
+
+    const newHand = [...playerData.hand];
+    const removed = newHand.splice(handIdx, 1)[0];
+
+    const newMelds = [...gameData.melds];
+    newMelds[meldIndex] = {
+        ...newMelds[meldIndex],
+        cards: [...newMelds[meldIndex].cards, removed],
+    };
+
+    const newHandCounts = { ...gameData.handCounts };
+    newHandCounts[userId] = (newHandCounts[userId] ?? newHand.length + 1) - 1;
+
+    return {
+        gameData: {
+            melds: newMelds,
+            handCounts: newHandCounts,
+        } as Partial<RummyData>,
+        playerData: { hand: newHand },
+    };
+}
+
+/**
+ * Optimistic DISCARD: remove card from hand, push to discard pile, advance
+ * turn index. Does NOT speculate the rummy-call window (server-authoritative).
+ */
+function optimisticRummyDiscard(
+    gameData: RummyData,
+    playerData: RummyPlayerData,
+    action: {
+        type: string;
+        payload: { card: RummyCardLite; playerId?: string };
+        userId: string;
+    },
+): OptimisticUpdateResult | null {
+    const { userId } = action;
+    const { card } = action.payload;
+
+    const currentPlayerId = gameData.playOrder[gameData.currentTurnIndex];
+    if (currentPlayerId !== userId) return null;
+    if (gameData.turnSubstate !== "may-meld") return null;
+
+    const handIdx = findCardIndex(playerData.hand, card);
+    if (handIdx === -1) return null;
+
+    const newHand = [...playerData.hand];
+    const removed = newHand.splice(handIdx, 1)[0];
+
+    const newDiscard = {
+        cards: [...gameData.discard.cards, removed],
+    };
+
+    const newHandCounts = { ...gameData.handCounts };
+    newHandCounts[userId] = (newHandCounts[userId] ?? newHand.length + 1) - 1;
+
+    const newTurnIndex =
+        (gameData.currentTurnIndex + 1) % gameData.playOrder.length;
+
+    return {
+        gameData: {
+            discard: newDiscard,
+            handCounts: newHandCounts,
+            currentTurnIndex: newTurnIndex,
+            turnSubstate: "awaiting-draw",
+        } as Partial<RummyData>,
+        playerData: { hand: newHand },
+    };
+}
+
+// =====================
+// MAIN REDUCER ROUTER
+// =====================
 /**
  * Main optimistic reducer that routes to game-specific reducers
  */
@@ -361,6 +531,54 @@ export function optimisticGameReducer(
                 );
             default:
                 // No optimistic update for this action
+                return null;
+        }
+    } else if (gameData.type === "rummy") {
+        const rummyData = gameData as RummyData;
+        const rummyPlayerData = playerData as RummyPlayerData;
+
+        switch (action.type) {
+            case "LAY_MELD":
+                return optimisticRummyLayMeld(
+                    rummyData,
+                    rummyPlayerData,
+                    action as {
+                        type: string;
+                        payload: { cards: RummyCardLite[]; playerId?: string };
+                        userId: string;
+                    },
+                );
+            case "LAY_OFF":
+                return optimisticRummyLayOff(
+                    rummyData,
+                    rummyPlayerData,
+                    action as {
+                        type: string;
+                        payload: {
+                            meldId: string;
+                            card: RummyCardLite;
+                            playerId?: string;
+                        };
+                        userId: string;
+                    },
+                );
+            case "DISCARD":
+                return optimisticRummyDiscard(
+                    rummyData,
+                    rummyPlayerData,
+                    action as {
+                        type: string;
+                        payload: {
+                            card: RummyCardLite;
+                            playerId?: string;
+                        };
+                        userId: string;
+                    },
+                );
+            // DRAW_STOCK / TAKE_DISCARD / CALL_RUMMY / CHOOSE_DEAL_SIZE /
+            // NEXT_ROUND are all server-authoritative (require info the client
+            // doesn't have or are race-arbitrated).
+            default:
                 return null;
         }
     }

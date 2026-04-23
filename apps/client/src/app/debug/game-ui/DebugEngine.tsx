@@ -13,6 +13,7 @@ import { useGameSettingsSchema } from "@/hooks/useGameSettingsSchema";
 import { optimisticGameReducer } from "@/lib/gameReducers";
 import { orientDominoTileForEnd } from "@shared/utils/dominoesBoard";
 import { toast } from "sonner";
+import { applyRummyDebugAction } from "./rummyDebugReducer";
 
 // Wrapper to use hooks that require context providers
 function GameComponentWrapper({
@@ -96,11 +97,55 @@ function GameComponentWrapper({
     );
 }
 
+const PLAYER_COUNT_CONFIG: Record<
+    string,
+    { min: number; max: number; default: number }
+> = {
+    rummy: { min: 2, max: 6, default: 3 },
+    lrc: { min: 3, max: 10, default: 5 },
+};
+
+/**
+ * Per-game hand-size (deal-size) override for the debug panel. Only games
+ * whose mock generator accepts a `handSize` option appear here. Step is the
+ * slider increment (e.g., 2 for odd values 5, 7, 9, 11, 13).
+ */
+const HAND_SIZE_CONFIG: Record<
+    string,
+    {
+        min: number;
+        max: number;
+        step: number;
+        default: number;
+        /** Mock-generator option key to forward this value through. */
+        optionKey: string;
+    }
+> = {
+    rummy: {
+        min: 1,
+        max: 13,
+        step: 2,
+        default: 9,
+        optionKey: "handSize",
+    },
+};
+
 export function DebugEngine() {
     const [selectedGameId, setSelectedGameId] = useState<string>("spades");
     const [selectedScenarioId, setSelectedScenarioId] =
         useState<string>("default");
     const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
+
+    const [debugPlayerCount, setDebugPlayerCount] = useState<number | null>(
+        null,
+    );
+    const [debugHandSize, setDebugHandSize] = useState<number | null>(null);
+
+    // Reset overrides when the game changes
+    useEffect(() => {
+        setDebugPlayerCount(null);
+        setDebugHandSize(null);
+    }, [selectedGameId]);
 
     const [masterGameState, setMasterGameState] = useState<{
         gameData: GameData | null;
@@ -166,9 +211,28 @@ export function DebugEngine() {
             Object.keys(currentSettings).length > 0 &&
             settingsGameId === selectedGameId;
 
+        const playerCountConfig = PLAYER_COUNT_CONFIG[selectedGameId];
+        const effectivePlayerCount =
+            debugPlayerCount ??
+            (playerCountConfig?.default ??
+                (gameEntry.defaultMockOptions?.playerCount as
+                    | number
+                    | undefined));
+
+        const handSizeConfig = HAND_SIZE_CONFIG[selectedGameId];
+        const effectiveHandSize = handSizeConfig
+            ? (debugHandSize ?? handSizeConfig.default)
+            : undefined;
+
         // For now, we just use default options. We could expand this to have predefined scenarios.
         const options = {
             ...(gameEntry.defaultMockOptions || {}),
+            ...(effectivePlayerCount != null
+                ? { playerCount: effectivePlayerCount }
+                : {}),
+            ...(handSizeConfig && effectiveHandSize != null
+                ? { [handSizeConfig.optionKey]: effectiveHandSize }
+                : {}),
             settings: shouldUseCurrentSettings ? currentSettings : undefined,
         };
 
@@ -199,7 +263,7 @@ export function DebugEngine() {
             setSelectedPlayerId(mockData.gameData.playOrder[0]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedGameId, selectedScenarioId, regenerateTrigger]);
+    }, [selectedGameId, selectedScenarioId, regenerateTrigger, debugPlayerCount, debugHandSize]);
 
     const handleEmit = useCallback(
         (event: string, payload: unknown) => {
@@ -498,6 +562,16 @@ export function DebugEngine() {
                             (currentIndex + 1) % playOrder.length;
                     }
 
+                    // ----- Rummy -----
+                    if (selectedGameId === "rummy") {
+                        applyRummyDebugAction(
+                            newGameData,
+                            newPlayerDataMap,
+                            action,
+                            selectedPlayerId,
+                        );
+                    }
+
                     return {
                         ...prevState,
                         gameData: newGameData as GameData,
@@ -790,6 +864,31 @@ export function DebugEngine() {
                 onUpdateSetting={handleUpdateSetting}
                 onRegenerateGame={() =>
                     setRegenerateTrigger((prev) => prev + 1)
+                }
+                playerCountConfig={
+                    PLAYER_COUNT_CONFIG[selectedGameId]
+                        ? {
+                              min: PLAYER_COUNT_CONFIG[selectedGameId].min,
+                              max: PLAYER_COUNT_CONFIG[selectedGameId].max,
+                              value:
+                                  debugPlayerCount ??
+                                  PLAYER_COUNT_CONFIG[selectedGameId].default,
+                              onChange: setDebugPlayerCount,
+                          }
+                        : undefined
+                }
+                handSizeConfig={
+                    HAND_SIZE_CONFIG[selectedGameId]
+                        ? {
+                              min: HAND_SIZE_CONFIG[selectedGameId].min,
+                              max: HAND_SIZE_CONFIG[selectedGameId].max,
+                              step: HAND_SIZE_CONFIG[selectedGameId].step,
+                              value:
+                                  debugHandSize ??
+                                  HAND_SIZE_CONFIG[selectedGameId].default,
+                              onChange: setDebugHandSize,
+                          }
+                        : undefined
                 }
             />
         </div>

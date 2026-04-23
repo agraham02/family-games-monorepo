@@ -195,7 +195,9 @@ export function generateRummyMockData(options: RummyMockOptions = {}): {
 
     const scores: Record<string, number> = {};
     playOrder.forEach((id, idx) => {
-        scores[id] = idx === 0 ? 145 : 80 + idx * 35;
+        // Round 1 → fresh game, everyone at 0. Later rounds get varied totals
+        // so the UI for multi-round scoreboards can be exercised.
+        scores[id] = round <= 1 ? 0 : idx === 0 ? 145 : 80 + idx * 35;
     });
 
     const gameData: RummyData = {

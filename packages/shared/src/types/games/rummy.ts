@@ -40,6 +40,22 @@ export interface Meld {
     ownerId: string;
     /** Round number this meld was created in. */
     round: number;
+    /**
+     * Per-card lay-off attribution. Each entry maps a position in `cards`
+     * to the player who added that card via lay-off (LAY_OFF, TAKE_DISCARD
+     * intoMeldId, or CALL_RUMMY). Cards laid by the original owner do NOT
+     * appear here. Used for client visualisation (showing whose card joined
+     * a shared meld) and round scoring (ledger source of truth still lives
+     * server-side on `_meldedByPlayer`).
+     */
+    layoffs?: MeldLayoff[];
+}
+
+export interface MeldLayoff {
+    /** Index into `Meld.cards` after the lay-off was applied. */
+    index: number;
+    /** Player who laid this card. */
+    playerId: string;
 }
 
 // ============================================================================
@@ -258,6 +274,8 @@ export interface RummyMeldView {
     cards: PlayingCard[];
     ownerId: string;
     round: number;
+    /** Per-card lay-off attribution (mirrors `Meld.layoffs`). */
+    layoffs?: MeldLayoff[];
 }
 
 export interface RummyDiscardView {

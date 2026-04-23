@@ -55,6 +55,20 @@ interface FloatingControlPanelProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onUpdateSetting?: (key: string, value: any) => void;
     onRegenerateGame?: () => void;
+    playerCountConfig?: {
+        min: number;
+        max: number;
+        value: number;
+        onChange: (n: number) => void;
+    };
+    handSizeConfig?: {
+        min: number;
+        max: number;
+        /** Slider increment. e.g. 2 for odd-only values. */
+        step: number;
+        value: number;
+        onChange: (n: number) => void;
+    };
 }
 
 export function FloatingControlPanel({
@@ -83,6 +97,8 @@ export function FloatingControlPanel({
     currentSettings = {},
     onUpdateSetting,
     onRegenerateGame,
+    playerCountConfig,
+    handSizeConfig,
 }: FloatingControlPanelProps) {
     const [isMinimized, setIsMinimized] = useState(false);
     const [jsonInput, setJsonInput] = useState(gameStateJson);
@@ -234,6 +250,62 @@ export function FloatingControlPanel({
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {playerCountConfig && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="debug-player-count">
+                                                Players
+                                            </Label>
+                                            <span className="text-xs text-muted-foreground tabular-nums">
+                                                {playerCountConfig.value}
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            id="debug-player-count"
+                                            min={playerCountConfig.min}
+                                            max={playerCountConfig.max}
+                                            step={1}
+                                            value={[playerCountConfig.value]}
+                                            onValueChange={(v) =>
+                                                playerCountConfig.onChange(v[0])
+                                            }
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            {playerCountConfig.min}–
+                                            {playerCountConfig.max} players
+                                            supported
+                                        </p>
+                                    </div>
+                                )}
+
+                                {handSizeConfig && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="debug-hand-size">
+                                                Cards per player
+                                            </Label>
+                                            <span className="text-xs text-muted-foreground tabular-nums">
+                                                {handSizeConfig.value}
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            id="debug-hand-size"
+                                            min={handSizeConfig.min}
+                                            max={handSizeConfig.max}
+                                            step={handSizeConfig.step}
+                                            value={[handSizeConfig.value]}
+                                            onValueChange={(v) =>
+                                                handSizeConfig.onChange(v[0])
+                                            }
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            {handSizeConfig.min}–
+                                            {handSizeConfig.max} in steps of{" "}
+                                            {handSizeConfig.step}
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <Label>Perspective (Player View)</Label>

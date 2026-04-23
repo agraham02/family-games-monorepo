@@ -454,6 +454,10 @@ function handleTakeDiscard(
         // Commit: shrink discard, lay off, hand absorbs tail.
         state.discard.cards = state.discard.cards.slice(0, pickIndex);
         meld.cards = [...meld.cards, picked];
+        meld.layoffs = [
+            ...(meld.layoffs ?? []),
+            { index: meld.cards.length - 1, playerId },
+        ];
         state.hands[playerId] = [...state.hands[playerId], ...tail];
         attributeMeldedCards(state, playerId, [picked]);
         state.history.push(
@@ -559,6 +563,10 @@ function handleLayOff(
     if (!handAfter) throw new Error("Card not in your hand");
     state.hands[playerId] = handAfter;
     meld.cards = [...meld.cards, card];
+    meld.layoffs = [
+        ...(meld.layoffs ?? []),
+        { index: meld.cards.length - 1, playerId },
+    ];
     attributeMeldedCards(state, playerId, [card]);
     state.history.push(
         `${playerId} laid off ${card.rank}${card.suit[0]} on ${meldId}`,
@@ -644,6 +652,10 @@ function handleCallRummy(
     }
     state.discard.cards = state.discard.cards.slice(0, -1);
     meld.cards = [...meld.cards, state.rummyCall.card];
+    meld.layoffs = [
+        ...(meld.layoffs ?? []),
+        { index: meld.cards.length - 1, playerId: callerId },
+    ];
     attributeMeldedCards(state, callerId, [state.rummyCall.card]);
     state.history.push(
         `${callerId} called Rummy! on ${state.rummyCall.card.rank}${state.rummyCall.card.suit[0]}`,
@@ -671,6 +683,7 @@ function toClientMeld(meld: Meld): RummyMeldView {
         cards: meld.cards.map(toClientCard),
         ownerId: meld.ownerId,
         round: meld.round,
+        layoffs: meld.layoffs ? meld.layoffs.map((l) => ({ ...l })) : undefined,
     };
 }
 
