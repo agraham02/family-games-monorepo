@@ -579,6 +579,7 @@ export function DebugEngine() {
                             string,
                             PlayerData
                         >,
+                        loadedGameId: prevState.loadedGameId,
                     };
                 });
             }

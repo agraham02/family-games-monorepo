@@ -50,6 +50,12 @@ export interface DominoChainState {
     headOpenPip: PipValue | null;
     /** The pip value exposed at the tail end */
     tailOpenPip: PipValue | null;
+    /**
+     * Stable per-chain seed used to randomize snake direction tiebreakers
+     * (e.g. whether the head snakes up or down when runways are similar).
+     * Must be deterministic for a given board state so replays stay stable.
+     */
+    snakeSeed?: number;
 }
 
 // ─── Placement ───────────────────────────────────────────────

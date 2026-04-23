@@ -129,17 +129,34 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
     );
 
     // ── Auto-fit: compute target scale/position to show all tiles ──
-    const AUTOFIT_PADDING = 80; // px of padding around the chain
+    // Padding scales with the smaller container dimension so small screens
+    // (phones) don't waste a fixed 80px on each side.
+    const getAutoFitPadding = (containerW: number, containerH: number) => {
+        const minDim = Math.min(containerW, containerH);
+        return Math.max(16, Math.min(48, Math.round(minDim * 0.05)));
+    };
+
+    // Cap auto-fit zoom. Allowing >1 lets small chains fill the available
+    // space instead of leaving large empty margins. 1.75 keeps tiles
+    // readable without rendering at >2x source resolution.
+    const AUTOFIT_MAX_SCALE = 1.75;
+    const AUTOFIT_MIN_SCALE = 0.3;
 
     const getAutoFitTarget = useCallback(
         (containerW: number, containerH: number) => {
             const segments = useDominoesStore.getState().chain.segments;
+            const padding = getAutoFitPadding(containerW, containerH);
+            const availW = Math.max(1, containerW - padding * 2);
+            const availH = Math.max(1, containerH - padding * 2);
+
             if (segments.length === 0) {
-                // No tiles yet — center on focal point at scale 1
+                // No tiles yet — center on focal point at a slightly
+                // zoomed-in scale so the board feels inviting.
+                const initialScale = Math.min(AUTOFIT_MAX_SCALE, 1.5);
                 return {
-                    scale: 1,
-                    x: containerW / 2 - focalX,
-                    y: containerH / 2 - focalY,
+                    scale: initialScale,
+                    x: containerW / 2 - focalX * initialScale,
+                    y: containerH / 2 - focalY * initialScale,
                 };
             }
 
@@ -165,13 +182,12 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
             const chainCx = (minX + maxX) / 2;
             const chainCy = (minY + maxY) / 2;
 
-            // Scale to fit with padding, capped at 1.0 so early-game
-            // tiles stay at normal zoom instead of being magnified.
-            const availW = containerW - AUTOFIT_PADDING * 2;
-            const availH = containerH - AUTOFIT_PADDING * 2;
             const scaleX = availW / Math.max(chainW, 1);
             const scaleY = availH / Math.max(chainH, 1);
-            const scale = Math.max(0.3, Math.min(1, Math.min(scaleX, scaleY)));
+            const scale = Math.max(
+                AUTOFIT_MIN_SCALE,
+                Math.min(AUTOFIT_MAX_SCALE, Math.min(scaleX, scaleY)),
+            );
 
             return {
                 scale,
