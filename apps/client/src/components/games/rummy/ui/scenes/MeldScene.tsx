@@ -2,11 +2,10 @@
 
 import React, { useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CardHand, useGameTable } from "@/components/games/shared";
+import { useGameTable } from "@/components/games/shared";
 import { MeldBoard } from "@/components/games/shared/MeldBoard";
 import DiscardPile from "../DiscardPile";
 import MeldComposer from "../MeldComposer";
-import MeldToolbar from "../MeldToolbar";
 import type { RummySceneCommonProps } from "../types";
 
 /**
@@ -14,7 +13,8 @@ import type { RummySceneCommonProps } from "../types";
  *
  *  Row 1  Discard pile fan — read-only, shows where your discard will land
  *  Row 2  MeldBoard — tap melds to lay off; MeldComposer slides in here
- *  Row 3  MeldToolbar + hero CardHand (interactive)
+ *  Bottom controls (toolbar + hand) are hosted persistently in `RummyStage`
+ *  to avoid remount flicker between DRAW and MELD transitions.
  */
 export default function MeldScene({
     gameData,
@@ -38,7 +38,6 @@ export default function MeldScene({
     const seedCard = forceComposerOpen
         ? (playerData.pendingDiscardPick?.pickedCard ?? null)
         : null;
-    const canDiscard = controller.selectedHandIndices.length === 1;
 
     return (
         <motion.div
@@ -88,7 +87,8 @@ export default function MeldScene({
                 </AnimatePresence>
             </div>
 
-            {/* MeldComposer slides in between Row 2 and Row 3 */}
+            {/* MeldComposer slides in below the board; bottom hand/toolbar are
+                rendered by the persistent stage-level host. */}
             <AnimatePresence initial={false}>
                 {composerOpen && (
                     <motion.div
@@ -121,38 +121,6 @@ export default function MeldScene({
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* ── Row 3: MeldToolbar + CardHand ── */}
-            <div className="shrink-0 flex flex-col items-center gap-2 px-2 pt-2 pb-3 border-t border-white/10 bg-black/20">
-                <MeldToolbar
-                    turnSubstate={gameData.turnSubstate}
-                    isMeldComposerOpen={composerOpen}
-                    canDiscard={canDiscard}
-                    disabled={controller.isSubmitting}
-                    onOpenMeldComposer={controller.onOpenMeldComposer}
-                    onCancelMeldComposer={controller.onCancelMeldComposer}
-                    onDiscard={controller.onDiscard}
-                />
-                <CardHand
-                    cards={playerData.hand}
-                    isLocalPlayer
-                    interactive={!controller.isSubmitting}
-                    selectedIndex={
-                        !composerOpen &&
-                        controller.selectedHandIndices.length === 1
-                            ? controller.selectedHandIndices[0]
-                            : null
-                    }
-                    selectedIndices={
-                        composerOpen
-                            ? controller.selectedHandIndices
-                            : undefined
-                    }
-                    onCardClick={(idx) => controller.onSelectHandCard(idx)}
-                    playerId={heroId}
-                    expansionMode="hover-zoom"
-                />
-            </div>
         </motion.div>
     );
 }

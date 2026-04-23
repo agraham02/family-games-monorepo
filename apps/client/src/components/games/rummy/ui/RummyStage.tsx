@@ -11,6 +11,7 @@ import { useRummyScene } from "../hooks/useRummyScene";
 import WaitingScene from "./scenes/WaitingScene";
 import DrawScene from "./scenes/DrawScene";
 import MeldScene from "./scenes/MeldScene";
+import MeldToolbar from "./MeldToolbar";
 import TurnIndicator from "./TurnIndicator";
 import HandPeek from "./HandPeek";
 import RummyOpponentTile from "./RummyOpponentTile";
@@ -53,23 +54,50 @@ export default function RummyStage(props: RummyStageProps) {
     const seats = getSeatAssignments(playerCount, heroIndex);
     const byEdge = groupSeatsByEdge(seats);
 
+    const isDrawScene = scene === "DRAW";
+    const isMeldScene = scene === "MELD";
+    const isActiveTurnScene = isDrawScene || isMeldScene;
+
     // MELD only: full-viewport bento hides opponent seats so the player
     // can focus on melding. During DRAW the normal table (with seats) is
     // kept so opponents are visible and stock/discard feel natural in the
     // center slot.
-    const bentoMode = scene === "MELD";
+    const bentoMode = isMeldScene;
 
-    // Show hero hand in the bottom edge for DRAW + WAITING; hidden in MELD
-    // (hand lives inside MeldScene rows).
+    // Hero hand exists whenever the local player has cards.
     const heroHasHand = !isSpectator && playerData.hand.length > 0;
 
-    // During DRAW + take-discard composer, the hand must be interactive so
-    // the player can pick cards to form a meld with the picked discard card.
+    // During DRAW + take-discard composer, the hand must be interactive so the
+    // player can pick cards to form a meld with the picked discard card.
     const drawComposerOpen =
-        scene === "DRAW" &&
+        isDrawScene &&
         controller.meldComposerOpen &&
         controller.discardPickIndex != null;
-    const handIsInteractive = !controller.isSubmitting && drawComposerOpen;
+
+    const forceMeldComposerOpen =
+        gameData.turnSubstate === "awaiting-discard-play";
+    const meldComposerOpen =
+        isMeldScene && (controller.meldComposerOpen || forceMeldComposerOpen);
+    const canDiscard = controller.selectedHandIndices.length === 1;
+
+    const handIsInteractive =
+        !controller.isSubmitting && (isMeldScene || drawComposerOpen);
+    const handSelectedIndex =
+        isMeldScene && !meldComposerOpen && canDiscard
+            ? controller.selectedHandIndices[0]
+            : null;
+    const handSelectedIndices =
+        handIsInteractive && controller.selectedHandIndices.length > 0
+            ? controller.selectedHandIndices
+            : undefined;
+
+    const showPersistentBottomHost = heroHasHand && isActiveTurnScene;
+    const showWaitingBottomEdge = !bentoMode && !isActiveTurnScene;
+    const centerBottomPaddingClass = showPersistentBottomHost
+        ? drawComposerOpen || meldComposerOpen
+            ? "pb-64 md:pb-72"
+            : "pb-40 md:pb-44"
+        : "";
 
     return (
         <div className="relative w-full h-full">
@@ -125,7 +153,7 @@ export default function RummyStage(props: RummyStageProps) {
                     })}
 
                 {/* ── Hero bottom region — only in non-bento (WAITING/spectator) ── */}
-                {!bentoMode && (
+                {showWaitingBottomEdge && (
                     <EdgeRegion position="bottom" isHero>
                         <AnimatePresence mode="wait" initial={false}>
                             {heroHasHand ? (
@@ -140,20 +168,7 @@ export default function RummyStage(props: RummyStageProps) {
                                     <CardHand
                                         cards={playerData.hand}
                                         isLocalPlayer
-                                        interactive={handIsInteractive}
-                                        selectedIndices={
-                                            handIsInteractive
-                                                ? controller.selectedHandIndices
-                                                : undefined
-                                        }
-                                        onCardClick={
-                                            handIsInteractive
-                                                ? (idx) =>
-                                                      controller.onSelectHandCard(
-                                                          idx,
-                                                      )
-                                                : undefined
-                                        }
+                                        interactive={false}
                                         playerId={heroId}
                                         expansionMode="hover-zoom"
                                     />
@@ -183,7 +198,7 @@ export default function RummyStage(props: RummyStageProps) {
                 {/* ── Center: scene-specific content ── */}
                 <LayoutGroup id="rummy-stage">
                     <div
-                        className="relative z-10 flex flex-col min-h-0 w-full h-full"
+                        className={`relative z-10 flex flex-col min-h-0 w-full h-full ${centerBottomPaddingClass}`}
                         style={{ gridArea: "center" }}
                     >
                         <AnimatePresence mode="wait" initial={false}>
@@ -201,6 +216,47 @@ export default function RummyStage(props: RummyStageProps) {
                         </AnimatePresence>
                     </div>
                 </LayoutGroup>
+
+                {/* Persistent bottom host for active-turn scenes.
+                    Keeping this mounted in one place prevents hand remount
+                    flicker between DRAW and MELD transitions. */}
+                {showPersistentBottomHost && (
+                    <div className="absolute left-0 right-0 bottom-0 z-25 px-2 pb-2 pointer-events-none">
+                        <div className="pointer-events-auto w-full flex flex-col items-center gap-2 px-2 pt-2 pb-3 border-t border-white/10 bg-black/20 backdrop-blur-sm">
+                            {isMeldScene && (
+                                <MeldToolbar
+                                    turnSubstate={gameData.turnSubstate}
+                                    isMeldComposerOpen={meldComposerOpen}
+                                    canDiscard={canDiscard}
+                                    disabled={controller.isSubmitting}
+                                    onOpenMeldComposer={
+                                        controller.onOpenMeldComposer
+                                    }
+                                    onCancelMeldComposer={
+                                        controller.onCancelMeldComposer
+                                    }
+                                    onDiscard={controller.onDiscard}
+                                />
+                            )}
+
+                            <CardHand
+                                cards={playerData.hand}
+                                isLocalPlayer
+                                interactive={handIsInteractive}
+                                selectedIndex={handSelectedIndex}
+                                selectedIndices={handSelectedIndices}
+                                onCardClick={
+                                    handIsInteractive
+                                        ? (idx) =>
+                                              controller.onSelectHandCard(idx)
+                                        : undefined
+                                }
+                                playerId={heroId}
+                                expansionMode="hover-zoom"
+                            />
+                        </div>
+                    </div>
+                )}
             </GameTable>
 
             {/* Turn indicator — whose turn + countdown (always visible). */}
