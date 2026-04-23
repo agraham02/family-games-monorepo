@@ -40,6 +40,27 @@ interface CardHandProps {
     selectedIndices?: number[];
     /** Indices of disabled cards */
     disabledIndices?: number[];
+    /**
+     * Per-card visual annotations (rings, badges, pulse). Keyed by the
+     * **same index space** that `cards` uses — i.e. display index, not any
+     * underlying server hand index. The renderer only consumes these
+     * non-interactively; they never affect click handling.
+     */
+    cardAnnotations?: Record<
+        number,
+        {
+            /** Tailwind ring color class (e.g. `ring-amber-400`). */
+            ringClass?: string;
+            /** Tailwind ring style class (e.g. `ring-2`). */
+            ringStyleClass?: string;
+            /** Apply Tailwind `animate-pulse` to the card. */
+            pulse?: boolean;
+            /** Optional small badge label. */
+            badge?: string;
+            /** Optional Tailwind background class for the badge. */
+            badgeColorClass?: string;
+        }
+    >;
     /** Callback when a card is clicked */
     onCardClick?: (index: number, card: PlayingCardType) => void;
     /** Player ID for layoutId animations */
@@ -145,6 +166,13 @@ interface CardInHandProps {
     spacing: number;
     isHovered: boolean;
     playerId?: string;
+    annotation?: {
+        ringClass?: string;
+        ringStyleClass?: string;
+        pulse?: boolean;
+        badge?: string;
+        badgeColorClass?: string;
+    };
     onClick?: () => void;
     onHoverChange?: (index: number | null) => void;
     /** Whether to release pointer capture on touch so pointerenter fires on neighbours. */
@@ -165,6 +193,7 @@ function CardInHand({
     spacing,
     isHovered,
     playerId,
+    annotation,
     onClick,
     onHoverChange,
     enableTouchHoverDrag,
@@ -311,6 +340,19 @@ function CardInHand({
                     isFocused &&
                         !isSelected &&
                         "ring-2 ring-blue-400 ring-offset-1",
+                    // Hint annotation ring (only when not selected/focused so
+                    // selection always wins visually).
+                    !isSelected &&
+                        !isFocused &&
+                        annotation?.ringClass &&
+                        annotation.ringClass,
+                    !isSelected &&
+                        !isFocused &&
+                        annotation?.ringStyleClass &&
+                        annotation.ringStyleClass,
+                    annotation?.pulse &&
+                        !prefersReducedMotion &&
+                        "animate-pulse",
                     isDisabled && "grayscale brightness-75 cursor-not-allowed",
                 )}
                 style={{
@@ -346,6 +388,18 @@ function CardInHand({
                         />
                     </div>
                 )}
+
+                {/* Hint badge — small label in top-right corner. */}
+                {annotation?.badge && !showBack && (
+                    <span
+                        className={cn(
+                            "absolute top-0.5 right-0.5 px-1 py-0 rounded text-[8px] font-bold uppercase text-white tracking-wide leading-tight",
+                            annotation.badgeColorClass ?? "bg-emerald-600",
+                        )}
+                    >
+                        {annotation.badge}
+                    </span>
+                )}
             </div>
         </motion.div>
     );
@@ -365,6 +419,7 @@ function CardHand({
     selectedIndex = null,
     selectedIndices,
     disabledIndices = [],
+    cardAnnotations,
     onCardClick,
     playerId,
     className,
@@ -716,6 +771,7 @@ function CardHand({
                                 }
                                 playerId={playerId}
                                 isHorizontal={isHorizontal}
+                                annotation={cardAnnotations?.[index]}
                                 prefersReducedMotion={prefersReducedMotion}
                                 onHoverChange={
                                     hoverZoomActive

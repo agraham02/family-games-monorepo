@@ -136,6 +136,12 @@ export default function DrawScene({
                             interactive={!takeDiscardMode}
                             previewPickIndex={controller.discardPickIndex}
                             onCardClick={controller.onClickDiscardCard}
+                            topGlow={
+                                controller.hintSettings.discardTop &&
+                                (controller.hints.discardTop.canLayoff ||
+                                    controller.hints.discardTop
+                                        .canFormMeldWithHand)
+                            }
                         />
                         <span className="text-[10px] font-mono text-white/60">
                             Discard · {gameData.discard.cards.length}

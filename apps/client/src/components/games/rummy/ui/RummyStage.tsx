@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useMemo } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { GameTable, EdgeRegion, CardHand } from "@/components/games/shared";
 import {
@@ -91,6 +91,53 @@ export default function RummyStage(props: RummyStageProps) {
             ? controller.selectedHandIndices
             : undefined;
 
+    // ---- Display-order layer (client-only sort) ---------------------------
+    // The controller exposes `displayOrder: displayIndex -> serverHandIndex`.
+    // We render `orderedCards` for `CardHand`, then translate every index
+    // back to server-space when bubbling clicks / selections.
+    const displayOrder = controller.displayOrder;
+    const orderedCards = useMemo(
+        () => displayOrder.map((i) => playerData.hand[i]).filter(Boolean),
+        [displayOrder, playerData.hand],
+    );
+
+    const serverToDisplay = useMemo(() => {
+        const map = new Map<number, number>();
+        displayOrder.forEach((serverIdx, dispIdx) =>
+            map.set(serverIdx, dispIdx),
+        );
+        return map;
+    }, [displayOrder]);
+
+    const orderedSelectedIndex =
+        handSelectedIndex != null
+            ? (serverToDisplay.get(handSelectedIndex) ?? null)
+            : null;
+    const orderedSelectedIndices = handSelectedIndices
+        ? handSelectedIndices
+              .map((i) => serverToDisplay.get(i))
+              .filter((i): i is number => i != null)
+        : undefined;
+
+    const handAnnotations = controller.handAnnotations;
+    const orderedAnnotations = useMemo(() => {
+        const out: Record<number, (typeof handAnnotations)[number]> = {};
+        displayOrder.forEach((serverIdx, dispIdx) => {
+            const ann = handAnnotations[serverIdx];
+            if (ann) out[dispIdx] = ann;
+        });
+        return out;
+    }, [displayOrder, handAnnotations]);
+
+    const handleHeroCardClick = useCallback(
+        (dispIdx: number) => {
+            const serverIdx = displayOrder[dispIdx];
+            if (serverIdx == null) return;
+            controller.onSelectHandCard(serverIdx);
+        },
+        [displayOrder, controller],
+    );
+
     const showPersistentBottomHost = heroHasHand && isActiveTurnScene;
     const showWaitingBottomEdge = !bentoMode && !isActiveTurnScene;
     const centerBottomPaddingClass = showPersistentBottomHost
@@ -166,7 +213,7 @@ export default function RummyStage(props: RummyStageProps) {
                                     transition={{ duration: 0.15 }}
                                 >
                                     <CardHand
-                                        cards={playerData.hand}
+                                        cards={orderedCards}
                                         isLocalPlayer
                                         interactive={false}
                                         playerId={heroId}
@@ -183,7 +230,7 @@ export default function RummyStage(props: RummyStageProps) {
                                     transition={{ duration: 0.15 }}
                                 >
                                     <HandPeek
-                                        hand={playerData.hand}
+                                        hand={orderedCards}
                                         spectator={
                                             isSpectator ||
                                             playerData.hand.length === 0
@@ -236,19 +283,32 @@ export default function RummyStage(props: RummyStageProps) {
                                         controller.onCancelMeldComposer
                                     }
                                     onDiscard={controller.onDiscard}
+                                    sortMode={controller.sortMode}
+                                    onSetSortMode={controller.onSetSortMode}
+                                    deadwoodPoints={
+                                        controller.hintSettings.deadwood
+                                            ? controller.hints.deadwoodPoints
+                                            : undefined
+                                    }
+                                    meldPulse={
+                                        controller.hintSettings
+                                            .meldButtonPulse &&
+                                        !meldComposerOpen &&
+                                        controller.hints.meldGroups.length > 0
+                                    }
                                 />
                             )}
 
                             <CardHand
-                                cards={playerData.hand}
+                                cards={orderedCards}
                                 isLocalPlayer
                                 interactive={handIsInteractive}
-                                selectedIndex={handSelectedIndex}
-                                selectedIndices={handSelectedIndices}
+                                selectedIndex={orderedSelectedIndex}
+                                selectedIndices={orderedSelectedIndices}
+                                cardAnnotations={orderedAnnotations}
                                 onCardClick={
                                     handIsInteractive
-                                        ? (idx) =>
-                                              controller.onSelectHandCard(idx)
+                                        ? handleHeroCardClick
                                         : undefined
                                 }
                                 playerId={heroId}

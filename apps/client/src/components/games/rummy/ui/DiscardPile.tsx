@@ -30,6 +30,12 @@ export interface DiscardPileProps {
      * to 10 (spacious) / 8 (comfortable) / 1 (compact).
      */
     maxFanCards?: number;
+    /**
+     * When true, the top-of-pile card pulses with a green ring to hint that
+     * the hero can immediately layoff or form a meld with it. Hint-gated by
+     * the caller (settings + master toggle).
+     */
+    topGlow?: boolean;
     className?: string;
 }
 
@@ -47,6 +53,7 @@ export default function DiscardPile({
     interactive = false,
     onCardClick,
     maxFanCards,
+    topGlow = false,
     className,
 }: DiscardPileProps) {
     const cards = discard.cards;
@@ -82,7 +89,12 @@ export default function DiscardPile({
                         type="button"
                         onClick={() => interactive && onCardClick?.(count - 1)}
                         disabled={!interactive}
-                        className={cn("block", interactive && "cursor-pointer")}
+                        className={cn(
+                            "block rounded-md",
+                            interactive && "cursor-pointer",
+                            topGlow &&
+                                "ring-2 ring-emerald-400 ring-offset-1 ring-offset-transparent animate-pulse",
+                        )}
                         aria-label={`Discard top: ${top.rank} of ${top.suit}`}
                     >
                         <PlayingCardView card={top} size="sm" />
@@ -184,6 +196,10 @@ export default function DiscardPile({
                                         interactive && "cursor-pointer",
                                         isPreview &&
                                             "ring-2 ring-amber-400 rounded-md z-20",
+                                        isTop &&
+                                            !isPreview &&
+                                            topGlow &&
+                                            "ring-2 ring-emerald-400 rounded-md animate-pulse",
                                     )}
                                     style={{
                                         left: localIdx * offsetPct,

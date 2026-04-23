@@ -13,12 +13,25 @@ import {
     PlayingCard,
 } from "@shared/types";
 import { findAllLayoffTargets } from "@shared/validation/rummy";
-import { GameMenu } from "@/components/games/shared";
+import { computeRummyHints, sortHandRummy } from "@shared/hints/rummy";
+import { GameMenu, GameSettingToggle } from "@/components/games/shared";
+import {
+    Lightbulb,
+    Layers,
+    PlusSquare,
+    Sparkles,
+    Calculator,
+    ArrowDownToLine,
+    Zap,
+} from "lucide-react";
 import RummyStage from "./ui/RummyStage";
 import RummyCallToast from "./ui/RummyCallToast";
 import DealSizePrompt from "./ui/DealSizePrompt";
 import RoundRevealOverlay from "./ui/RoundRevealOverlay";
 import type { RummyController } from "./ui/types";
+import { useRummyHintSettings } from "./hints/useRummyHintSettings";
+import { useSortMode } from "./hints/useSortMode";
+import { buildHandAnnotations } from "./hints/annotations";
 
 const SUIT_TO_ENUM: Record<string, Suit> = {
     Hearts: Suit.Hearts,
@@ -102,6 +115,42 @@ export default function Rummy({
         null,
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // ---- Hint + sort settings (client-only, persisted to localStorage) ---------
+    const hintSettings = useRummyHintSettings();
+    const [sortMode, setSortMode] = useSortMode();
+
+    // ---- Hints + display order (memoized off the hand snapshot) ----------------
+    const hints = useMemo(() => {
+        const handCards = playerData.hand.map(toServerCard);
+        const meldsCards = gameData.melds.map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            ownerId: m.ownerId,
+            round: m.round,
+            cards: m.cards.map(toServerCard),
+        }));
+        const top = gameData.discard.cards.length
+            ? toServerCard(
+                gameData.discard.cards[gameData.discard.cards.length - 1],
+            )
+            : null;
+        return computeRummyHints({
+            hand: handCards,
+            melds: meldsCards,
+            discardTop: top,
+        });
+    }, [playerData.hand, gameData.melds, gameData.discard.cards]);
+
+    const displayOrder = useMemo<readonly number[]>(() => {
+        const handCards = playerData.hand.map(toServerCard);
+        return sortHandRummy({ hand: handCards, mode: sortMode, hints });
+    }, [playerData.hand, sortMode, hints]);
+
+    const handAnnotations = useMemo(
+        () => buildHandAnnotations(hints, hintSettings),
+        [hints, hintSettings],
+    );
 
     // ---- Derived flags ---------------------------------------------------------
     // For spectators (no playerData), heroId is empty -> isMyTurn naturally false.
@@ -360,6 +409,12 @@ export default function Rummy({
             discardPickIndex,
             meldComposerOpen,
             isSubmitting,
+            displayOrder,
+            sortMode,
+            onSetSortMode: setSortMode,
+            hintSettings,
+            hints,
+            handAnnotations,
             onSelectHandCard: handleSelectHandCard,
             onClearSelection: () => setSelectedHandIndices([]),
             onDrawStock: handleDrawStock,
@@ -383,6 +438,12 @@ export default function Rummy({
             discardPickIndex,
             meldComposerOpen,
             isSubmitting,
+            displayOrder,
+            sortMode,
+            setSortMode,
+            hintSettings,
+            hints,
+            handAnnotations,
             handleSelectHandCard,
             handleDrawStock,
             handleClickDiscardCard,
@@ -396,7 +457,59 @@ export default function Rummy({
     return (
         <div className="relative w-full h-full flex flex-col bg-linear-to-br from-emerald-950 via-emerald-900 to-stone-900">
             <div className="absolute top-2 left-2 z-40">
-                <GameMenu roomCode={roomCode ?? ""} />
+                <GameMenu roomCode={roomCode ?? ""}>
+                    {/* Master hint toggle. Disabling hides every visual hint
+                        (rings, badges, deadwood, discard glow, meld pulse). */}
+                    <GameSettingToggle
+                        storageKey="rummy.showHints"
+                        label="Show Hints"
+                        icon={<Lightbulb className="h-4 w-4" />}
+                        defaultValue={false}
+                    />
+
+                    {hintSettings.master && (
+                        <div className="ml-2 pl-2 border-l border-border/60 flex flex-col gap-0.5">
+                            <GameSettingToggle
+                                storageKey="rummy.hints.meldGroups"
+                                label="Highlight meld groups"
+                                icon={<Layers className="h-3.5 w-3.5" />}
+                                defaultValue={true}
+                            />
+                            <GameSettingToggle
+                                storageKey="rummy.hints.layoffs"
+                                label="Highlight layoffs"
+                                icon={<PlusSquare className="h-3.5 w-3.5" />}
+                                defaultValue={true}
+                            />
+                            <GameSettingToggle
+                                storageKey="rummy.hints.nearMelds"
+                                label="Show near-melds"
+                                icon={<Sparkles className="h-3.5 w-3.5" />}
+                                defaultValue={false}
+                            />
+                            <GameSettingToggle
+                                storageKey="rummy.hints.deadwood"
+                                label="Show deadwood"
+                                icon={<Calculator className="h-3.5 w-3.5" />}
+                                defaultValue={true}
+                            />
+                            <GameSettingToggle
+                                storageKey="rummy.hints.discardTop"
+                                label="Glow useful discard"
+                                icon={
+                                    <ArrowDownToLine className="h-3.5 w-3.5" />
+                                }
+                                defaultValue={true}
+                            />
+                            <GameSettingToggle
+                                storageKey="rummy.hints.meldButtonPulse"
+                                label="Pulse meld button"
+                                icon={<Zap className="h-3.5 w-3.5" />}
+                                defaultValue={true}
+                            />
+                        </div>
+                    )}
+                </GameMenu>
             </div>
 
             <div className="flex-1 min-h-0 relative">
