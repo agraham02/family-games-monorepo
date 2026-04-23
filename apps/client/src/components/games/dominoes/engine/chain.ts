@@ -56,6 +56,7 @@ export function placeFirstTile(
         segments: [segment],
         headOpenPip: domino.pip1,
         tailOpenPip: domino.pip2,
+        snakeSeed: chain.snakeSeed,
     };
 }
 
@@ -241,29 +242,55 @@ export function autoPlace(
         skipIndex,
     );
 
-    // Tiebreaker: when runways are similar, prefer turning away from opposite end
+    // Tiebreaker: when runways are similar, decide which way to snake.
+    // For the FIRST corner (growth is still horizontal), use a per-chain
+    // seed to pick which end goes up vs down — head and tail always snake
+    // into opposite vertical halves of the board so the layout stays
+    // balanced. For SUBSEQUENT corners (growth already vertical), fall back
+    // to the original distance-based heuristic, which routes back across
+    // the board away from the opposite end of the chain.
     let firstTurn: Direction;
     let secondTurn: Direction;
 
     if (Math.abs(leftRunway - rightRunway) <= 2) {
-        const oppositeEnd =
-            end === "tail"
-                ? chain.segments[0]
-                : chain.segments[chain.segments.length - 1];
-        const oppPos = oppositeEnd.gridPos;
+        const isHorizontalGrowth = growthDir === 0 || growthDir === 180;
 
-        const { dRow: lRow, dCol: lCol } = directionVector(leftDir);
-        const { dRow: rRow, dCol: rCol } = directionVector(rightDir);
+        if (isHorizontalGrowth) {
+            // 90 = down (dRow +1), 270 = up (dRow -1).
+            // flip=false preserves the historical "head down, tail up" look;
+            // flip=true mirrors it to "head up, tail down".
+            const flip = ((chain.snakeSeed ?? 0) & 1) === 1;
+            const headTargetDir: Direction = flip ? 270 : 90;
+            const tailTargetDir: Direction = flip ? 90 : 270;
+            const targetDir =
+                end === "head" ? headTargetDir : tailTargetDir;
 
-        const leftDist =
-            Math.abs(openEdge.row + lRow - oppPos.row) +
-            Math.abs(openEdge.col + lCol - oppPos.col);
-        const rightDist =
-            Math.abs(openEdge.row + rRow - oppPos.row) +
-            Math.abs(openEdge.col + rCol - oppPos.col);
+            const preferLeft = leftDir === targetDir;
+            [firstTurn, secondTurn] = preferLeft
+                ? [leftDir, rightDir]
+                : [rightDir, leftDir];
+        } else {
+            const oppositeEnd =
+                end === "tail"
+                    ? chain.segments[0]
+                    : chain.segments[chain.segments.length - 1];
+            const oppPos = oppositeEnd.gridPos;
 
-        [firstTurn, secondTurn] =
-            leftDist >= rightDist ? [leftDir, rightDir] : [rightDir, leftDir];
+            const { dRow: lRow, dCol: lCol } = directionVector(leftDir);
+            const { dRow: rRow, dCol: rCol } = directionVector(rightDir);
+
+            const leftDist =
+                Math.abs(openEdge.row + lRow - oppPos.row) +
+                Math.abs(openEdge.col + lCol - oppPos.col);
+            const rightDist =
+                Math.abs(openEdge.row + rRow - oppPos.row) +
+                Math.abs(openEdge.col + rCol - oppPos.col);
+
+            [firstTurn, secondTurn] =
+                leftDist >= rightDist
+                    ? [leftDir, rightDir]
+                    : [rightDir, leftDir];
+        }
     } else {
         [firstTurn, secondTurn] =
             leftRunway >= rightRunway
@@ -333,6 +360,7 @@ export function addSegmentToChain(
             segments: newSegments,
             headOpenPip: chain.headOpenPip,
             tailOpenPip: segment.openPipTail,
+            snakeSeed: chain.snakeSeed,
         };
     } else {
         newSegments.unshift(segment);
@@ -340,6 +368,7 @@ export function addSegmentToChain(
             segments: newSegments,
             headOpenPip: segment.openPipHead,
             tailOpenPip: chain.tailOpenPip,
+            snakeSeed: chain.snakeSeed,
         };
     }
 }

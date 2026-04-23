@@ -83,7 +83,17 @@ export function replayBoardToChain(
     // Use placeFirstTile directly — it sets BOTH headOpenPip and tailOpenPip.
     // (autoPlace returns only a segment; addSegmentToChain("tail") would
     //  preserve the empty-chain headOpenPip = null, breaking all head tiles.)
-    let chain = placeFirstTile(createEmptyChain(), orientedCenter);
+    // Seed the chain from the center tile id so the snake-direction
+    // tiebreaker varies per game but stays deterministic across re-renders.
+    const seedSource = centerTile.id;
+    let snakeSeed = 0;
+    for (let i = 0; i < seedSource.length; i++) {
+        snakeSeed = (snakeSeed * 31 + seedSource.charCodeAt(i)) | 0;
+    }
+    let chain = placeFirstTile(
+        { ...createEmptyChain(), snakeSeed },
+        orientedCenter,
+    );
 
     // Build TAIL: tiles to the right of center (centerIdx+1 → end).
     // Each tile's .left = connecting pip matching the previous tile's right pip.
