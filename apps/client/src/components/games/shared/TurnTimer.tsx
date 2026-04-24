@@ -1,7 +1,7 @@
 // src/components/games/shared/TurnTimer.tsx
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -113,8 +113,11 @@ export function TurnTimer({
         }
     }, [isActive, showStartAnimation]);
 
-    // Main animation loop - runs independently of React render cycle
-    useEffect(() => {
+    // Main animation loop - runs independently of React render cycle.
+    // Use useLayoutEffect so the first tick (which writes the correct
+    // stroke-dashoffset for the current moment) runs synchronously before
+    // the browser paints, avoiding a stale initial frame.
+    useLayoutEffect(() => {
         if (!isActive) {
             return;
         }
@@ -127,17 +130,24 @@ export function TurnTimer({
             const remainingMs = calculateRemainingMs();
             const percentage = totalMs > 0 ? (remainingMs / totalMs) * 100 : 0;
 
-            // Direct DOM update for strokeDashoffset (no React re-render)
+            // Direct DOM update for strokeDashoffset (no React re-render).
+            // Use setAttribute (SVG presentation attribute) rather than
+            // style.strokeDashoffset because the inline CSS property does not
+            // reliably override the SVG attribute across browsers / React 19,
+            // which can cause the ring to appear "stuck" until React re-renders.
             if (progressCircleRef.current) {
                 const offset = circumference * ((100 - percentage) / 100);
-                progressCircleRef.current.style.strokeDashoffset =
-                    String(offset);
+                const offsetStr = String(offset);
+                progressCircleRef.current.setAttribute(
+                    "stroke-dashoffset",
+                    offsetStr
+                );
 
                 // Update stroke color directly
                 const { stroke, bg } = getColors(percentage);
-                progressCircleRef.current.style.stroke = stroke;
+                progressCircleRef.current.setAttribute("stroke", stroke);
                 if (bgCircleRef.current) {
-                    bgCircleRef.current.style.stroke = bg;
+                    bgCircleRef.current.setAttribute("stroke", bg);
                 }
             }
 
@@ -165,8 +175,10 @@ export function TurnTimer({
             }
         };
 
-        // Start the animation loop
-        rafIdRef.current = requestAnimationFrame(tick);
+        // Run the first tick synchronously so the initial paint reflects
+        // the actual elapsed time (not the cached SVG attribute), then
+        // continue via requestAnimationFrame for smooth 60fps updates.
+        tick();
 
         return () => {
             if (rafIdRef.current !== null) {
@@ -191,11 +203,12 @@ export function TurnTimer({
         );
     }
 
-    // Calculate initial offset for first render
-    const initialRemainingMs = calculateRemainingMs();
+    // Initial colors used as a first-paint fallback for the React-controlled
+    // start-animation overlay border. The actual SVG strokes are written
+    // imperatively by the useLayoutEffect tick() below to avoid React
+    // re-renders fighting the RAF-driven animation.
     const initialPercentage =
-        totalMs > 0 ? (initialRemainingMs / totalMs) * 100 : 0;
-    const initialOffset = circumference * ((100 - initialPercentage) / 100);
+        totalMs > 0 ? (calculateRemainingMs() / totalMs) * 100 : 0;
     const initialColors = getColors(initialPercentage);
 
     return (
@@ -242,18 +255,22 @@ export function TurnTimer({
                     className="dark:opacity-30"
                     style={{ willChange: "stroke" }}
                 />
-                {/* Progress circle - animated via direct DOM manipulation */}
+                {/* Progress circle - animated via direct DOM manipulation.
+                    Initial stroke / stroke-dashoffset are NOT set as JSX
+                    attributes here because React would reconcile and overwrite
+                    the imperatively-set values on every re-render (e.g. when
+                    color state changes or a parent re-renders). The
+                    useLayoutEffect tick() below sets these synchronously via
+                    setAttribute before the first paint. */}
                 <circle
                     ref={progressCircleRef}
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke={initialColors.stroke}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeDasharray={circumference}
-                    strokeDashoffset={initialOffset}
                     style={{ willChange: "stroke-dashoffset, stroke" }}
                 />
             </svg>

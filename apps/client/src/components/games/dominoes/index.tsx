@@ -6,6 +6,8 @@ import { LayoutGroup } from "motion/react";
 import type { DominoesData, DominoesPlayerData } from "@shared/types";
 import type { GameComponentProps } from "../registry";
 import { useSession } from "@/contexts/SessionContext";
+import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useTurnTimer } from "@/hooks";
 import {
     GameTable,
     EdgeRegion,
@@ -26,6 +28,7 @@ import BoardControls from "./board/BoardControls";
 import FlyingTile from "./board/FlyingTile";
 import DominoHand, { OpponentTiles } from "./ui/DominoHand";
 import type { ChainEnd } from "./engine/types";
+import { playTimerStartSound, initializeAudioOnInteraction } from "@/lib/audio";
 
 // react-konva must be loaded client-side only (no SSR)
 const GameBoard = dynamic(() => import("./board/GameBoard"), {
@@ -55,6 +58,7 @@ export default function Dominoes({
     roomCode,
 }: GameComponentProps<DominoesData, DominoesPlayerData>) {
     const { userId } = useSession();
+    const { clockOffset } = useWebSocket();
     const store = useDominoesStore;
 
     // Track previous board tile count to detect new placements
@@ -129,6 +133,56 @@ export default function Dominoes({
         playerData?.localOrdering?.length ?? gameData.playOrder.length;
     const isLeader = userId === gameData.leaderId;
     const ordering = playerData?.localOrdering ?? gameData.playOrder;
+
+    // ── Turn timer wiring (mirrors Spades) ──────────────────────────────────
+    // Initialize audio on first interaction so we can play the start cue.
+    useEffect(() => {
+        initializeAudioOnInteraction();
+    }, []);
+
+    const turnTimeLimit = gameData.settings?.turnTimeLimit ?? 0;
+
+    // Keep latest isMyTurn accessible to the stable callback.
+    const isMyTurnRef = useRef(isMyTurn);
+    useEffect(() => {
+        isMyTurnRef.current = isMyTurn;
+    }, [isMyTurn]);
+
+    const handleTimerStart = useCallback(() => {
+        if (isMyTurnRef.current) {
+            playTimerStartSound();
+        }
+    }, []);
+
+    const { isActive: timerIsActive } = useTurnTimer(
+        gameData.turnTimer,
+        clockOffset,
+        handleTimerStart,
+    );
+
+    // Memoized timer props for the active player's PlayerInfo.
+    // Gated on phase === "playing" so the ring hides during round-summary/finished.
+    const timerPropsCache = useMemo(() => {
+        if (
+            turnTimeLimit <= 0 ||
+            gameData.phase !== "playing" ||
+            !timerIsActive ||
+            !gameData.turnTimer?.startedAt
+        ) {
+            return undefined;
+        }
+        return {
+            totalMs: turnTimeLimit * 1000,
+            startedAt: gameData.turnTimer.startedAt,
+            clockOffset,
+        };
+    }, [
+        turnTimeLimit,
+        gameData.phase,
+        timerIsActive,
+        gameData.turnTimer?.startedAt,
+        clockOffset,
+    ]);
 
     // Sync selected tile to store for ghost previews
     const selectedTile = useMemo(() => {
@@ -277,6 +331,11 @@ export default function Dominoes({
                                     isCurrentTurn={isCurrentTurn}
                                     isLocalPlayer={isLocal}
                                     seatPosition={edgePosition}
+                                    turnTimer={
+                                        isCurrentTurn && timerPropsCache
+                                            ? timerPropsCache
+                                            : undefined
+                                    }
                                     customStats={() => (
                                         <div className="flex gap-1 items-center">
                                             <Badge

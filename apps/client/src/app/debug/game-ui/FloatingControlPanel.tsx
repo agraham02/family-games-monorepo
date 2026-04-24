@@ -488,15 +488,24 @@ export function FloatingControlPanel({
                                                                 <Button
                                                                     variant="outline"
                                                                     size="sm"
-                                                                    onClick={() =>
+                                                                    onClick={() => {
+                                                                        // When the schema default is null (i.e. the setting
+                                                                        // ships disabled), enabling it must seed a real number,
+                                                                        // otherwise the button toggles null \u2194 null.
+                                                                        const enableValue =
+                                                                            typeof def.default ===
+                                                                            "number"
+                                                                                ? def.default
+                                                                                : (def.min ??
+                                                                                  0);
                                                                         onUpdateSetting?.(
                                                                             def.key,
                                                                             value ===
                                                                                 null
-                                                                                ? def.default
+                                                                                ? enableValue
                                                                                 : null,
-                                                                        )
-                                                                    }
+                                                                        );
+                                                                    }}
                                                                 >
                                                                     {value ===
                                                                     null

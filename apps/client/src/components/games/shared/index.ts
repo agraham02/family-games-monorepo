@@ -20,6 +20,8 @@ export { default as CardDeck } from "./CardDeck";
 export { default as DealingCard } from "./DealingCard";
 export { default as CardBadge } from "./CardBadge";
 export { default as PlayerInfo } from "./PlayerInfo";
+export { default as PlayerAvatar } from "./PlayerAvatar";
+export type { PlayerAvatarProps, PlayerAvatarTurnTimer } from "./PlayerAvatar";
 export { default as TrickPile } from "./TrickPile";
 
 // Action UI components

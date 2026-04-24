@@ -7,7 +7,13 @@
  * Handles game phases, player interactions, and animations.
  */
 
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+import React, {
+    useCallback,
+    useMemo,
+    useRef,
+    useState,
+    useEffect,
+} from "react";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useSession } from "@/contexts/SessionContext";
 import { useTurnTimer } from "@/hooks/useTurnTimer";
@@ -15,6 +21,8 @@ import { LRCData, LRCPlayerData, LRCPlayer } from "@shared/types";
 import {
     GameMenu,
     GameSettingToggle,
+    PlayerAvatar,
+    type PlayerAvatarTurnTimer,
     RotateDeviceOverlay,
     useGameSetting,
 } from "@/components/games/shared";
@@ -39,6 +47,8 @@ import {
     playDiceRollSound,
     playChipPassSound,
     playWinnerFanfareSound,
+    playTimerStartSound,
+    initializeAudioOnInteraction,
 } from "@/lib/audio";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,6 +70,8 @@ interface PlayerSlotProps {
     isWinner: boolean;
     chipValue: number;
     showMoney: boolean;
+    /** Active turn timer state — only renders ring when this is the active seat. */
+    turnTimer?: PlayerAvatarTurnTimer;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +86,7 @@ function PlayerSlot({
     isWinner,
     chipValue,
     showMoney,
+    turnTimer,
 }: PlayerSlotProps) {
     const moneyValue = useMemo(() => {
         if (!showMoney || chipValue <= 0) return null;
@@ -102,6 +115,17 @@ function PlayerSlot({
             }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
+            {/* Avatar (with optional turn timer ring) */}
+            <PlayerAvatar
+                playerId={player.id}
+                playerName={player.name}
+                size={isHero ? 44 : 36}
+                isCurrentTurn={isCurrentTurn}
+                isLocalPlayer={isHero}
+                connected={isConnected}
+                turnTimer={turnTimer}
+            />
+
             {/* Player name */}
             <div
                 className={cn(
@@ -130,18 +154,6 @@ function PlayerSlot({
                 <div className="text-[10px] sm:text-xs text-green-400 font-medium bg-green-500/20 px-1.5 py-0.5 rounded-full">
                     {moneyValue}
                 </div>
-            )}
-
-            {/* Current turn pulsing indicator */}
-            {isCurrentTurn && (
-                <motion.div
-                    className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full shadow-lg"
-                    animate={{
-                        scale: [1, 1.3, 1],
-                        opacity: [1, 0.7, 1],
-                    }}
-                    transition={{ duration: 1.2, repeat: Infinity }}
-                />
             )}
 
             {/* Winner crown */}
@@ -199,14 +211,54 @@ export default function LRC({
         ? gameData.lrcPlayers.find((p) => p.id === gameData.winnerId)
         : null;
 
-    // Turn timer
+    // ── Turn timer wiring (mirrors Spades) ──────────────────────────────────
+    useEffect(() => {
+        initializeAudioOnInteraction();
+    }, []);
+
+    const turnTimeLimit = gameData.settings?.turnTimeLimit ?? 0;
+
+    const isMyTurnRef = useRef(isMyTurn);
+    useEffect(() => {
+        isMyTurnRef.current = isMyTurn;
+    }, [isMyTurn]);
+
+    const handleTimerStart = useCallback(() => {
+        if (isMyTurnRef.current && soundEnabled) {
+            playTimerStartSound();
+        }
+    }, [soundEnabled]);
+
     const { remainingSeconds, isActive: timerActive } = useTurnTimer(
         gameData.turnTimer,
         clockOffset,
-        () => {
-            // Timer start callback - could play a sound
-        },
+        handleTimerStart,
     );
+
+    // Memoized timer props for the active player's slot.
+    // Gated on phase === "waiting-for-roll" — the only phase the active
+    // player owns the action — so the ring hides during chip-pass / round-over.
+    const turnTimerProps = useMemo<PlayerAvatarTurnTimer | undefined>(() => {
+        if (
+            turnTimeLimit <= 0 ||
+            gameData.phase !== "waiting-for-roll" ||
+            !timerActive ||
+            !gameData.turnTimer?.startedAt
+        ) {
+            return undefined;
+        }
+        return {
+            totalMs: turnTimeLimit * 1000,
+            startedAt: gameData.turnTimer.startedAt,
+            clockOffset,
+        };
+    }, [
+        turnTimeLimit,
+        gameData.phase,
+        timerActive,
+        gameData.turnTimer?.startedAt,
+        clockOffset,
+    ]);
 
     // Send game action helper
     const sendGameAction = useCallback(
@@ -452,6 +504,11 @@ export default function LRC({
                             isWinner={player.id === gameData.winnerId}
                             chipValue={gameData.settings.chipValue}
                             showMoney={showMoney}
+                            turnTimer={
+                                player.id === currentPlayer?.id
+                                    ? turnTimerProps
+                                    : undefined
+                            }
                         />
                     </CircularPlayerSlot>
                 ))}

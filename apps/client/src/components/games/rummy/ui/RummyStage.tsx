@@ -2,7 +2,13 @@
 
 import React, { useCallback, useMemo } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { GameTable, EdgeRegion, CardHand } from "@/components/games/shared";
+import {
+    GameTable,
+    EdgeRegion,
+    CardHand,
+    PlayerAvatar,
+    type PlayerAvatarTurnTimer,
+} from "@/components/games/shared";
 import {
     getSeatAssignments,
     groupSeatsByEdge,
@@ -20,6 +26,8 @@ import type { RummySceneCommonProps } from "./types";
 export interface RummyStageProps extends RummySceneCommonProps {
     /** Viewer is a spectator (read-only everywhere). */
     isSpectator: boolean;
+    /** Active turn timer state; only renders when phase==='playing' on the active seat. */
+    turnTimer?: PlayerAvatarTurnTimer;
 }
 
 /**
@@ -33,7 +41,8 @@ export interface RummyStageProps extends RummySceneCommonProps {
  * `apps/client/src/components/games/rummy/index.tsx`.
  */
 export default function RummyStage(props: RummyStageProps) {
-    const { gameData, playerData, heroId, isSpectator, controller } = props;
+    const { gameData, playerData, heroId, isSpectator, controller, turnTimer } =
+        props;
     const isMyTurn =
         !isSpectator &&
         !!heroId &&
@@ -191,6 +200,7 @@ export default function RummyStage(props: RummyStageProps) {
                                                 key={pid}
                                                 playerId={pid}
                                                 gameData={gameData}
+                                                turnTimer={turnTimer}
                                             />
                                         );
                                     })}
@@ -270,6 +280,30 @@ export default function RummyStage(props: RummyStageProps) {
                 {showPersistentBottomHost && (
                     <div className="absolute left-0 right-0 bottom-0 z-25 px-2 pb-2 pointer-events-none">
                         <div className="pointer-events-auto w-full flex flex-col items-center gap-2 px-2 pt-2 pb-3 border-t border-white/10 bg-black/20 backdrop-blur-sm">
+                            {/* Hero avatar with active turn timer ring */}
+                            <div className="self-start flex items-center gap-2">
+                                <PlayerAvatar
+                                    playerId={heroId}
+                                    playerName={
+                                        gameData.players[heroId]?.name ?? "You"
+                                    }
+                                    size={36}
+                                    isCurrentTurn={isMyTurn}
+                                    isLocalPlayer
+                                    connected={
+                                        gameData.players[heroId]?.isConnected ??
+                                        true
+                                    }
+                                    turnTimer={isMyTurn ? turnTimer : undefined}
+                                />
+                                <span className="text-xs font-medium text-amber-200">
+                                    {gameData.players[heroId]?.name ?? "You"}
+                                    <span className="text-amber-300/70 ml-1">
+                                        (You)
+                                    </span>
+                                </span>
+                            </div>
+
                             {isMeldScene && (
                                 <MeldToolbar
                                     turnSubstate={gameData.turnSubstate}

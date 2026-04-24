@@ -158,7 +158,7 @@ export function DebugEngine() {
     >([]);
     const [latency, setLatency] = useState<number>(0);
     const [simulateError, setSimulateError] = useState<boolean>(false);
-    const [autoPlay, setAutoPlay] = useState<boolean>(false);
+    const [autoPlay, setAutoPlay] = useState<boolean>(true);
     const [autoSwitchPerspective, setAutoSwitchPerspective] =
         useState<boolean>(false);
 
@@ -171,12 +171,26 @@ export function DebugEngine() {
         useState<string>(selectedGameId);
     const [regenerateTrigger, setRegenerateTrigger] = useState<number>(0);
 
+    // Default debug turn-time-limit (seconds) seeded when the schema default is null,
+    // so the timer ring + auto-play cadence are visible on first load.
+    const DEBUG_DEFAULT_TURN_TIME_LIMIT_SEC = 10;
+
     // Initialize settings when defaults change or game changes
     useEffect(() => {
         if (defaultSettings) {
-            setCurrentSettings(
-                defaultSettings as unknown as Record<string, unknown>,
-            );
+            const seeded = {
+                ...(defaultSettings as unknown as Record<string, unknown>),
+            };
+            // Schemas ship with `turnTimeLimit: null` (disabled). For the debug
+            // page, seed a real value so the ring + auto-play cadence are active.
+            if (
+                "turnTimeLimit" in seeded &&
+                (seeded.turnTimeLimit === null ||
+                    seeded.turnTimeLimit === undefined)
+            ) {
+                seeded.turnTimeLimit = DEBUG_DEFAULT_TURN_TIME_LIMIT_SEC;
+            }
+            setCurrentSettings(seeded);
             setSettingsGameId(selectedGameId);
             setRegenerateTrigger((prev) => prev + 1);
         }
@@ -189,13 +203,35 @@ export function DebugEngine() {
             // Also update the master game state so the game component sees the new settings
             setMasterGameState((prevState) => {
                 if (!prevState.gameData) return prevState;
-                return {
-                    ...prevState,
-                    gameData: {
-                        ...prevState.gameData,
-                        settings: newSettings,
-                    } as unknown as GameData,
+                const nextGameData = {
+                    ...prevState.gameData,
+                    settings: newSettings,
+                } as unknown as GameData & {
+                    turnTimer?: {
+                        startedAt: number;
+                        duration: number;
+                        serverTime: number;
+                    };
                 };
+
+                // When the turn time limit is changed in the debug panel, synthesize
+                // a fresh `turnTimer` object so the ring/countdown actually reflect the
+                // new value (mock data has no real server-driven timer).
+                if (key === "turnTimeLimit") {
+                    const limitSec = typeof value === "number" ? value : 0;
+                    if (limitSec > 0) {
+                        const now = Date.now();
+                        nextGameData.turnTimer = {
+                            startedAt: now,
+                            duration: limitSec * 1000,
+                            serverTime: now,
+                        };
+                    } else {
+                        nextGameData.turnTimer = undefined;
+                    }
+                }
+
+                return { ...prevState, gameData: nextGameData };
             });
 
             return newSettings;
@@ -243,12 +279,38 @@ export function DebugEngine() {
 
         // Apply current settings if we have them and they belong to the current game,
         // otherwise use the mock data's settings
+        const effectiveSettings = shouldUseCurrentSettings
+            ? currentSettings
+            : (mockData.gameData.settings as unknown as Record<string, unknown>);
+
         const gameDataWithSettings = {
             ...mockData.gameData,
-            settings: shouldUseCurrentSettings
-                ? currentSettings
-                : mockData.gameData.settings,
-        } as GameData;
+            settings: effectiveSettings,
+        } as unknown as GameData & {
+            turnTimer?: {
+                startedAt: number;
+                duration: number;
+                serverTime: number;
+            };
+        };
+
+        // Synthesize a turn timer in debug mode so the ring activates when the
+        // schema's turnTimeLimit setting is > 0. Real games receive this from the
+        // server, but mock data has no live timer.
+        const turnTimeLimitSec =
+            typeof effectiveSettings?.turnTimeLimit === "number"
+                ? (effectiveSettings.turnTimeLimit as number)
+                : 0;
+        if (turnTimeLimitSec > 0) {
+            const now = Date.now();
+            gameDataWithSettings.turnTimer = {
+                startedAt: now,
+                duration: turnTimeLimitSec * 1000,
+                serverTime: now,
+            };
+        } else {
+            gameDataWithSettings.turnTimer = undefined;
+        }
 
         const gameDataWithLayout = gameDataWithSettings;
 
@@ -315,6 +377,14 @@ export function DebugEngine() {
                                             c.rank === card.rank
                                         ),
                                 ),
+                            };
+
+                            // Update handsCounts so opponent card-back stacks
+                            // visually shrink as cards are played.
+                            newGameData.handsCounts = {
+                                ...newGameData.handsCounts,
+                                [playerId]:
+                                    newPlayerDataMap[playerId].hand.length,
                             };
                         }
 
@@ -572,6 +642,33 @@ export function DebugEngine() {
                         );
                     }
 
+                    // Refresh the synthetic turn timer whenever an action lands so
+                    // the ring restarts at the top of the new player's turn (mirrors
+                    // server behavior). A no-op when the setting is disabled.
+                    const turnTimeLimitSec =
+                        typeof (
+                            newGameData.settings as
+                                | Record<string, unknown>
+                                | undefined
+                        )?.turnTimeLimit === "number"
+                            ? ((
+                                  newGameData.settings as Record<
+                                      string,
+                                      unknown
+                                  >
+                              ).turnTimeLimit as number)
+                            : 0;
+                    if (turnTimeLimitSec > 0) {
+                        const now = Date.now();
+                        newGameData.turnTimer = {
+                            startedAt: now,
+                            duration: turnTimeLimitSec * 1000,
+                            serverTime: now,
+                        };
+                    } else {
+                        newGameData.turnTimer = undefined;
+                    }
+
                     return {
                         ...prevState,
                         gameData: newGameData as GameData,
@@ -603,9 +700,27 @@ export function DebugEngine() {
         }
     }, []);
 
-    // Auto-play logic (very basic, just logs intent for now)
+    // Auto-play logic. When a turn time limit is configured, the cadence matches
+    // the timer so auto-play behaves like real auto-pass-on-expiry. Otherwise
+    // falls back to a fixed 2s tick.
     useEffect(() => {
         if (!autoPlay || !masterGameState.gameData) return;
+
+        const turnTimeLimitSec =
+            typeof (
+                masterGameState.gameData.settings as unknown as Record<
+                    string,
+                    unknown
+                >
+            )?.turnTimeLimit === "number"
+                ? ((
+                      masterGameState.gameData.settings as unknown as Record<
+                          string,
+                          unknown
+                      >
+                  ).turnTimeLimit as number)
+                : 0;
+        const intervalMs = turnTimeLimitSec > 0 ? turnTimeLimitSec * 1000 : 2000;
 
         const interval = setInterval(() => {
             const gameData = masterGameState.gameData;
@@ -747,7 +862,7 @@ export function DebugEngine() {
                     },
                 });
             }
-        }, 2000);
+        }, intervalMs);
 
         return () => clearInterval(interval);
     }, [autoPlay, masterGameState, selectedGameId, handleEmit]);

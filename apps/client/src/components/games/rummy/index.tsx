@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { toast } from "sonner";
 import { useSession } from "@/contexts/SessionContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
-import { useWebSocketError } from "@/hooks";
+import { useTurnTimer, useWebSocketError } from "@/hooks";
+import { playTimerStartSound, initializeAudioOnInteraction } from "@/lib/audio";
 import {
     RummyData,
     RummyPlayerData,
@@ -85,7 +92,7 @@ export default function Rummy({
     roomCode,
 }: RummyProps) {
     const playerData = rawPlayerData ?? SPECTATOR_PLAYER_DATA;
-    const { socket, connected } = useWebSocket();
+    const { socket, connected, clockOffset } = useWebSocket();
     const { roomId, userId } = useSession();
     useWebSocketError();
 
@@ -132,8 +139,8 @@ export default function Rummy({
         }));
         const top = gameData.discard.cards.length
             ? toServerCard(
-                gameData.discard.cards[gameData.discard.cards.length - 1],
-            )
+                  gameData.discard.cards[gameData.discard.cards.length - 1],
+              )
             : null;
         return computeRummyHints({
             hand: handCards,
@@ -161,6 +168,52 @@ export default function Rummy({
         !isSpectator;
     const dealerId = gameData.playOrder[gameData.dealerIndex];
     const isDealer = dealerId === heroId;
+
+    // ── Turn timer wiring (mirrors Spades) ──────────────────────────────────
+    useEffect(() => {
+        initializeAudioOnInteraction();
+    }, []);
+
+    const turnTimeLimit = gameData.settings?.turnTimeLimit ?? 0;
+
+    const isMyTurnRef = useRef(isMyTurn);
+    useEffect(() => {
+        isMyTurnRef.current = isMyTurn;
+    }, [isMyTurn]);
+
+    const handleTimerStart = useCallback(() => {
+        if (isMyTurnRef.current) {
+            playTimerStartSound();
+        }
+    }, []);
+
+    const { isActive: timerIsActive } = useTurnTimer(
+        gameData.turnTimer,
+        clockOffset,
+        handleTimerStart,
+    );
+
+    const turnTimerProps = useMemo(() => {
+        if (
+            turnTimeLimit <= 0 ||
+            gameData.phase !== "playing" ||
+            !timerIsActive ||
+            !gameData.turnTimer?.startedAt
+        ) {
+            return undefined;
+        }
+        return {
+            totalMs: turnTimeLimit * 1000,
+            startedAt: gameData.turnTimer.startedAt,
+            clockOffset,
+        };
+    }, [
+        turnTimeLimit,
+        gameData.phase,
+        timerIsActive,
+        gameData.turnTimer?.startedAt,
+        clockOffset,
+    ]);
 
     const rummyCallActive = Boolean(
         gameData.rummyCall &&
@@ -519,6 +572,7 @@ export default function Rummy({
                     heroId={heroId}
                     isSpectator={!!isSpectator}
                     controller={controller}
+                    turnTimer={turnTimerProps}
                 />
             </div>
 

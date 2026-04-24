@@ -2,12 +2,10 @@
 
 import React, { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { getInitials } from "@shared/utils";
 import { motion } from "motion/react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SeatPosition } from "@/hooks";
-import { TurnTimer } from "./TurnTimer";
+import { PlayerAvatar } from "./PlayerAvatar";
 import { useGameTableOptional } from "./GameTable";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,36 +100,6 @@ function getLayoutConfig(position: SeatPosition): {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Turn Indicator Component
-// ─────────────────────────────────────────────────────────────────────────────
-
-function TurnIndicator({ isActive }: { isActive: boolean }) {
-    if (!isActive) return null;
-
-    return (
-        <motion.div
-            className="absolute inset-0 rounded-full pointer-events-none"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{
-                opacity: [0.4, 0.8, 0.4],
-                scale: [1, 1.4, 1],
-            }}
-            transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-            }}
-            style={{
-                background:
-                    "radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, transparent 70%)",
-                boxShadow:
-                    "0 0 25px 8px rgba(251, 191, 36, 0.6), inset 0 0 15px 2px rgba(251, 191, 36, 0.5)",
-            }}
-        />
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // PlayerInfo Component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -155,7 +123,6 @@ function PlayerInfo({
     customStats,
 }: PlayerInfoProps) {
     const layout = getLayoutConfig(seatPosition);
-    const initials = getInitials(playerName);
 
     // When inside a GameTable, shrink the info block on compact layouts so
     // side seats (left/right) don't overflow their narrow column.
@@ -168,7 +135,10 @@ function PlayerInfo({
         seatPosition === "top-right" ||
         seatPosition === "bottom-left" ||
         seatPosition === "bottom-right";
-    const isTopSeat = seatPosition === "top" || seatPosition === "top-left" || seatPosition === "top-right";
+    const isTopSeat =
+        seatPosition === "top" ||
+        seatPosition === "top-left" ||
+        seatPosition === "top-right";
     // On compact side seats, collapse name + stats to keep the column narrow.
     // The count badge next to the avatar already conveys hand size.
     const hideTextBlock = !isLocalPlayer && isCompact && isSideSeat;
@@ -210,86 +180,19 @@ function PlayerInfo({
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
-            {/* Avatar with turn indicator or timer */}
-            <div className={cn("relative", hideHeroAvatar && "hidden")}>
-                {/* Show pulse indicator when it's current turn but no active timer */}
-                {/* Timer takes precedence when active */}
-                {isCurrentTurn && !(turnTimer && turnTimer.totalMs > 0) && (
-                    <TurnIndicator isActive={true} />
-                )}
-
-                {/* Only render TurnTimer when it should be active to prevent 0→100% animation */}
-                {isCurrentTurn && turnTimer && turnTimer.totalMs > 0 ? (
-                    <TurnTimer
-                        key={`timer-${playerId}-${turnTimer.startedAt}`}
-                        totalMs={turnTimer.totalMs}
-                        startedAt={turnTimer.startedAt}
-                        clockOffset={turnTimer.clockOffset}
-                        isActive={true}
-                        size={timerSize}
-                    >
-                        <Avatar
-                            className={cn(
-                                avatarSize,
-                                "border-2 shadow-md transition-all duration-200",
-                                "border-amber-400",
-                            )}
-                            style={{
-                                borderColor: teamColor || undefined,
-                                boxShadow: isLocalPlayer
-                                    ? "0 0 0 2px #3b82f6, 0 0 8px 2px rgba(59, 130, 246, 0.5)"
-                                    : undefined,
-                            }}
-                        >
-                            <AvatarFallback
-                                className={cn(
-                                    "text-sm font-bold",
-                                    isLocalPlayer
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-slate-700 text-slate-200",
-                                )}
-                            >
-                                {initials}
-                            </AvatarFallback>
-                        </Avatar>
-                    </TurnTimer>
-                ) : (
-                    <Avatar
-                        className={cn(
-                            avatarSize,
-                            "border-2 shadow-md transition-all duration-200",
-                            isCurrentTurn
-                                ? "border-amber-400"
-                                : "border-white/30",
-                        )}
-                        style={{
-                            borderColor: teamColor || undefined,
-                            boxShadow: isLocalPlayer
-                                ? "0 0 0 2px #3b82f6, 0 0 8px 2px rgba(59, 130, 246, 0.5)"
-                                : undefined,
-                        }}
-                    >
-                        <AvatarFallback
-                            className={cn(
-                                "text-sm font-bold",
-                                isLocalPlayer
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-slate-700 text-slate-200",
-                            )}
-                        >
-                            {initials}
-                        </AvatarFallback>
-                    </Avatar>
-                )}
-
-                {/* Disconnected indicator */}
-                {!connected && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-[8px] font-bold">
-                            !
-                        </span>
-                    </div>
-                )}
+            {/* Avatar with turn indicator or timer (shared primitive) */}
+            <div className={cn(hideHeroAvatar && "hidden")}>
+                <PlayerAvatar
+                    playerId={playerId}
+                    playerName={playerName}
+                    size={timerSize - 12}
+                    sizeClassName={avatarSize}
+                    isCurrentTurn={isCurrentTurn}
+                    isLocalPlayer={isLocalPlayer}
+                    connected={connected}
+                    teamColor={teamColor}
+                    turnTimer={turnTimer}
+                />
             </div>
 
             {/* Player info */}

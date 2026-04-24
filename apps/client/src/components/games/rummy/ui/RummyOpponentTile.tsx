@@ -3,31 +3,36 @@
 import React from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { getInitials } from "@shared/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+    PlayerAvatar,
+    type PlayerAvatarTurnTimer,
+} from "@/components/games/shared";
 import type { RummyData } from "@shared/types";
 
 export interface RummyOpponentTileProps {
     playerId: string;
     gameData: RummyData;
+    /** Timer state for the active player; only renders when this is the active seat. */
+    turnTimer?: PlayerAvatarTurnTimer;
 }
 
 /**
  * Single-player opponent tile used inside EdgeRegion for the Rummy seat layout.
- * Shows avatar, name, card count and active-turn highlight. Replaces the
- * horizontal OpponentsStrip with per-edge placements driven by the shared
- * getSeatAssignments engine.
+ * Composes the shared `PlayerAvatar` primitive (avatar + ring + connected
+ * indicator) with Rummy-specific labels (name, card count, score).
  */
 export default function RummyOpponentTile({
     playerId,
     gameData,
+    turnTimer,
 }: RummyOpponentTileProps) {
     const player = gameData.players[playerId];
     const isTurn = gameData.playOrder[gameData.currentTurnIndex] === playerId;
     const handCount = gameData.handCounts[playerId] ?? 0;
     const score = gameData.scores[playerId] ?? 0;
     const name = player?.name ?? "Unknown";
+    const connected = player?.isConnected ?? true;
 
     return (
         <motion.div
@@ -41,13 +46,14 @@ export default function RummyOpponentTile({
             )}
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
         >
-            <Avatar
-                className={cn("h-8 w-8", isTurn && "ring-2 ring-amber-300")}
-            >
-                <AvatarFallback className="text-xs bg-emerald-900 text-white">
-                    {getInitials(name)}
-                </AvatarFallback>
-            </Avatar>
+            <PlayerAvatar
+                playerId={playerId}
+                playerName={name}
+                size={36}
+                isCurrentTurn={isTurn}
+                connected={connected}
+                turnTimer={isTurn ? turnTimer : undefined}
+            />
             <div className="flex flex-col min-w-0">
                 <span
                     className={cn(
