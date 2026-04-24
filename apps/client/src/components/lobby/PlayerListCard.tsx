@@ -80,7 +80,7 @@ export default function PlayerListCard({
         toast(
             `Promoted ${
                 users.find((u) => u.id === newLeaderId)?.name
-            } to leader`
+            } to leader`,
         );
     }
 
@@ -123,7 +123,7 @@ export default function PlayerListCard({
                                 <div className="relative flex-shrink-0">
                                     <Avatar
                                         className={`w-10 h-10 ${getAvatarColor(
-                                            user.name
+                                            user.name,
                                         )}`}
                                     >
                                         <AvatarFallback className="text-white font-semibold text-sm bg-transparent">
@@ -195,7 +195,7 @@ export default function PlayerListCard({
                                                         className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30"
                                                         onClick={() =>
                                                             handlePromote(
-                                                                user.id
+                                                                user.id,
                                                             )
                                                         }
                                                     >

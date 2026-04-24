@@ -23,13 +23,13 @@ const userToSocket: Map<string, string> = new Map();
 const roomDeletionTimers: Map<string, NodeJS.Timeout> = new Map();
 // Configurable TTL in seconds before deleting an empty room (default: 300 seconds = 5 minutes)
 const ROOM_EMPTY_TTL_SECONDS: number = Number(
-    process.env.ROOM_EMPTY_TTL_SECONDS ?? 300
+    process.env.ROOM_EMPTY_TTL_SECONDS ?? 300,
 );
 // Track reconnection timeout timers for paused games
 const reconnectTimeoutTimers: Map<string, NodeJS.Timeout> = new Map();
 // Configurable timeout in minutes before aborting a paused game
 const RECONNECT_TIMEOUT_MINUTES: number = Number(
-    process.env.RECONNECT_TIMEOUT_MINUTES ?? 2
+    process.env.RECONNECT_TIMEOUT_MINUTES ?? 2,
 );
 
 // ============================================================================
@@ -45,7 +45,7 @@ const RECONNECT_TIMEOUT_MINUTES: number = Number(
  */
 export function validateGameSettings(
     gameType: string,
-    settings: Record<string, unknown>
+    settings: Record<string, unknown>,
 ): PartialGameSettings {
     const settingsData = gameManager.getSettingsForGame(gameType);
     if (!settingsData) {
@@ -167,20 +167,20 @@ const JOIN_REQUEST_MAX_ATTEMPTS = 3;
 export function requestToJoinRoom(
     roomCode: string,
     requesterId: string,
-    requesterName: string
+    requesterName: string,
 ): { roomId: string; leaderId: string } {
     // Normalize room code to uppercase for lookup
     const normalizedCode = roomCode.toUpperCase();
     const roomId = roomCodeToId.get(normalizedCode);
     if (!roomId)
         throw notFound(
-            "Room not found. Please check the room code and try again."
+            "Room not found. Please check the room code and try again.",
         );
 
     const room = rooms.get(roomId);
     if (!room)
         throw notFound(
-            "Room not found. Please check the room code and try again."
+            "Room not found. Please check the room code and try again.",
         );
 
     // Only allow requests for private rooms
@@ -196,7 +196,7 @@ export function requestToJoinRoom(
     // Check if user has been kicked
     if (room.kickedUserIds?.includes(requesterId)) {
         throw forbidden(
-            "You have been kicked from this room and cannot request to join."
+            "You have been kicked from this room and cannot request to join.",
         );
     }
 
@@ -214,17 +214,17 @@ export function requestToJoinRoom(
         // Check cooldown
         if (timeSinceRequest < JOIN_REQUEST_COOLDOWN_MS) {
             const remainingSeconds = Math.ceil(
-                (JOIN_REQUEST_COOLDOWN_MS - timeSinceRequest) / 1000
+                (JOIN_REQUEST_COOLDOWN_MS - timeSinceRequest) / 1000,
             );
             throw tooManyRequests(
-                `Please wait ${Math.ceil(remainingSeconds / 60)} minute(s) before requesting again.`
+                `Please wait ${Math.ceil(remainingSeconds / 60)} minute(s) before requesting again.`,
             );
         }
 
         // Check max attempts
         if (existingRequest.attempts >= JOIN_REQUEST_MAX_ATTEMPTS) {
             throw tooManyRequests(
-                "You have exceeded the maximum number of join requests for this room."
+                "You have exceeded the maximum number of join requests for this room.",
             );
         }
     }
@@ -247,7 +247,7 @@ export function acceptJoinRequest(
     roomId: string,
     leaderId: string,
     requesterId: string,
-    requesterName: string
+    requesterName: string,
 ): { room: Room; user: User } {
     const room = rooms.get(roomId);
     if (!room) throw notFound("Room not found.");
@@ -273,7 +273,7 @@ export function acceptJoinRequest(
 export function rejectJoinRequest(
     roomId: string,
     leaderId: string,
-    _requesterId: string
+    _requesterId: string,
 ): void {
     const room = rooms.get(roomId);
     if (!room) throw notFound("Room not found.");
@@ -370,7 +370,7 @@ function scheduleReconnectTimeout(roomId: string): void {
     }, ms);
     reconnectTimeoutTimers.set(roomId, timeout);
     console.log(
-        `Reconnect timeout started for room ${roomId} (${RECONNECT_TIMEOUT_MINUTES} minutes)`
+        `Reconnect timeout started for room ${roomId} (${RECONNECT_TIMEOUT_MINUTES} minutes)`,
     );
 }
 
@@ -392,7 +392,7 @@ function cancelReconnectTimeout(roomId: string): void {
  */
 function abortGameDueToTimeout(roomId: string): void {
     console.log(
-        `⏰ Reconnect timeout expired for room ${roomId} - aborting game`
+        `⏰ Reconnect timeout expired for room ${roomId} - aborting game`,
     );
     const room = rooms.get(roomId);
     if (!room) {
@@ -412,7 +412,7 @@ function abortGameDueToTimeout(roomId: string): void {
 
     // Reset ready states for all users
     room.users.forEach((user) => {
-        room.readyStates[user.id] = false;
+        room.readyStates[user.id] = process.env.NODE_ENV === "development";
     });
 
     emitRoomEvent<{ reason: string }>(room, "game_aborted", {
@@ -428,7 +428,7 @@ function abortGameDueToTimeout(roomId: string): void {
         room.users = [];
         scheduleRoomDeletionIfEmpty(roomId);
         console.log(
-            `Game aborted and room scheduled for deletion (all users disconnected) for room ${roomId}`
+            `Game aborted and room scheduled for deletion (all users disconnected) for room ${roomId}`,
         );
     } else {
         console.log(`Game aborted due to reconnect timeout for room ${roomId}`);
@@ -445,7 +445,7 @@ async function generateUniqueRoomCode(): Promise<string> {
     return await new Promise((resolve) => {
         do {
             code = Array.from({ length: 6 }, () =>
-                chars.charAt(Math.floor(Math.random() * chars.length))
+                chars.charAt(Math.floor(Math.random() * chars.length)),
             ).join("");
         } while (roomCodeToId.has(code));
         resolve(code);
@@ -461,7 +461,7 @@ async function generateUniqueRoomCode(): Promise<string> {
 export function registerSocketUser(
     socketId: string,
     roomId: string,
-    userId: string
+    userId: string,
 ): { alreadyConnected: boolean; oldSocketId?: string } {
     // Check if the room exists first
     const room = rooms.get(roomId);
@@ -472,7 +472,7 @@ export function registerSocketUser(
     // Check if user has been kicked from this room
     if (room.kickedUserIds?.includes(userId)) {
         throw forbidden(
-            "You have been kicked from this room and cannot rejoin."
+            "You have been kicked from this room and cannot rejoin.",
         );
     }
 
@@ -485,7 +485,7 @@ export function registerSocketUser(
             console.log(
                 `Duplicate join detected for user ${userId} in room ${roomId}. ` +
                     `Existing socket: ${existingSocketId}, New socket: ${socketId}. ` +
-                    `Disconnecting old socket.`
+                    `Disconnecting old socket.`,
             );
             return { alreadyConnected: true, oldSocketId: existingSocketId };
         }
@@ -502,26 +502,26 @@ export function registerSocketUser(
         socketToUser.delete(socketId);
         userToSocket.delete(userId);
         throw forbidden(
-            "You are not a member of this room. Please join the room first."
+            "You are not a member of this room. Please join the room first.",
         );
     }
 
     console.log(
-        `📡 registerSocketUser: user ${user.name} (${userId}), isConnected: ${user.isConnected}, room state: ${room.state}, isPaused: ${room.isPaused}`
+        `📡 registerSocketUser: user ${user.name} (${userId}), isConnected: ${user.isConnected}, room state: ${room.state}, isPaused: ${room.isPaused}`,
     );
 
     // Handle rejoin for both lobby and in-game states
     if (user.isConnected === false) {
         // User is rejoining
         console.log(
-            `🔄 User ${user.name} (${userId}) is rejoining - was disconnected, now marking connected`
+            `🔄 User ${user.name} (${userId}) is rejoining - was disconnected, now marking connected`,
         );
         user.isConnected = true;
 
         if (isActiveGame(room)) {
             // In-game rejoin
             console.log(
-                `🎮 User ${user.name} rejoining active game. Room paused: ${room.isPaused}`
+                `🎮 User ${user.name} rejoining active game. Room paused: ${room.isPaused}`,
             );
             gameManager.handlePlayerReconnect(room.gameId, userId);
 
@@ -529,7 +529,7 @@ export function registerSocketUser(
             emitRoomEvent<{ userName?: string; userId: string }>(
                 room,
                 "user_reconnected",
-                { userName: user.name, userId }
+                { userName: user.name, userId },
             );
         } else {
             // Lobby rejoin - user must have refreshed the page and is joining again
@@ -538,7 +538,7 @@ export function registerSocketUser(
             emitRoomEvent<{ userName?: string; userId: string }>(
                 room,
                 "user_reconnected",
-                { userName: user.name, userId }
+                { userName: user.name, userId },
             );
 
             console.log(`User ${user.name} reconnected to lobby`);
@@ -558,7 +558,7 @@ export function registerSocketUser(
 
             const hasMinPlayers = gameManager.checkMinimumPlayers(room.gameId);
             console.log(
-                `🎮 Checking resume: hasMinPlayers=${hasMinPlayers}, isPaused=${room.isPaused}`
+                `🎮 Checking resume: hasMinPlayers=${hasMinPlayers}, isPaused=${room.isPaused}`,
             );
             if (hasMinPlayers) {
                 console.log(`✅ Resuming game - all players connected`);
@@ -578,7 +578,7 @@ export function registerSocketUser(
             }
         } else {
             console.log(
-                `📡 User ${user.name} is not a game player (isGamePlayer=${isGamePlayer}, isSpectator=${isSpectator}) - skipping reconnect`
+                `📡 User ${user.name} is not a game player (isGamePlayer=${isGamePlayer}, isSpectator=${isSpectator}) - skipping reconnect`,
             );
         }
     }
@@ -589,7 +589,7 @@ export function registerSocketUser(
 export async function createRoom(
     roomName: string,
     userName: string,
-    userId?: string
+    userId?: string,
 ): Promise<{ room: Room; user: User }> {
     const user: User = {
         id: userId || uuidv4(),
@@ -603,7 +603,7 @@ export async function createRoom(
         name: roomName,
         users: [user],
         leaderId: user.id,
-        readyStates: { [user.id]: false },
+        readyStates: { [user.id]: process.env.NODE_ENV === "development" },
         state: "lobby",
         selectedGameType: "spades",
         gameId: null,
@@ -621,7 +621,7 @@ export function joinRoom(
     roomCode: string,
     userName: string,
     userId?: string,
-    bypassPrivateCheck?: boolean // Used when accepting a join request
+    bypassPrivateCheck?: boolean, // Used when accepting a join request
 ): { room: Room; user: User } {
     // Normalize room code to uppercase for lookup
     const normalizedCode = roomCode.toUpperCase();
@@ -629,13 +629,13 @@ export function joinRoom(
     const room = roomId ? rooms.get(roomId) : undefined;
     if (!room)
         throw notFound(
-            "Room not found. Please check the room code and try again."
+            "Room not found. Please check the room code and try again.",
         );
 
     // Check if user has been kicked from this room
     if (userId && room.kickedUserIds?.includes(userId)) {
         throw forbidden(
-            "You have been kicked from this room and cannot rejoin."
+            "You have been kicked from this room and cannot rejoin.",
         );
     }
 
@@ -644,7 +644,7 @@ export function joinRoom(
     if (!existingUser && room.settings?.isPrivate && !bypassPrivateCheck) {
         throw forbidden(
             "This room is private. Please request to join.",
-            "PRIVATE_ROOM"
+            "PRIVATE_ROOM",
         );
     }
 
@@ -658,14 +658,14 @@ export function joinRoom(
         // This ensures the resume logic triggers properly when socket connects
         if (existingUser.isConnected === false) {
             console.log(
-                `User ${userName} will rejoin room ${room.id} on socket connection`
+                `User ${userName} will rejoin room ${room.id} on socket connection`,
             );
         }
 
         // If game is active, log it (connection will be handled in registerSocketUser)
         if (isActiveGame(room)) {
             console.log(
-                `User ${userName} rejoining active game in room ${room.id} (will reconnect on socket)`
+                `User ${userName} rejoining active game in room ${room.id} (will reconnect on socket)`,
             );
         }
 
@@ -693,7 +693,7 @@ export function joinRoom(
     };
 
     room.users.push(user);
-    room.readyStates[user.id] = false;
+    room.readyStates[user.id] = process.env.NODE_ENV === "development";
     emitRoomEvent<{ userName: string }>(room, "user_joined", {
         userName: user.name,
     });
@@ -763,7 +763,7 @@ export function handleUserDisconnect(socketId: string): void {
             room.isPaused = true;
             room.pausedAt = new Date();
             const timeoutAt = new Date(
-                room.pausedAt.getTime() + RECONNECT_TIMEOUT_MINUTES * 60 * 1000
+                room.pausedAt.getTime() + RECONNECT_TIMEOUT_MINUTES * 60 * 1000,
             );
             room.timeoutAt = timeoutAt;
             scheduleReconnectTimeout(room.id);
@@ -787,7 +787,7 @@ export function handleUserDisconnect(socketId: string): void {
         // Auto-promote leader if the disconnected user was the leader
         if (room.leaderId === userId) {
             const connectedUsers = room.users.filter(
-                (u) => u.isConnected !== false
+                (u) => u.isConnected !== false,
             );
             if (connectedUsers.length > 0) {
                 const newLeader = connectedUsers[0];
@@ -798,7 +798,7 @@ export function handleUserDisconnect(socketId: string): void {
                     {
                         newLeaderId: newLeader.id,
                         newLeaderName: newLeader.name,
-                    }
+                    },
                 );
             }
         }
@@ -807,7 +807,7 @@ export function handleUserDisconnect(socketId: string): void {
         emitRoomEvent<{ userName?: string; userId: string }>(
             room,
             "user_disconnected",
-            { userName, userId }
+            { userName, userId },
         );
     } else {
         // In lobby or ended state - remove user immediately
@@ -829,7 +829,7 @@ export function handleUserDisconnect(socketId: string): void {
                     {
                         newLeaderId: room.users[0].id,
                         newLeaderName: room.users[0].name,
-                    }
+                    },
                 );
             }
 
@@ -857,7 +857,7 @@ export function handleUserDisconnect(socketId: string): void {
 export function setReadyState(
     roomId: string,
     userId: string,
-    ready: boolean
+    ready: boolean,
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -871,7 +871,7 @@ export function setReadyState(
         {
             userId,
             ready,
-        }
+        },
     );
 }
 
@@ -888,14 +888,14 @@ export function toggleReadyState(roomId: string, userId: string): void {
         {
             userId,
             ready: room.readyStates[userId],
-        }
+        },
     );
 }
 
 export function promoteLeader(
     roomId: string,
     userId: string,
-    newLeaderId: string
+    newLeaderId: string,
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -913,7 +913,7 @@ export function promoteLeader(
 export function selectGame(
     roomId: string,
     userId: string,
-    gameType: string = "spades"
+    gameType: string = "spades",
 ) {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -941,7 +941,7 @@ export function updateRoomSettings(
         maxPlayers?: number;
         pauseTimeoutSeconds?: number;
         isPrivate?: boolean;
-    }
+    },
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -965,7 +965,7 @@ export function updateRoomSettings(
 export function updateGameSettings(
     roomId: string,
     userId: string,
-    gameSettings: Record<string, unknown>
+    gameSettings: Record<string, unknown>,
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -994,7 +994,7 @@ export function updateGameSettings(
 export function kickUser(
     roomId: string,
     userId: string,
-    targetUserId: string
+    targetUserId: string,
 ): { kickedSocketId: string | undefined } {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -1048,7 +1048,8 @@ export function kickUser(
 
             // Reset ready states for remaining users
             room.users.forEach((user) => {
-                room.readyStates[user.id] = false;
+                room.readyStates[user.id] =
+                    process.env.NODE_ENV === "development";
             });
 
             emitRoomEvent<{ userId: string; userName?: string }>(
@@ -1057,7 +1058,7 @@ export function kickUser(
                 {
                     userId: targetUserId,
                     userName: kickedUserName,
-                }
+                },
             );
 
             emitRoomEvent<{ reason: string }>(room, "game_aborted", {
@@ -1071,7 +1072,7 @@ export function kickUser(
                 {
                     userId: targetUserId,
                     userName: kickedUserName,
-                }
+                },
             );
 
             // If game was paused waiting for this player, it might be able to resume now
@@ -1104,7 +1105,7 @@ export function kickUser(
             {
                 userId: targetUserId,
                 userName: kickedUserName,
-            }
+            },
         );
     }
 
@@ -1119,7 +1120,7 @@ export function kickUser(
 export function setTeams(
     roomId: string,
     userId: string,
-    teams: string[][]
+    teams: string[][],
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -1161,7 +1162,7 @@ export function randomizeTeams(roomId: string, userId: string): string[][] {
     // Distribute into teams round-robin
     const teams: string[][] = Array.from(
         { length: requirements.numTeams },
-        () => []
+        () => [],
     );
     userIds.forEach((id, idx) => {
         teams[idx % requirements.numTeams].push(id);
@@ -1173,7 +1174,7 @@ export function startGame(
     roomId: string,
     userId: string,
     gameType: string = "spades",
-    customSettings?: any
+    customSettings?: any,
 ): void {
     const room = getRoom(roomId);
     if (!room) throw notFound("Room not found.");
@@ -1187,7 +1188,7 @@ export function startGame(
     if (module && module.metadata.numTeams && module.metadata.numTeams > 0) {
         if (!room.teams || room.teams.length === 0) {
             throw badRequest(
-                "Teams must be assigned before starting the game."
+                "Teams must be assigned before starting the game.",
             );
         }
         const allUserIds = room.users.map((u) => u.id);
@@ -1259,7 +1260,7 @@ export function leaveGame(roomId: string, userId: string): void {
         // Handle leader promotion if leaving user was leader
         if (room.leaderId === userId && room.users.length > 0) {
             const connectedUsers = room.users.filter(
-                (u) => u.isConnected !== false
+                (u) => u.isConnected !== false,
             );
             const newLeader =
                 connectedUsers.length > 0 ? connectedUsers[0] : room.users[0];
@@ -1270,7 +1271,7 @@ export function leaveGame(roomId: string, userId: string): void {
                 {
                     newLeaderId: newLeader.id,
                     newLeaderName: newLeader.name,
-                }
+                },
             );
         }
 
@@ -1278,7 +1279,7 @@ export function leaveGame(roomId: string, userId: string): void {
         emitRoomEvent<{ userName?: string; voluntary: boolean }>(
             room,
             "user_left",
-            { userName, voluntary: true }
+            { userName, voluntary: true },
         );
 
         // Emit game sync so remaining players see updated player states
@@ -1290,7 +1291,7 @@ export function leaveGame(roomId: string, userId: string): void {
             room.isPaused = true;
             room.pausedAt = new Date();
             const timeoutAt = new Date(
-                room.pausedAt.getTime() + RECONNECT_TIMEOUT_MINUTES * 60 * 1000
+                room.pausedAt.getTime() + RECONNECT_TIMEOUT_MINUTES * 60 * 1000,
             );
             room.timeoutAt = timeoutAt;
             scheduleReconnectTimeout(room.id);
@@ -1326,14 +1327,14 @@ export function leaveGame(roomId: string, userId: string): void {
                 {
                     newLeaderId: room.users[0].id,
                     newLeaderName: room.users[0].name,
-                }
+                },
             );
         }
 
         emitRoomEvent<{ userName?: string; voluntary: boolean }>(
             room,
             "user_left",
-            { userName, voluntary: true }
+            { userName, voluntary: true },
         );
 
         if (room.users.length === 0) {
@@ -1370,7 +1371,7 @@ export function abortGame(roomId: string, userId: string): void {
 
     // Reset ready states for all users
     room.users.forEach((user) => {
-        room.readyStates[user.id] = false;
+        room.readyStates[user.id] = process.env.NODE_ENV === "development";
     });
 
     // Emit game_aborted with "leader_ended" reason
@@ -1388,7 +1389,7 @@ export function abortGame(roomId: string, userId: string): void {
 export function addSpectator(
     roomCode: string,
     userName: string,
-    userId?: string
+    userId?: string,
 ): { room: Room; user: User; isSpectator: true } {
     // Normalize room code to uppercase for lookup
     const normalizedCode = roomCode.toUpperCase();
@@ -1396,7 +1397,7 @@ export function addSpectator(
     const room = roomId ? rooms.get(roomId) : undefined;
     if (!room)
         throw notFound(
-            "Room not found. Please check the room code and try again."
+            "Room not found. Please check the room code and try again.",
         );
 
     // Can only spectate if game is in progress
@@ -1437,7 +1438,7 @@ export function addSpectator(
     emitRoomEvent<{ userName: string; isSpectator: boolean }>(
         room,
         "user_joined",
-        { userName: user.name, isSpectator: true }
+        { userName: user.name, isSpectator: true },
     );
 
     console.log(`User ${userName} joined as spectator in room ${roomId}`);
@@ -1479,7 +1480,7 @@ export function moveToSpectators(roomId: string, userId: string): void {
     emitRoomEvent<{ userId: string; userName: string }>(
         room,
         "player_moved_to_spectators",
-        { userId, userName: user.name }
+        { userId, userName: user.name },
     );
 
     console.log(`User ${user.name} moved to spectators in room ${roomId}`);
@@ -1492,7 +1493,7 @@ export function moveToSpectators(roomId: string, userId: string): void {
 export function claimPlayerSlot(
     roomId: string,
     claimingUserId: string,
-    targetSlotUserId: string
+    targetSlotUserId: string,
 ): { success: boolean; error?: string } {
     const room = rooms.get(roomId);
     if (!room) return { success: false, error: "Room not found" };
@@ -1523,7 +1524,7 @@ export function claimPlayerSlot(
             room.gameId,
             targetSlotUserId,
             claimingUserId,
-            claimingUser.name
+            claimingUser.name,
         );
         if (!transferred) {
             return {
@@ -1543,7 +1544,7 @@ export function claimPlayerSlot(
     // Update teams if applicable
     if (room.teams) {
         room.teams = room.teams.map((team) =>
-            team.map((id) => (id === targetSlotUserId ? claimingUserId : id))
+            team.map((id) => (id === targetSlotUserId ? claimingUserId : id)),
         );
     }
 
@@ -1571,7 +1572,7 @@ export function claimPlayerSlot(
     });
 
     console.log(
-        `User ${claimingUser.name} claimed slot of ${targetUser.name} in room ${roomId}`
+        `User ${claimingUser.name} claimed slot of ${targetUser.name} in room ${roomId}`,
     );
     return { success: true };
 }
@@ -1580,7 +1581,7 @@ export function claimPlayerSlot(
  * Get available (disconnected) player slots that spectators can claim.
  */
 export function getAvailableSlots(
-    roomId: string
+    roomId: string,
 ): { userId: string; userName: string; teamIndex?: number }[] {
     const room = rooms.get(roomId);
     if (!room) return [];
@@ -1588,7 +1589,7 @@ export function getAvailableSlots(
 
     // Find disconnected players who are not spectators
     const disconnectedPlayers = room.users.filter(
-        (u) => u.isConnected === false && !room.spectators?.includes(u.id)
+        (u) => u.isConnected === false && !room.spectators?.includes(u.id),
     );
 
     return disconnectedPlayers.map((u) => {
