@@ -123,50 +123,58 @@ function getGridTracks(
     const topCount = seatCounts.top;
 
     if (mode === "compact") {
-        // Side columns: tighter than before; widen slightly when 2-3 stacked
-        // seats need to fit a column of compact avatars.
+        // Side columns: tight, but use clamp() so single avatars don't claim
+        // an `fr` share that steals horizontal space from the board. When 2+
+        // avatars are stacked we widen slightly so they fit.
         const sideCol =
             sideMax >= 3
-                ? "minmax(3rem, 0.7fr)"
+                ? "clamp(2.75rem, 14vw, 5rem)"
                 : sideMax >= 2
-                  ? "minmax(2.75rem, 0.6fr)"
-                  : "minmax(2.5rem, 0.5fr)";
+                  ? "clamp(2.5rem, 13vw, 4.75rem)"
+                  : "clamp(2.25rem, 11vw, 4rem)";
+        // Top row: only as tall as needed for a single avatar; reserve a bit
+        // more when multiple avatars stack.
         const topRow =
             topCount >= 3
-                ? "minmax(72px, 0.9fr)"
+                ? "minmax(64px, max-content)"
                 : topCount >= 2
-                  ? "minmax(64px, 0.8fr)"
-                  : "minmax(56px, 0.7fr)";
+                  ? "minmax(56px, max-content)"
+                  : "minmax(48px, max-content)";
         return {
-            gridTemplateRows: `${topRow} minmax(0, 2.4fr) minmax(56px, 0.8fr)`,
-            gridTemplateColumns: `${sideCol} minmax(0, 3fr) ${sideCol}`,
+            gridTemplateRows: `${topRow} minmax(0, 1fr) minmax(48px, max-content)`,
+            gridTemplateColumns: `${sideCol} minmax(0, 1fr) ${sideCol}`,
         };
     }
 
     if (mode === "comfortable") {
-        // Softer than compact: capped max-content tracks.
+        // Softer than compact: capped max-content tracks. Trimmed from the
+        // earlier 9rem/8rem/6.5rem to keep more room for the center board.
         const sideCol =
             sideMax >= 3
-                ? "minmax(0, 9rem)"
+                ? "minmax(0, 7rem)"
                 : sideMax >= 2
-                  ? "minmax(0, 8rem)"
-                  : "minmax(0, 6.5rem)";
+                  ? "minmax(0, 6rem)"
+                  : "minmax(0, 5rem)";
         const topRow =
             topCount >= 3
-                ? "minmax(0, 6rem)"
+                ? "minmax(0, 5.25rem)"
                 : topCount >= 2
-                  ? "minmax(0, 5.5rem)"
-                  : "minmax(0, 5rem)";
+                  ? "minmax(0, 4.75rem)"
+                  : "minmax(0, 4.25rem)";
         return {
             gridTemplateRows: `${topRow} minmax(0, 1fr) minmax(0, auto)`,
             gridTemplateColumns: `${sideCol} minmax(0, 1fr) ${sideCol}`,
         };
     }
 
-    // Spacious: let content size naturally.
+    // Spacious: size edge tracks to their content (capped) so the center
+    // cell always wins extra space. `max-content` prevents long opponent
+    // names from inflating, and avoids the prior `auto` ballooning issue.
     return {
-        gridTemplateRows: "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
-        gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+        gridTemplateRows:
+            "minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content)",
+        gridTemplateColumns:
+            "minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content)",
     };
 }
 

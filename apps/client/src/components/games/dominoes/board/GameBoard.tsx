@@ -14,6 +14,7 @@ import TileChain from "./TileChain";
 import GhostTile from "./GhostTile";
 import { useDominoesStore } from "../store";
 import { GRID_CELL_SIZE, BOARD_COLS, BOARD_ROWS } from "../engine/types";
+import type { ChainSegment } from "../engine/types";
 import { getTilePixelBounds } from "../engine/layout";
 
 const BOARD_PX_W = BOARD_COLS * GRID_CELL_SIZE;
@@ -144,15 +145,17 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
 
     const getAutoFitTarget = useCallback(
         (containerW: number, containerH: number) => {
-            const segments = useDominoesStore.getState().chain.segments;
+            const state = useDominoesStore.getState();
+            const segments = state.chain.segments;
+            const ghosts = state.ghostPlacements;
             const padding = getAutoFitPadding(containerW, containerH);
             const availW = Math.max(1, containerW - padding * 2);
             const availH = Math.max(1, containerH - padding * 2);
 
-            if (segments.length === 0) {
-                // No tiles yet — center on focal point at a slightly
-                // zoomed-in scale so the board feels inviting.
-                const initialScale = Math.min(AUTOFIT_MAX_SCALE, 1.5);
+            if (segments.length === 0 && ghosts.length === 0) {
+                // No tiles yet — center on focal point at a calm scale so
+                // the leap to a multi-tile chain isn't jarring.
+                const initialScale = Math.min(AUTOFIT_MAX_SCALE, 1.1);
                 return {
                     scale: initialScale,
                     x: containerW / 2 - focalX * initialScale,
@@ -160,12 +163,14 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
                 };
             }
 
-            // Compute bounding box of all placed tiles
+            // Compute bounding box of placed tiles AND any active ghost
+            // previews so selecting a tile near an end keeps the preview on
+            // screen instead of clipping off the edge.
             let minX = Infinity,
                 minY = Infinity,
                 maxX = -Infinity,
                 maxY = -Infinity;
-            for (const seg of segments) {
+            const accumulate = (seg: ChainSegment) => {
                 const b = getTilePixelBounds(
                     seg.gridPos,
                     seg.direction,
@@ -175,7 +180,9 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
                 minY = Math.min(minY, b.y);
                 maxX = Math.max(maxX, b.x + b.width);
                 maxY = Math.max(maxY, b.y + b.height);
-            }
+            };
+            for (const seg of segments) accumulate(seg);
+            for (const ghost of ghosts) accumulate(ghost.segment);
 
             const chainW = maxX - minX;
             const chainH = maxY - minY;
@@ -237,25 +244,44 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
         [setStageScale, setStagePosition],
     );
 
-    // Trigger auto-fit whenever the chain changes and autoFit is on
+    // Trigger auto-fit whenever the chain OR active ghost previews change
+    // and autoFit is on. Including ghosts ensures that selecting a tile near
+    // the head/tail of the chain expands the camera to keep the preview on
+    // screen instead of clipping it. Also depends on container dimensions so
+    // a re-fit happens once the grid layout settles (matters on rejoin where
+    // the container starts at 0×0 then grows).
     const prevSegmentCountRef = useRef(chain.segments.length);
+    const ghostSignature = ghostPlacements
+        .map(
+            (g) =>
+                `${g.end}:${g.segment.gridPos.row},${g.segment.gridPos.col},${g.segment.direction}`,
+        )
+        .join("|");
     useEffect(() => {
         if (!autoFit) {
             prevSegmentCountRef.current = chain.segments.length;
             return;
         }
 
-        const container = containerRef.current;
-        if (!container) return;
+        // Skip until container has real dimensions — otherwise we'd compute
+        // a fit against the 800×600 default and lock the camera at a tiny
+        // scale that never recovers.
+        if (dimensions.width <= 0 || dimensions.height <= 0) return;
 
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        const target = getAutoFitTarget(w, h);
+        const target = getAutoFitTarget(dimensions.width, dimensions.height);
 
         // On first tile or initial load, animate; otherwise also animate
         animateToTarget(target.scale, target.x, target.y);
         prevSegmentCountRef.current = chain.segments.length;
-    }, [chain.segments.length, autoFit, getAutoFitTarget, animateToTarget]);
+    }, [
+        chain.segments.length,
+        ghostSignature,
+        autoFit,
+        getAutoFitTarget,
+        animateToTarget,
+        dimensions.width,
+        dimensions.height,
+    ]);
 
     // Clean up animation on unmount
     useEffect(() => {
@@ -266,32 +292,47 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
         };
     }, []);
 
+    // Track container size with ResizeObserver so we react to actual
+    // container resizes (grid layout settling, sibling mounts, rejoin
+    // re-mount, sidebar/menu open). `window.resize` alone misses these and
+    // leaves the camera locked at a stale scale — the cause of the
+    // "tiny board after rejoin" bug.
     const initializedRef = useRef(false);
     useLayoutEffect(() => {
-        const updateSize = () => {
-            if (containerRef.current) {
-                const w = containerRef.current.clientWidth;
-                const h = containerRef.current.clientHeight;
-                setDimensions({ width: w, height: h });
+        const container = containerRef.current;
+        if (!container) return;
 
-                if (!initializedRef.current) {
-                    initializedRef.current = true;
-                    // If autoFit is on, let the auto-fit effect handle initial positioning
-                    if (!useDominoesStore.getState().autoFit) {
-                        centerBoard(w, h, stageScale);
-                    }
-                } else if (useDominoesStore.getState().autoFit) {
-                    // Re-fit on resize when autoFit is active
-                    const target = getAutoFitTarget(w, h);
-                    setStageScale(target.scale);
-                    setStagePosition({ x: target.x, y: target.y });
+        const updateSize = (w: number, h: number) => {
+            if (w <= 0 || h <= 0) return;
+            setDimensions({ width: w, height: h });
+
+            if (!initializedRef.current) {
+                initializedRef.current = true;
+                // If autoFit is on, let the auto-fit effect handle initial
+                // positioning (it will fire because dimensions changed).
+                if (!useDominoesStore.getState().autoFit) {
+                    centerBoard(w, h, stageScale);
                 }
+            } else if (useDominoesStore.getState().autoFit) {
+                // Re-fit immediately on resize when autoFit is active so
+                // the chain stays framed as the available space changes.
+                const target = getAutoFitTarget(w, h);
+                setStageScale(target.scale);
+                setStagePosition({ x: target.x, y: target.y });
             }
         };
 
-        updateSize();
-        window.addEventListener("resize", updateSize);
-        return () => window.removeEventListener("resize", updateSize);
+        updateSize(container.clientWidth, container.clientHeight);
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+            const { width, height } = entry.contentRect;
+            updateSize(width, height);
+        });
+        observer.observe(container);
+
+        return () => observer.disconnect();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleWheel = useCallback(

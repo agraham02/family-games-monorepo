@@ -84,9 +84,26 @@ export default function Dominoes({
     const prevTileCountRef = useRef(0);
     const centerTileIdRef = useRef<string | null>(null);
     const prevTileIdsRef = useRef<string[]>([]);
+    const prevRoundRef = useRef<number | null>(null);
     const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(
         null,
     );
+
+    // Reset chain anchor refs whenever the round changes. Without this, the
+    // round-1 center tile id can leak into round 2 — if we never observe the
+    // 1-tile board state (round summary modal can hide it), the cached id no
+    // longer exists in the new board and replay falls back to centerIdx = 0
+    // with stale orientation, causing tiles to silently drop on collision.
+    if (
+        gameData.round != null &&
+        prevRoundRef.current != null &&
+        gameData.round !== prevRoundRef.current
+    ) {
+        centerTileIdRef.current = null;
+        prevTileIdsRef.current = [];
+        prevTileCountRef.current = 0;
+    }
+    prevRoundRef.current = gameData.round ?? null;
 
     // Replay server board → chain whenever board changes.
     // Center-anchored: the first tile placed (center of the chain) always
@@ -102,15 +119,25 @@ export default function Dominoes({
 
         const tiles = gameData.board.tiles;
 
+        // Validate the cached center tile id still exists in the current
+        // board. If not (round transition we missed, reconnect, etc.), drop
+        // it so we can pick a fresh anchor below.
+        if (
+            centerTileIdRef.current &&
+            !tiles.some((t) => t.id === centerTileIdRef.current)
+        ) {
+            centerTileIdRef.current = null;
+        }
+
         // Capture the center tile ID on the first tile placed in a round.
         // This is the anchor that keeps the layout stable.
-        if (!centerTileIdRef.current || tiles.length === 1) {
-            // For a fresh round (1 tile), that tile is the center.
-            // For reconnection (many tiles, no prior state), use the middle.
+        if (!centerTileIdRef.current) {
             if (tiles.length === 1) {
+                // Fresh round: that tile is the center.
                 centerTileIdRef.current = tiles[0].id;
-            } else if (prevTileIdsRef.current.length === 0) {
-                // Reconnect: pick the midpoint as best guess
+            } else {
+                // Reconnect or missed round transition: pick the midpoint
+                // as best guess so the chain has an anchor.
                 centerTileIdRef.current =
                     tiles[Math.floor(tiles.length / 2)].id;
             }
@@ -443,7 +470,7 @@ export default function Dominoes({
                             flexDirection: "column",
                             minWidth: 0,
                             minHeight: 0,
-                            margin: "4px",
+                            margin: "6px 4px",
                         }}
                     >
                         <GameBoard onPlaceAtEnd={handlePlaceAtEnd} />

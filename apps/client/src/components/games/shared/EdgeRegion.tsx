@@ -123,8 +123,11 @@ function EdgeRegion({
     // Safe-area insets are merged into the base padding via max() so notched
     // devices keep their inset without the utility class nuking our base
     // padding to 0 on non-notched viewports.
+    // Compact: small but non-zero cross padding so side/top opponent
+    // avatars don't sit flush against the viewport edge. Edge padding stays
+    // tight; safe-area insets are merged in at the call site below.
     const basePad = isCompact
-        ? { edge: "2px", cross: "0px" }
+        ? { edge: "4px", cross: "6px" }
         : isComfortable
           ? { edge: "0.375rem", cross: "0.25rem" }
           : { edge: "0.5rem", cross: "0.5rem" };

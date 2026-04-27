@@ -40,7 +40,17 @@ function AnimatedChainTile({
     const shouldAnimate = isNew && !flyingTile;
 
     useEffect(() => {
-        if (!shouldAnimate) return;
+        if (!shouldAnimate) {
+            // Force visible state. Critical when a background tab throttled
+            // RAF: the tile may have mounted with isNew=true (state 0/0) but
+            // the animation never advanced, then a newer tile took over
+            // `lastPlacedTileId` and shouldAnimate flipped to false. Without
+            // this reset the tile would stay invisible forever, leaving a
+            // gap in the chain.
+            setAnimScale(1);
+            setAnimOpacity(1);
+            return;
+        }
 
         if (reducedMotion) {
             setAnimScale(1);
@@ -76,8 +86,19 @@ function AnimatedChainTile({
 
         requestAnimationFrame(tick);
 
+        // Safety net: if RAF never advances (backgrounded tab) ensure the
+        // tile becomes visible after the animation duration regardless.
+        // setTimeout still fires (throttled to ~1s) in background tabs.
+        const safetyTimer = setTimeout(() => {
+            if (cancelled) return;
+            setAnimScale(1);
+            setAnimOpacity(1);
+            clearLastPlaced();
+        }, duration + 100);
+
         return () => {
             cancelled = true;
+            clearTimeout(safetyTimer);
         };
     }, [shouldAnimate, clearLastPlaced, reducedMotion]);
 
