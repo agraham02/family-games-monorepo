@@ -18,7 +18,6 @@ import WaitingScene from "./scenes/WaitingScene";
 import DrawScene from "./scenes/DrawScene";
 import MeldScene from "./scenes/MeldScene";
 import MeldToolbar from "./MeldToolbar";
-import TurnIndicator from "./TurnIndicator";
 import HandPeek from "./HandPeek";
 import RummyOpponentTile from "./RummyOpponentTile";
 import type { RummySceneCommonProps } from "./types";
@@ -149,11 +148,8 @@ export default function RummyStage(props: RummyStageProps) {
 
     const showPersistentBottomHost = heroHasHand && isActiveTurnScene;
     const showWaitingBottomEdge = !bentoMode && !isActiveTurnScene;
-    const centerBottomPaddingClass = showPersistentBottomHost
-        ? drawComposerOpen || meldComposerOpen
-            ? "pb-64 md:pb-72"
-            : "pb-40 md:pb-44"
-        : "";
+    // Bottom host is rendered in the grid's `bottom` area below; no manual
+    // padding needed — the grid auto-sizes the bottom row to its content.
 
     return (
         <div className="relative w-full h-full">
@@ -256,7 +252,7 @@ export default function RummyStage(props: RummyStageProps) {
                 {/* ── Center: scene-specific content ── */}
                 <LayoutGroup id="rummy-stage">
                     <div
-                        className={`relative z-10 flex flex-col min-h-0 w-full h-full ${centerBottomPaddingClass}`}
+                        className="relative z-10 flex flex-col min-h-0 w-full h-full"
                         style={{ gridArea: "center" }}
                     >
                         <AnimatePresence mode="wait" initial={false}>
@@ -276,35 +272,16 @@ export default function RummyStage(props: RummyStageProps) {
                 </LayoutGroup>
 
                 {/* Persistent bottom host for active-turn scenes.
-                    Keeping this mounted in one place prevents hand remount
-                    flicker between DRAW and MELD transitions. */}
+                    Lives in the GameTable grid's `bottom` row (spanning all
+                    three columns) so the center row auto-sizes to the
+                    remaining space. Keeping this mounted in one place
+                    prevents hand remount flicker between DRAW/MELD. */}
                 {showPersistentBottomHost && (
-                    <div className="absolute left-0 right-0 bottom-0 z-25 px-2 pb-2 pointer-events-none">
-                        <div className="pointer-events-auto w-full flex flex-col items-center gap-2 px-2 pt-2 pb-3 border-t border-white/10 bg-black/20 backdrop-blur-sm">
-                            {/* Hero avatar with active turn timer ring */}
-                            <div className="self-start flex items-center gap-2">
-                                <PlayerAvatar
-                                    playerId={heroId}
-                                    playerName={
-                                        gameData.players[heroId]?.name ?? "You"
-                                    }
-                                    size={36}
-                                    isCurrentTurn={isMyTurn}
-                                    isLocalPlayer
-                                    connected={
-                                        gameData.players[heroId]?.isConnected ??
-                                        true
-                                    }
-                                    turnTimer={isMyTurn ? turnTimer : undefined}
-                                />
-                                <span className="text-xs font-medium text-amber-200">
-                                    {gameData.players[heroId]?.name ?? "You"}
-                                    <span className="text-amber-300/70 ml-1">
-                                        (You)
-                                    </span>
-                                </span>
-                            </div>
-
+                    <div
+                        className="relative z-25 px-2 pb-2"
+                        style={{ gridArea: "bottom", gridColumn: "1 / -1" }}
+                    >
+                        <div className="w-full flex flex-col items-center gap-2 px-2 pt-2 pb-3 border-t border-white/10 bg-black/20 backdrop-blur-sm">
                             {isMeldScene && (
                                 <MeldToolbar
                                     turnSubstate={gameData.turnSubstate}
@@ -334,34 +311,51 @@ export default function RummyStage(props: RummyStageProps) {
                                 />
                             )}
 
-                            <CardHand
-                                cards={orderedCards}
-                                isLocalPlayer
-                                interactive={handIsInteractive}
-                                selectedIndex={orderedSelectedIndex}
-                                selectedIndices={orderedSelectedIndices}
-                                cardAnnotations={orderedAnnotations}
-                                onCardClick={
-                                    handIsInteractive
-                                        ? handleHeroCardClick
-                                        : undefined
-                                }
-                                playerId={heroId}
-                                expansionMode="hover-zoom"
-                            />
+                            {/* Hero hand row — avatar floats at the left so
+                                it occupies the same vertical band as the
+                                cards instead of stacking above them. */}
+                            <div className="relative w-full flex items-center justify-center">
+                                <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                                    <div className="pointer-events-auto">
+                                        <PlayerAvatar
+                                            playerId={heroId}
+                                            playerName={
+                                                gameData.players[heroId]
+                                                    ?.name ?? "You"
+                                            }
+                                            size={36}
+                                            isCurrentTurn={isMyTurn}
+                                            isLocalPlayer
+                                            connected={
+                                                gameData.players[heroId]
+                                                    ?.isConnected ?? true
+                                            }
+                                            turnTimer={
+                                                isMyTurn ? turnTimer : undefined
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                                <CardHand
+                                    cards={orderedCards}
+                                    isLocalPlayer
+                                    interactive={handIsInteractive}
+                                    selectedIndex={orderedSelectedIndex}
+                                    selectedIndices={orderedSelectedIndices}
+                                    cardAnnotations={orderedAnnotations}
+                                    onCardClick={
+                                        handIsInteractive
+                                            ? handleHeroCardClick
+                                            : undefined
+                                    }
+                                    playerId={heroId}
+                                    expansionMode="hover-zoom"
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
             </GameTable>
-
-            {/* Turn indicator — whose turn + countdown (always visible). */}
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-                <TurnIndicator
-                    gameData={gameData}
-                    heroId={heroId}
-                    isMyTurn={isMyTurn}
-                />
-            </div>
 
             {/* Subtle emerald glow around the viewport when it IS your turn. */}
             {isMyTurn && (

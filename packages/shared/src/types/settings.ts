@@ -462,7 +462,7 @@ export const RUMMY_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         type: "number",
         default: 7,
         category: "advanced",
-        min: 3,
+        min: 1,
         max: 13,
         step: 2,
         suffix: "cards",

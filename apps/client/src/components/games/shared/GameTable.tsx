@@ -113,8 +113,11 @@ function getGridTracks(
     bentoMode: boolean,
 ): { gridTemplateRows: string; gridTemplateColumns: string } {
     if (bentoMode) {
+        // Bento mode collapses the top/side edges so the center wins the
+        // viewport, but the bottom row must still size to its content
+        // (active-turn scenes render the hand+toolbar host there).
         return {
-            gridTemplateRows: "0px 1fr 0px",
+            gridTemplateRows: "0px minmax(0, 1fr) minmax(0, max-content)",
             gridTemplateColumns: "0px 1fr 0px",
         };
     }

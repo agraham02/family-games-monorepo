@@ -514,7 +514,7 @@ export default function Rummy({
 
     // ---- Render ---------------------------------------------------------------
     return (
-        <div className="relative w-full h-full flex flex-col bg-linear-to-br from-emerald-950 via-emerald-900 to-stone-900">
+        <div className="relative w-full h-[100dvh] flex flex-col overflow-hidden bg-linear-to-br from-emerald-950 via-emerald-900 to-stone-900">
             <div className="absolute top-2 left-2 z-40">
                 <GameMenu roomCode={roomCode ?? ""}>
                     {/* Master hint toggle. Disabling hides every visual hint

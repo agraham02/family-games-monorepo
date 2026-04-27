@@ -287,10 +287,17 @@ function reducer(state: GameState, action: GameAction): GameState {
     const s = state as unknown as InternalRummyState;
     return produce(s, (draft) => {
         try {
-            applyAction(
-                draft,
-                action as unknown as RummyAction & { userId: string },
-            );
+            // Actions arrive as { type, payload, userId }. The rummy action
+            // shape (RummyAction) holds the action-specific fields directly,
+            // so flatten payload onto the action before dispatching.
+            const payload =
+                (action as { payload?: Record<string, unknown> }).payload ?? {};
+            const flat = {
+                ...payload,
+                type: action.type,
+                userId: (action as { userId?: string }).userId,
+            } as unknown as RummyAction & { userId?: string };
+            applyAction(draft, flat);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             draft.history.push(`[ERROR] ${msg}`);

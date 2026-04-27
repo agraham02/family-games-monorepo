@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +12,11 @@ export interface DealSizePromptProps {
     minSize: number;
     maxSize: number;
     onConfirm: (handSize: number) => void;
+    /**
+     * Seconds before the dealer's current selection is auto-submitted to keep
+     * the round moving when no one is paying attention. Defaults to 20s.
+     */
+    autoConfirmSeconds?: number;
 }
 
 function clampOdd(v: number, min: number, max: number): number {
@@ -25,6 +30,9 @@ function clampOdd(v: number, min: number, max: number): number {
 /**
  * Modal shown at the start of each round. Dealer sees a stepper bounded by
  * [minSize..maxSize] (odd values). Non-dealer players see a waiting overlay.
+ *
+ * If the dealer doesn't confirm within `autoConfirmSeconds`, the currently
+ * displayed value is auto-submitted so the round isn't blocked.
  */
 export default function DealSizePrompt({
     isOpen,
@@ -33,6 +41,7 @@ export default function DealSizePrompt({
     minSize,
     maxSize,
     onConfirm,
+    autoConfirmSeconds = 20,
 }: DealSizePromptProps) {
     const initial = clampOdd(
         Math.floor((minSize + maxSize) / 2),
@@ -40,10 +49,47 @@ export default function DealSizePrompt({
         maxSize,
     );
     const [value, setValue] = useState<number>(initial);
+    const [secondsLeft, setSecondsLeft] = useState<number>(autoConfirmSeconds);
+    const valueRef = useRef(value);
+    const confirmedRef = useRef(false);
 
+    // Keep latest value available to the timer callback.
     useEffect(() => {
-        if (isOpen) setValue(clampOdd(initial, minSize, maxSize));
-    }, [isOpen, initial, minSize, maxSize]);
+        valueRef.current = value;
+    }, [value]);
+
+    // Reset value + countdown whenever the prompt opens or bounds change.
+    useEffect(() => {
+        if (isOpen) {
+            setValue(clampOdd(initial, minSize, maxSize));
+            setSecondsLeft(autoConfirmSeconds);
+            confirmedRef.current = false;
+        }
+    }, [isOpen, initial, minSize, maxSize, autoConfirmSeconds]);
+
+    // Countdown tick — only the dealer needs to auto-submit.
+    useEffect(() => {
+        if (!isOpen || !isDealer) return;
+        const interval = setInterval(() => {
+            setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isOpen, isDealer]);
+
+    // Fire auto-confirm when countdown hits zero.
+    useEffect(() => {
+        if (!isOpen || !isDealer) return;
+        if (secondsLeft > 0) return;
+        if (confirmedRef.current) return;
+        confirmedRef.current = true;
+        onConfirm(clampOdd(valueRef.current, minSize, maxSize));
+    }, [isOpen, isDealer, secondsLeft, onConfirm, minSize, maxSize]);
+
+    const handleConfirm = () => {
+        if (confirmedRef.current) return;
+        confirmedRef.current = true;
+        onConfirm(value);
+    };
 
     if (!isOpen) return null;
 
@@ -94,12 +140,15 @@ export default function DealSizePrompt({
                                 +
                             </Button>
                         </div>
-                        <Button
-                            className="w-full"
-                            onClick={() => onConfirm(value)}
-                        >
+                        <Button className="w-full" onClick={handleConfirm}>
                             Deal {value} cards
                         </Button>
+                        <p
+                            className="text-xs text-white/50 text-center mt-3"
+                            aria-live="polite"
+                        >
+                            Auto-dealing in {secondsLeft}s…
+                        </p>
                     </>
                 ) : (
                     <div className="text-center py-4">

@@ -11,6 +11,8 @@ export interface DrawToolbarProps {
     disabled?: boolean;
     onDrawStock: () => void;
     onTakeDiscard: () => void;
+    /** Compact viewport: render smaller buttons. */
+    compact?: boolean;
 }
 
 /**
@@ -25,7 +27,9 @@ export default function DrawToolbar({
     disabled = false,
     onDrawStock,
     onTakeDiscard,
+    compact = false,
 }: DrawToolbarProps) {
+    const btnCls = compact ? "h-7 px-2 text-xs" : "";
     return (
         <motion.div
             className="flex flex-wrap items-center justify-center gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10"
@@ -33,7 +37,12 @@ export default function DrawToolbar({
             animate={{ y: 0, opacity: 1 }}
             transition={{ type: "spring", stiffness: 320, damping: 26 }}
         >
-            <Button size="sm" onClick={onDrawStock} disabled={disabled}>
+            <Button
+                size="sm"
+                onClick={onDrawStock}
+                disabled={disabled}
+                className={btnCls}
+            >
                 Draw stock
             </Button>
             <Button
@@ -41,6 +50,7 @@ export default function DrawToolbar({
                 variant="secondary"
                 disabled={disabled || stagedDiscardPickIndex == null}
                 onClick={onTakeDiscard}
+                className={btnCls}
             >
                 Take discard
                 {stagedDiscardPickIndex != null && (

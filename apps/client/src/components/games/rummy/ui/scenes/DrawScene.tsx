@@ -35,6 +35,9 @@ export default function DrawScene({
         [gameData.playOrder, gameData.players],
     );
 
+    const isCompact = layoutMode === "compact";
+    const stockSizeCls = isCompact ? "w-16 h-24" : "w-20 h-28 md:w-24 md:h-32";
+
     const pickedCard =
         controller.discardPickIndex != null
             ? gameData.discard.cards[controller.discardPickIndex]
@@ -50,14 +53,14 @@ export default function DrawScene({
 
     return (
         <motion.div
-            className="flex flex-col h-full w-full overflow-y-auto"
+            className="flex flex-col h-full w-full"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
         >
             {/* ── Main: stock + discard + toolbar centered ── */}
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 px-4 py-3">
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 md:gap-4 px-4 py-3">
                 {/* Instruction pill */}
                 <motion.p
                     initial={{ opacity: 0, y: -4 }}
@@ -81,7 +84,7 @@ export default function DrawScene({
                                 gameData.stockCount === 0 ||
                                 takeDiscardMode
                             }
-                            className="relative shrink-0 w-20 h-28 md:w-24 md:h-32 disabled:opacity-60"
+                            className={`relative shrink-0 ${stockSizeCls} disabled:opacity-60`}
                             aria-label={`Draw from stock (${gameData.stockCount} cards remaining)`}
                         >
                             {gameData.stockCount > 0 ? (
@@ -156,6 +159,7 @@ export default function DrawScene({
                         disabled={controller.isSubmitting}
                         onDrawStock={controller.onDrawStock}
                         onTakeDiscard={handleTakeDiscard}
+                        compact={isCompact}
                     />
                 )}
 

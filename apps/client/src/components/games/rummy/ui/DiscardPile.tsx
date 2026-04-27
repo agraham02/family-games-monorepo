@@ -79,63 +79,26 @@ export default function DiscardPile({
         );
     }
 
-    // ---- Compact: top card only + tap-to-expand badge ----
-    if (layoutMode === "compact") {
-        const top = cards[count - 1];
-        return (
-            <>
-                <div className={cn("relative", className)}>
-                    <button
-                        type="button"
-                        onClick={() => interactive && onCardClick?.(count - 1)}
-                        disabled={!interactive}
-                        className={cn(
-                            "block rounded-md",
-                            interactive && "cursor-pointer",
-                            topGlow &&
-                                "ring-2 ring-emerald-400 ring-offset-1 ring-offset-transparent animate-pulse",
-                        )}
-                        aria-label={`Discard top: ${top.rank} of ${top.suit}`}
-                    >
-                        <PlayingCardView card={top} size="sm" />
-                    </button>
-                    {count > 1 && (
-                        <button
-                            type="button"
-                            onClick={() => setSheetOpen(true)}
-                            className="absolute -bottom-2 left-1/2 -translate-x-1/2"
-                            aria-label={`See full discard pile (${count} cards)`}
-                        >
-                            <Badge
-                                variant="secondary"
-                                className="text-[10px] cursor-pointer bg-black/70 text-white border-white/20 hover:bg-black/90"
-                            >
-                                Pile ({count})
-                            </Badge>
-                        </button>
-                    )}
-                </div>
-                <DiscardPileSheet
-                    open={sheetOpen}
-                    onOpenChange={setSheetOpen}
-                    cards={cards}
-                    interactive={interactive}
-                    onPick={handleSheetPick}
-                    previewPickIndex={previewPickIndex}
-                />
-            </>
-        );
-    }
-
-    // ---- Spacious / comfortable: cascading fan with overflow sheet ----
-    const fanCap = maxFanCards ?? (layoutMode === "spacious" ? 10 : 8);
+    // ---- Compact / comfortable / spacious: cascading fan with overflow ----
+    // Compact still shows a fan (smaller cap + tighter offset + xs cards) so
+    // players can see and pick deep cards instead of being limited to the top.
+    const fanCap =
+        maxFanCards ??
+        (layoutMode === "spacious" ? 10 : layoutMode === "comfortable" ? 8 : 4);
     const visibleCount = Math.min(count, fanCap);
     const visibleStart = count - visibleCount;
     const visibleCards = cards.slice(visibleStart);
     const hiddenBelow = visibleStart;
-    const offsetPct = layoutMode === "spacious" ? 22 : 16;
-    const cardSize = layoutMode === "spacious" ? "md" : "sm";
-    const cardWidth = cardSize === "md" ? 70 : 52;
+    const offsetPct =
+        layoutMode === "spacious" ? 22 : layoutMode === "comfortable" ? 16 : 12;
+    const cardSize: "md" | "sm" | "xs" =
+        layoutMode === "spacious"
+            ? "md"
+            : layoutMode === "comfortable"
+              ? "sm"
+              : "xs";
+    const cardWidth = cardSize === "md" ? 70 : cardSize === "sm" ? 52 : 40;
+    const cardHeight = cardSize === "md" ? 98 : cardSize === "sm" ? 73 : 56;
 
     const previewLocalIdx =
         previewPickIndex != null && previewPickIndex >= visibleStart
@@ -144,17 +107,25 @@ export default function DiscardPile({
 
     return (
         <>
-            <div className={cn("relative inline-block", className)}>
+            <div
+                className={cn(
+                    "relative inline-block",
+                    // Allow the +N overflow chip to render outside the fan
+                    // bounds without being clipped by parent stacking.
+                    "pt-3",
+                    className,
+                )}
+            >
                 {hiddenBelow > 0 && (
                     <button
                         type="button"
                         onClick={() => setSheetOpen(true)}
-                        className="absolute -top-2 -left-2 z-30"
+                        className="absolute top-0 -left-3 z-40"
                         aria-label={`Show ${hiddenBelow} older discarded card${hiddenBelow === 1 ? "" : "s"}`}
                     >
                         <Badge
                             variant="secondary"
-                            className="text-[10px] bg-black/70 text-white border-white/20 cursor-pointer hover:bg-black/90"
+                            className="text-[10px] leading-none px-1.5 py-0.5 bg-black/80 text-white border-white/30 cursor-pointer hover:bg-black shadow-md"
                         >
                             +{hiddenBelow}
                         </Badge>
@@ -165,7 +136,7 @@ export default function DiscardPile({
                     style={{
                         width:
                             cardWidth + (visibleCards.length - 1) * offsetPct,
-                        height: cardSize === "md" ? 98 : 73,
+                        height: cardHeight,
                     }}
                 >
                     <AnimatePresence>
