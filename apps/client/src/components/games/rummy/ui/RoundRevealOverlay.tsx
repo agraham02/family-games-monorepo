@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MeldStrip } from "@/components/games/shared/MeldStrip";
 import { RummyData, RummyRoundSummary, RummyMeldView } from "@shared/types";
+
+const AUTO_CONTINUE_SECONDS = 10;
 
 export interface RoundRevealOverlayProps {
     isOpen: boolean;
@@ -15,6 +17,8 @@ export interface RoundRevealOverlayProps {
     /** Total scores after this round was applied. */
     totals: Record<string, number>;
     onContinue: () => void;
+    /** Whether the current viewer is the room leader (controls auto-continue). */
+    isLeader: boolean;
 }
 
 /**
@@ -28,7 +32,36 @@ export default function RoundRevealOverlay({
     players,
     totals,
     onContinue,
+    isLeader,
 }: RoundRevealOverlayProps) {
+    // Countdown timer for auto-continue (leader only).
+    const [countdown, setCountdown] = useState(AUTO_CONTINUE_SECONDS);
+    const autoFiredRef = useRef(false);
+
+    useEffect(() => {
+        if (!isOpen || !isLeader) {
+            setCountdown(AUTO_CONTINUE_SECONDS);
+            autoFiredRef.current = false;
+            return;
+        }
+        const interval = setInterval(() => {
+            setCountdown((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isOpen, isLeader]);
+
+    useEffect(() => {
+        if (
+            isOpen &&
+            isLeader &&
+            countdown === 0 &&
+            !autoFiredRef.current
+        ) {
+            autoFiredRef.current = true;
+            onContinue();
+        }
+    }, [isOpen, isLeader, countdown, onContinue]);
+
     if (!summary) return null;
 
     return (
@@ -128,7 +161,9 @@ export default function RoundRevealOverlay({
                         </div>
 
                         <Button className="w-full mt-5" onClick={onContinue}>
-                            Continue
+                            {isLeader
+                                ? `Continue${countdown > 0 ? ` (${countdown}s)` : ""}`
+                                : "Continue"}
                         </Button>
                     </motion.div>
                 </motion.div>

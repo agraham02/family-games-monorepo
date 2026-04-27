@@ -1200,6 +1200,14 @@ export function startGame(
         user.isConnected = true;
     });
 
+    // In dev mode, default turnTimeLimit to 5 seconds if not explicitly set
+    if (process.env.NODE_ENV === "development") {
+        customSettings = {
+            turnTimeLimit: 5,
+            ...customSettings,
+        };
+    }
+
     // Create game instance
     const gameId = gameManager.createGame(gameType, room, customSettings);
     room.state = "in-game";

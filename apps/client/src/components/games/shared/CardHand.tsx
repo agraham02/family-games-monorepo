@@ -563,16 +563,13 @@ function CardHand({
         [shouldEnableTapToSpread, isSpread, onCardClick, expandSpread],
     );
 
-    // For opponents in badge mode, render CardBadge instead
+    // For opponents in badge mode, the card count already rides on the
+    // player's avatar via PlayerInfo's `countBadge`. A second CardBadge here
+    // would duplicate the same number and steal vertical space, so we drop
+    // the badge-mode opponent rendering entirely.
     const effectiveCardCount = cardCount ?? cards.length;
     if (!isLocalPlayer && layoutConfig.useBadgeMode && effectiveCardCount > 0) {
-        return (
-            <CardBadge
-                cardCount={effectiveCardCount}
-                size="sm"
-                className={className}
-            />
-        );
+        return null;
     }
 
     // Get rotation from prop, EdgeRegion context, or default to 0

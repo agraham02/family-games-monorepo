@@ -4,6 +4,7 @@ import React, { useRef, ReactNode, createContext, useContext } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { useContainerDimensions, ContainerDimensions } from "@/hooks";
+import { getEdgeSlotCounts } from "./seatLayout";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout Mode Types
@@ -51,12 +52,17 @@ function getLayoutMode(
 }
 
 /**
- * Get layout configuration based on mode
+ * Get layout configuration based on mode.
+ *
+ * High-density tables (7+ players) force badge mode at every breakpoint so
+ * opponent rails stay narrow regardless of viewport. Hero card sizing is
+ * unaffected.
  */
 function getLayoutConfig(
     mode: LayoutMode,
     playerCount: number,
 ): LayoutModeConfig {
+    const isCrowded = playerCount >= 7;
     switch (mode) {
         case "compact":
             return {
@@ -68,7 +74,7 @@ function getLayoutConfig(
         case "comfortable":
             return {
                 layoutMode: mode,
-                useBadgeMode: playerCount >= 4,
+                useBadgeMode: isCrowded || playerCount >= 4,
                 heroCardSize: "md",
                 opponentCardSize: "xs",
             };
@@ -76,11 +82,92 @@ function getLayoutConfig(
         default:
             return {
                 layoutMode: mode,
-                useBadgeMode: false,
+                useBadgeMode: isCrowded,
                 heroCardSize: "lg",
                 opponentCardSize: "sm",
             };
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Grid track sizing
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SeatCounts {
+    bottom: number;
+    left: number;
+    top: number;
+    right: number;
+}
+
+/**
+ * Compute CSS grid template rows/columns for the table based on layout mode
+ * and per-edge seat counts. Tighter on `compact`, slightly looser on
+ * `comfortable`, and natural sizing on `spacious`. Crowded edges (2-3 stacked
+ * seats) get a bit more room but stay capped so the center area always wins
+ * the leftover space.
+ */
+function getGridTracks(
+    mode: LayoutMode,
+    seatCounts: SeatCounts,
+    bentoMode: boolean,
+): { gridTemplateRows: string; gridTemplateColumns: string } {
+    if (bentoMode) {
+        return {
+            gridTemplateRows: "0px 1fr 0px",
+            gridTemplateColumns: "0px 1fr 0px",
+        };
+    }
+
+    const sideMax = Math.max(seatCounts.left, seatCounts.right);
+    const topCount = seatCounts.top;
+
+    if (mode === "compact") {
+        // Side columns: tighter than before; widen slightly when 2-3 stacked
+        // seats need to fit a column of compact avatars.
+        const sideCol =
+            sideMax >= 3
+                ? "minmax(3rem, 0.7fr)"
+                : sideMax >= 2
+                  ? "minmax(2.75rem, 0.6fr)"
+                  : "minmax(2.5rem, 0.5fr)";
+        const topRow =
+            topCount >= 3
+                ? "minmax(72px, 0.9fr)"
+                : topCount >= 2
+                  ? "minmax(64px, 0.8fr)"
+                  : "minmax(56px, 0.7fr)";
+        return {
+            gridTemplateRows: `${topRow} minmax(0, 2.4fr) minmax(56px, 0.8fr)`,
+            gridTemplateColumns: `${sideCol} minmax(0, 3fr) ${sideCol}`,
+        };
+    }
+
+    if (mode === "comfortable") {
+        // Softer than compact: capped max-content tracks.
+        const sideCol =
+            sideMax >= 3
+                ? "minmax(0, 9rem)"
+                : sideMax >= 2
+                  ? "minmax(0, 8rem)"
+                  : "minmax(0, 6.5rem)";
+        const topRow =
+            topCount >= 3
+                ? "minmax(0, 6rem)"
+                : topCount >= 2
+                  ? "minmax(0, 5.5rem)"
+                  : "minmax(0, 5rem)";
+        return {
+            gridTemplateRows: `${topRow} minmax(0, 1fr) minmax(0, auto)`,
+            gridTemplateColumns: `${sideCol} minmax(0, 1fr) ${sideCol}`,
+        };
+    }
+
+    // Spacious: let content size naturally.
+    return {
+        gridTemplateRows: "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+        gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +182,8 @@ interface GameTableContextValue {
     layoutMode: LayoutMode;
     /** Layout configuration with card sizes and badge mode */
     layoutConfig: LayoutModeConfig;
+    /** Per-edge seat counts derived from playerCount */
+    seatCounts: SeatCounts;
 }
 
 const GameTableContext = createContext<GameTableContextValue | null>(null);
@@ -173,6 +262,8 @@ function GameTable({
         playerCount,
     );
     const layoutConfig = getLayoutConfig(layoutMode, playerCount);
+    const seatCounts = getEdgeSlotCounts(playerCount);
+    const gridTracks = getGridTracks(layoutMode, seatCounts, bentoMode);
 
     const contextValue: GameTableContextValue = {
         dimensions,
@@ -180,6 +271,7 @@ function GameTable({
         isDealing,
         layoutMode,
         layoutConfig,
+        seatCounts,
     };
 
     return (
@@ -258,16 +350,8 @@ function GameTable({
                             "left  center right"
                             ".     bottom ."
                         `,
-                        gridTemplateRows: bentoMode
-                            ? "0px 1fr 0px"
-                            : layoutMode === "compact"
-                              ? "minmax(76px, 1fr) minmax(0, 2.4fr) minmax(64px, 1fr)"
-                              : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
-                        gridTemplateColumns: bentoMode
-                            ? "0px 1fr 0px"
-                            : playerCount >= 3 && layoutMode === "compact"
-                              ? "minmax(3.5rem, 0.8fr) minmax(0, 3fr) minmax(3.5rem, 0.8fr)"
-                              : "minmax(0, auto) minmax(0, 1fr) minmax(0, auto)",
+                        gridTemplateRows: gridTracks.gridTemplateRows,
+                        gridTemplateColumns: gridTracks.gridTemplateColumns,
                     }}
                 >
                     {children}

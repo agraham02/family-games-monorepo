@@ -35,6 +35,7 @@ import RummyStage from "./ui/RummyStage";
 import RummyCallToast from "./ui/RummyCallToast";
 import DealSizePrompt from "./ui/DealSizePrompt";
 import RoundRevealOverlay from "./ui/RoundRevealOverlay";
+import GameSummaryModal from "./ui/GameSummaryModal";
 import type { RummyController } from "./ui/types";
 import { useRummyHintSettings } from "./hints/useRummyHintSettings";
 import { useSortMode } from "./hints/useSortMode";
@@ -111,6 +112,11 @@ export default function Rummy({
         },
         [dispatchOptimisticAction, socket, connected, roomId, userId],
     );
+
+    const handleReturnToLobby = useCallback(() => {
+        if (!socket || !connected) return;
+        socket.emit("abort_game", { roomId, userId });
+    }, [socket, connected, roomId, userId]);
 
     // ---- Local UI state --------------------------------------------------------
     const [selectedHandIndices, setSelectedHandIndices] = useState<number[]>(
@@ -605,9 +611,16 @@ export default function Rummy({
                 melds={gameData.melds}
                 players={gameData.players}
                 totals={gameData.scores}
+                isLeader={userId === gameData.leaderId}
                 onContinue={() => {
                     sendAction("NEXT_ROUND", { playerId: heroId });
                 }}
+            />
+
+            {/* Game summary modal (shows when phase === "finished"). */}
+            <GameSummaryModal
+                gameData={gameData}
+                onReturnToLobby={handleReturnToLobby}
             />
         </div>
     );

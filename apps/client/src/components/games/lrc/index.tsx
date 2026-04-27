@@ -21,20 +21,23 @@ import { LRCData, LRCPlayerData, LRCPlayer } from "@shared/types";
 import {
     GameMenu,
     GameSettingToggle,
-    PlayerAvatar,
+    PlayerInfo,
+    GameTable,
+    TableCenter,
+    EdgeRegion,
     type PlayerAvatarTurnTimer,
     RotateDeviceOverlay,
     useGameSetting,
 } from "@/components/games/shared";
 import {
-    CircularPlayerLayout,
-    CircularPlayerSlot,
-    CircularCenter,
-    DirectionArrows,
-} from "@/components/games/shared/CircularPlayerLayout";
+    getSeatAssignments,
+    groupSeatsByEdge,
+} from "@/components/games/shared/seatLayout";
+import type { EdgePosition } from "@/components/games/shared";
 import { DiceTray, RollButton } from "./ui/Die";
 import { ChipStack, ChipAnimationManager } from "./ui/ChipStack";
 import { CenterPot } from "./ui/CenterPot";
+import { PassDirectionIndicator } from "./ui/PassDirectionIndicator";
 import {
     RoundSummaryModal,
     WildTargetModal,
@@ -62,7 +65,7 @@ interface LRCProps {
     roomCode?: string;
 }
 
-interface PlayerSlotProps {
+interface LrcSeatProps {
     player: LRCPlayer;
     isConnected: boolean;
     isCurrentTurn: boolean;
@@ -70,15 +73,18 @@ interface PlayerSlotProps {
     isWinner: boolean;
     chipValue: number;
     showMoney: boolean;
+    seatPosition: EdgePosition;
     /** Active turn timer state — only renders ring when this is the active seat. */
     turnTimer?: PlayerAvatarTurnTimer;
+    /** Ref-callback to register this seat's DOM node for chip-pass animation positions. */
+    seatRef: (node: HTMLDivElement | null) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Player Slot Component (for CircularPlayerLayout)
+// LRC Seat (PlayerInfo wrapper with chip stack + winner crown)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PlayerSlot({
+function LrcSeat({
     player,
     isConnected,
     isCurrentTurn,
@@ -86,8 +92,10 @@ function PlayerSlot({
     isWinner,
     chipValue,
     showMoney,
+    seatPosition,
     turnTimer,
-}: PlayerSlotProps) {
+    seatRef,
+}: LrcSeatProps) {
     const moneyValue = useMemo(() => {
         if (!showMoney || chipValue <= 0) return null;
         return new Intl.NumberFormat("en-US", {
@@ -99,67 +107,79 @@ function PlayerSlot({
 
     return (
         <motion.div
+            ref={seatRef}
+            data-player-id={player.id}
             className={cn(
-                "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-xl transition-all duration-300",
-                "bg-black/20 backdrop-blur-sm",
+                "relative flex flex-col items-center gap-1 p-1 sm:p-1.5 rounded-lg transition-all duration-300",
                 isCurrentTurn &&
-                    "ring-2 ring-amber-400 bg-amber-500/30 shadow-lg shadow-amber-500/20",
+                    "ring-2 ring-amber-400/70 bg-amber-500/10 shadow-lg shadow-amber-500/10",
                 isWinner &&
-                    "ring-2 ring-green-400 bg-green-500/30 shadow-lg shadow-green-500/20",
+                    "ring-2 ring-green-400/70 bg-green-500/10 shadow-lg shadow-green-500/10",
                 !isConnected && "opacity-40 grayscale",
-                isHero && "scale-105",
             )}
             layout
-            animate={{
-                scale: isCurrentTurn ? 1.05 : 1,
-            }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
-            {/* Avatar (with optional turn timer ring) */}
-            <PlayerAvatar
+            <PlayerInfo
                 playerId={player.id}
                 playerName={player.name}
-                size={isHero ? 44 : 36}
                 isCurrentTurn={isCurrentTurn}
                 isLocalPlayer={isHero}
+                seatPosition={seatPosition}
                 connected={isConnected}
                 turnTimer={turnTimer}
+                countBadge={{
+                    value: player.chips,
+                    tone: "chip",
+                    ariaLabel: `${player.chips} chips`,
+                }}
+                customStats={(ctxOrAlign) => {
+                    // Narrow the union: legacy callers may receive just the
+                    // text-align string, modern callers receive the context.
+                    const ctx =
+                        typeof ctxOrAlign === "string"
+                            ? {
+                                  textAlign: ctxOrAlign,
+                                  density: "spacious" as const,
+                                  isLocalPlayer: isHero,
+                              }
+                            : ctxOrAlign;
+                    const isCompact = ctx.density === "compact";
+                    // Hero: show a real chip-stack so chips remain tactile.
+                    if (ctx.isLocalPlayer) {
+                        return (
+                            <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                <ChipStack
+                                    count={player.chips}
+                                    chipValue={chipValue}
+                                    showMoney={false}
+                                    size={isCompact ? "sm" : "md"}
+                                />
+                                {moneyValue && (
+                                    <div className="text-[10px] text-green-400 font-medium bg-green-500/20 px-1.5 py-0.5 rounded-full">
+                                        {moneyValue}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
+                    // Opponents: count is on the avatar badge; only print
+                    // the money on comfortable+ to avoid cluttering compact.
+                    if (moneyValue && !isCompact) {
+                        return (
+                            <span className="text-[10px] text-green-400 font-medium">
+                                {moneyValue}
+                            </span>
+                        );
+                    }
+                    return null;
+                }}
             />
-
-            {/* Player name */}
-            <div
-                className={cn(
-                    "text-xs sm:text-sm font-semibold truncate max-w-16 sm:max-w-24 text-center",
-                    isHero ? "text-amber-300" : "text-white/90",
-                )}
-            >
-                {player.name}
-                {isHero && (
-                    <span className="text-amber-400/70 text-[10px] block">
-                        (You)
-                    </span>
-                )}
-            </div>
-
-            {/* Chip stack - slightly larger for visibility */}
-            <ChipStack
-                count={player.chips}
-                chipValue={chipValue}
-                showMoney={false}
-                size={isHero ? "md" : "sm"}
-            />
-
-            {/* Money value (shown below stack) */}
-            {moneyValue && (
-                <div className="text-[10px] sm:text-xs text-green-400 font-medium bg-green-500/20 px-1.5 py-0.5 rounded-full">
-                    {moneyValue}
-                </div>
-            )}
 
             {/* Winner crown */}
             {isWinner && (
                 <motion.div
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400"
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400 text-base"
                     initial={{ scale: 0, rotate: -20 }}
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: "spring", stiffness: 400, damping: 15 }}
@@ -170,8 +190,8 @@ function PlayerSlot({
 
             {/* Disconnected indicator */}
             {!isConnected && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
-                    <span className="text-xs text-white/60">Offline</span>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg pointer-events-none">
+                    <span className="text-[10px] text-white/60">Offline</span>
                 </div>
             )}
         </motion.div>
@@ -483,49 +503,262 @@ export default function LRC({
         return gameData.lrcPlayers.findIndex((p) => p.id === userId);
     }, [gameData.lrcPlayers, userId]);
 
+    // ── Seat assignments via shared engine (2–10 players) ───────────────────
+    const playerCount = gameData.lrcPlayers.length;
+    const seatAssignments = useMemo(
+        () => getSeatAssignments(playerCount, heroIndex >= 0 ? heroIndex : 0),
+        [playerCount, heroIndex],
+    );
+    // Enrich each seat with its player index BEFORE grouping so we can map
+    // back to `lrcPlayers[i]` when rendering each edge.
+    const seatsWithIndex = useMemo(
+        () =>
+            seatAssignments.map((seat, playerIndex) => ({
+                ...seat,
+                playerIndex,
+            })),
+        [seatAssignments],
+    );
+    const seatsByEdge = useMemo(
+        () => groupSeatsByEdge(seatsWithIndex),
+        [seatsWithIndex],
+    ) as Record<EdgePosition, Array<(typeof seatsWithIndex)[number]>>;
+
+    // ── Ref registry for chip-pass animation positions ──────────────────────
+    // Each LrcSeat registers its outer DOM node so we can read its viewport
+    // rect on demand. The center pot ref is captured the same way.
+    const seatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+    const centerRef = useRef<HTMLDivElement | null>(null);
+    const registerSeat = useCallback(
+        (playerId: string) => (node: HTMLDivElement | null) => {
+            if (node) {
+                seatRefs.current.set(playerId, node);
+            } else {
+                seatRefs.current.delete(playerId);
+            }
+        },
+        [],
+    );
+
+    // Compute live positions only when entering the chip-pass phase. Stored
+    // in state so ChipAnimationManager re-renders once positions are ready.
+    const [animationPositions, setAnimationPositions] = useState<{
+        playerPositions: Record<string, { x: number; y: number }>;
+        centerPosition: { x: number; y: number };
+    } | null>(null);
+
+    useEffect(() => {
+        if (
+            gameData.phase !== "passing-chips" ||
+            !gameData.chipMovements?.length
+        ) {
+            setAnimationPositions(null);
+            return;
+        }
+        // Defer one frame so any layout shift settles before measuring.
+        const raf = requestAnimationFrame(() => {
+            const playerPositions: Record<string, { x: number; y: number }> =
+                {};
+            seatRefs.current.forEach((node, playerId) => {
+                const r = node.getBoundingClientRect();
+                playerPositions[playerId] = {
+                    x: r.left + r.width / 2,
+                    y: r.top + r.height / 2,
+                };
+            });
+            const centerNode = centerRef.current;
+            const centerRect = centerNode?.getBoundingClientRect();
+            const centerPosition = centerRect
+                ? {
+                      x: centerRect.left + centerRect.width / 2,
+                      y: centerRect.top + centerRect.height / 2,
+                  }
+                : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+            setAnimationPositions({ playerPositions, centerPosition });
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [gameData.phase, gameData.chipMovements]);
+
     return (
-        <div className="h-[100dvh] w-full overflow-hidden bg-linear-to-b from-emerald-900 to-emerald-950">
+        <div className="h-dvh w-full overflow-hidden bg-linear-to-b from-emerald-900 to-emerald-950">
             <RotateDeviceOverlay />
-            {/* Circular player layout */}
-            <CircularPlayerLayout
-                playerCount={gameData.lrcPlayers.length}
-                heroPlayerIndex={heroIndex >= 0 ? heroIndex : 0}
+
+            <GameTable
+                playerCount={playerCount}
+                feltGradient="from-amber-900 via-amber-800 to-yellow-900"
             >
-                {/* Player slots */}
-                {gameData.lrcPlayers.map((player, idx) => (
-                    <CircularPlayerSlot key={player.id} playerIndex={idx}>
-                        <PlayerSlot
-                            player={player}
-                            isConnected={
-                                gameData.players[player.id]?.isConnected ?? true
-                            }
-                            isCurrentTurn={player.id === currentPlayer?.id}
-                            isHero={player.id === userId}
-                            isWinner={player.id === gameData.winnerId}
-                            chipValue={gameData.settings.chipValue}
-                            showMoney={showMoney}
-                            turnTimer={
-                                player.id === currentPlayer?.id
-                                    ? turnTimerProps
-                                    : undefined
-                            }
+                {/* Top edge */}
+                {seatsByEdge.top.length > 0 && (
+                    <EdgeRegion position="top">
+                        <div className="flex flex-row items-end justify-around w-full gap-2">
+                            {seatsByEdge.top.map((seat) => {
+                                const player =
+                                    gameData.lrcPlayers[seat.playerIndex];
+                                if (!player) return null;
+                                return (
+                                    <LrcSeat
+                                        key={player.id}
+                                        player={player}
+                                        isConnected={
+                                            gameData.players[player.id]
+                                                ?.isConnected ?? true
+                                        }
+                                        isCurrentTurn={
+                                            player.id === currentPlayer?.id
+                                        }
+                                        isHero={false}
+                                        isWinner={
+                                            player.id === gameData.winnerId
+                                        }
+                                        chipValue={gameData.settings.chipValue}
+                                        showMoney={showMoney}
+                                        seatPosition="top"
+                                        turnTimer={
+                                            player.id === currentPlayer?.id
+                                                ? turnTimerProps
+                                                : undefined
+                                        }
+                                        seatRef={registerSeat(player.id)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </EdgeRegion>
+                )}
+
+                {/* Left edge */}
+                {seatsByEdge.left.length > 0 && (
+                    <EdgeRegion position="left">
+                        <div className="flex flex-col items-start justify-around h-full gap-2">
+                            {seatsByEdge.left.map((seat) => {
+                                const player =
+                                    gameData.lrcPlayers[seat.playerIndex];
+                                if (!player) return null;
+                                return (
+                                    <LrcSeat
+                                        key={player.id}
+                                        player={player}
+                                        isConnected={
+                                            gameData.players[player.id]
+                                                ?.isConnected ?? true
+                                        }
+                                        isCurrentTurn={
+                                            player.id === currentPlayer?.id
+                                        }
+                                        isHero={false}
+                                        isWinner={
+                                            player.id === gameData.winnerId
+                                        }
+                                        chipValue={gameData.settings.chipValue}
+                                        showMoney={showMoney}
+                                        seatPosition="left"
+                                        turnTimer={
+                                            player.id === currentPlayer?.id
+                                                ? turnTimerProps
+                                                : undefined
+                                        }
+                                        seatRef={registerSeat(player.id)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </EdgeRegion>
+                )}
+
+                {/* Right edge */}
+                {seatsByEdge.right.length > 0 && (
+                    <EdgeRegion position="right">
+                        <div className="flex flex-col items-end justify-around h-full gap-2">
+                            {seatsByEdge.right.map((seat) => {
+                                const player =
+                                    gameData.lrcPlayers[seat.playerIndex];
+                                if (!player) return null;
+                                return (
+                                    <LrcSeat
+                                        key={player.id}
+                                        player={player}
+                                        isConnected={
+                                            gameData.players[player.id]
+                                                ?.isConnected ?? true
+                                        }
+                                        isCurrentTurn={
+                                            player.id === currentPlayer?.id
+                                        }
+                                        isHero={false}
+                                        isWinner={
+                                            player.id === gameData.winnerId
+                                        }
+                                        chipValue={gameData.settings.chipValue}
+                                        showMoney={showMoney}
+                                        seatPosition="right"
+                                        turnTimer={
+                                            player.id === currentPlayer?.id
+                                                ? turnTimerProps
+                                                : undefined
+                                        }
+                                        seatRef={registerSeat(player.id)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </EdgeRegion>
+                )}
+
+                {/* Bottom edge — hero */}
+                {seatsByEdge.bottom.length > 0 &&
+                    (() => {
+                        const seat = seatsByEdge.bottom[0];
+                        const player = gameData.lrcPlayers[seat.playerIndex];
+                        if (!player) return null;
+                        return (
+                            <EdgeRegion position="bottom" isHero>
+                                <LrcSeat
+                                    player={player}
+                                    isConnected={
+                                        gameData.players[player.id]
+                                            ?.isConnected ?? true
+                                    }
+                                    isCurrentTurn={
+                                        player.id === currentPlayer?.id
+                                    }
+                                    isHero
+                                    isWinner={player.id === gameData.winnerId}
+                                    chipValue={gameData.settings.chipValue}
+                                    showMoney={showMoney}
+                                    seatPosition="bottom"
+                                    turnTimer={
+                                        player.id === currentPlayer?.id
+                                            ? turnTimerProps
+                                            : undefined
+                                    }
+                                    seatRef={registerSeat(player.id)}
+                                />
+                            </EdgeRegion>
+                        );
+                    })()}
+
+                {/* Center: pot, dice, action buttons, pass-direction indicator */}
+                <TableCenter>
+                    <div
+                        ref={centerRef}
+                        className="flex flex-col items-center gap-2"
+                    >
+                        <PassDirectionIndicator
+                            show={gameData.phase === "passing-chips"}
                         />
-                    </CircularPlayerSlot>
-                ))}
+                        {renderCenterContent()}
+                    </div>
+                </TableCenter>
+            </GameTable>
 
-                {/* Center content */}
-                <CircularCenter>{renderCenterContent()}</CircularCenter>
-
-                {/* Direction arrows during chip passing */}
-                <DirectionArrows show={gameData.phase === "passing-chips"} />
-            </CircularPlayerLayout>
-
-            {/* Chip animations */}
+            {/* Chip animations — fed live positions from refs */}
             {gameData.chipMovements && gameData.phase === "passing-chips" && (
                 <ChipAnimationManager
                     movements={gameData.chipMovements}
+                    playerPositions={animationPositions?.playerPositions}
+                    centerPosition={animationPositions?.centerPosition}
                     onComplete={() => {
-                        // Animations complete - could trigger next phase
+                        // Animations complete - server drives next phase
                     }}
                 />
             )}

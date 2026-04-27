@@ -108,6 +108,7 @@ function EdgeRegion({
     const layout = EDGE_LAYOUTS[position];
     const { layoutConfig } = useGameTable();
     const isCompact = layoutConfig.layoutMode === "compact";
+    const isComfortable = layoutConfig.layoutMode === "comfortable";
 
     const contextValue: EdgeRegionContextValue = {
         position,
@@ -115,16 +116,18 @@ function EdgeRegion({
         cardRotation: layout.cardRotation,
     };
 
-    // Different padding based on position and layout mode
-    // Compact mode uses minimal padding to maximize card space.
-    // Comfortable/spacious add a small breathing gap so hands never sit flush
-    // against the viewport edge.
+    // Different padding based on position and layout mode.
+    // Compact mode: ~zero cross padding so cards/info hug the grid cell.
+    // Comfortable: small breathing gap; reduced from prior 0.5rem.
+    // Spacious: small breathing gap, unchanged.
     // Safe-area insets are merged into the base padding via max() so notched
     // devices keep their inset without the utility class nuking our base
     // padding to 0 on non-notched viewports.
     const basePad = isCompact
-        ? { edge: "2px", cross: "2px" }
-        : { edge: "0.5rem", cross: "0.5rem" };
+        ? { edge: "2px", cross: "0px" }
+        : isComfortable
+          ? { edge: "0.375rem", cross: "0.25rem" }
+          : { edge: "0.5rem", cross: "0.5rem" };
 
     const paddingStyles: Record<EdgePosition, React.CSSProperties> = {
         bottom: {
@@ -158,7 +161,12 @@ function EdgeRegion({
     return (
         <EdgeRegionContext.Provider value={contextValue}>
             <motion.div
-                className={cn("flex gap-2 z-20", overflowClass, className)}
+                className={cn(
+                    "flex z-20",
+                    isCompact ? "gap-1" : "gap-2",
+                    overflowClass,
+                    className,
+                )}
                 style={{
                     gridArea: layout.gridArea,
                     flexDirection: layout.flexDirection,

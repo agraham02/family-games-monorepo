@@ -3,28 +3,37 @@
 import React from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import {
     PlayerAvatar,
     type PlayerAvatarTurnTimer,
+    useGameTable,
 } from "@/components/games/shared";
+import type { EdgePosition } from "@/components/games/shared";
 import type { RummyData } from "@shared/types";
 
 export interface RummyOpponentTileProps {
     playerId: string;
     gameData: RummyData;
+    /** Edge this tile sits on — drives orientation (top=row, sides=column). */
+    seatPosition?: EdgePosition;
     /** Timer state for the active player; only renders when this is the active seat. */
     turnTimer?: PlayerAvatarTurnTimer;
 }
 
 /**
  * Single-player opponent tile used inside EdgeRegion for the Rummy seat layout.
- * Composes the shared `PlayerAvatar` primitive (avatar + ring + connected
- * indicator) with Rummy-specific labels (name, card count, score).
+ *
+ * Orientation rules (matches the new shared PlayerInfo matrix):
+ * - top edge      → horizontal (avatar | name+stats)
+ * - left/right    → vertical (avatar over name+stats), tighter on compact
+ *
+ * The card count rides on the avatar via `countBadge` so we don't double-print
+ * it in a separate trailing pill.
  */
 export default function RummyOpponentTile({
     playerId,
     gameData,
+    seatPosition = "top",
     turnTimer,
 }: RummyOpponentTileProps) {
     const player = gameData.players[playerId];
@@ -34,12 +43,26 @@ export default function RummyOpponentTile({
     const name = player?.name ?? "Unknown";
     const connected = player?.isConnected ?? true;
 
+    const { layoutConfig } = useGameTable();
+    const density = layoutConfig.layoutMode;
+    const isCompact = density === "compact";
+    const isTop = seatPosition === "top";
+    const isVertical = !isTop;
+
+    // Compact side seats hide the name to keep the column narrow; the
+    // count badge on the avatar still conveys hand size.
+    const hideName = isCompact && isVertical;
+    const avatarPx = isCompact ? 28 : 36;
+
     return (
         <motion.div
             layout
             layoutId={`rummy-opponent-${playerId}`}
             className={cn(
-                "flex items-center gap-2 rounded-full px-2 py-1.5 border backdrop-blur-sm transition-colors",
+                "flex items-center rounded-full border backdrop-blur-sm transition-colors",
+                isVertical
+                    ? "flex-col gap-1 px-1.5 py-1"
+                    : "flex-row gap-2 px-2 py-1.5",
                 isTurn
                     ? "bg-amber-500/25 border-amber-400/70 shadow-[0_0_14px_rgba(251,191,36,0.35)]"
                     : "bg-black/40 border-white/10",
@@ -49,34 +72,39 @@ export default function RummyOpponentTile({
             <PlayerAvatar
                 playerId={playerId}
                 playerName={name}
-                size={36}
+                size={avatarPx}
                 isCurrentTurn={isTurn}
                 connected={connected}
                 turnTimer={isTurn ? turnTimer : undefined}
+                countBadge={{
+                    value: handCount,
+                    tone: handCount === 0 ? "neutral" : "card",
+                    ariaLabel: `${name} has ${handCount} cards`,
+                }}
             />
-            <div className="flex flex-col min-w-0">
-                <span
+            {!hideName && (
+                <div
                     className={cn(
-                        "text-xs font-medium truncate max-w-28",
-                        isTurn ? "text-amber-100" : "text-white/90",
+                        "flex flex-col min-w-0",
+                        isVertical ? "items-center" : "items-start",
                     )}
                 >
-                    {name}
-                </span>
-                <span className="text-[10px] font-mono text-white/60 leading-tight">
-                    {handCount} cards · {score} pts
-                </span>
-            </div>
-            <Badge
-                variant="secondary"
-                className={cn(
-                    "text-[10px] font-mono bg-white/10 text-white border-white/10",
-                    handCount === 0 && "bg-purple-500/40 border-purple-400",
-                )}
-                aria-label={`${name} has ${handCount} cards`}
-            >
-                {handCount}
-            </Badge>
+                    <span
+                        className={cn(
+                            "text-xs font-medium truncate",
+                            isCompact ? "max-w-16" : "max-w-28",
+                            isTurn ? "text-amber-100" : "text-white/90",
+                        )}
+                    >
+                        {name}
+                    </span>
+                    {!isCompact && (
+                        <span className="text-[10px] font-mono text-white/60 leading-tight">
+                            {score} pts
+                        </span>
+                    )}
+                </div>
+            )}
         </motion.div>
     );
 }

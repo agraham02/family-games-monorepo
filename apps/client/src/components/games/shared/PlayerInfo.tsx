@@ -5,8 +5,26 @@ import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { SeatPosition } from "@/hooks";
-import { PlayerAvatar } from "./PlayerAvatar";
-import { useGameTableOptional } from "./GameTable";
+import { PlayerAvatar, type PlayerAvatarCountBadge } from "./PlayerAvatar";
+import { useGameTableOptional, type LayoutMode } from "./GameTable";
+import { TurnTimer } from "./TurnTimer";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Render-prop context handed to `customStats`. Lets each game adjust its
+ * stats display density based on layout mode + seat alignment without
+ * inspecting GameTable internals.
+ */
+export interface CustomStatsContext {
+    textAlign: "left" | "center" | "right";
+    /** Current GameTable layout mode (compact|comfortable|spacious). */
+    density: LayoutMode;
+    /** Hero (local player) seat — games may want richer stats here. */
+    isLocalPlayer: boolean;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -46,6 +64,12 @@ interface PlayerInfoProps {
      */
     turnTimer?: TurnTimerState;
     /**
+     * Optional small pill rendered in the bottom-right corner of the avatar
+     * showing a count (tiles, cards, chips remaining). On compact/comfortable
+     * layouts this saves rail space versus a separate badge column.
+     */
+    countBadge?: PlayerAvatarCountBadge;
+    /**
      * Render prop for game-specific stats display.
      * Receives the text alignment based on seat position.
      * Use this instead of bid/tricksWon for game-specific data.
@@ -60,16 +84,21 @@ interface PlayerInfoProps {
      *   </div>
      * )}
      *
-     * // Dominoes
-     * customStats={(textAlign) => (
+     * customStats={({ textAlign, density }) => (
      *   <div className="flex gap-1 items-center">
      *     <Badge>Tiles: {tilesCount}</Badge>
      *     <Badge>Score: {score}</Badge>
      *   </div>
      * )}
      * ```
+     *
+     * The legacy single-arg signature `(textAlign) => ReactNode` is still
+     * accepted for backward-compatibility — the function will be called with
+     * just the alignment string in that case via duck typing.
      */
-    customStats?: (textAlign: "left" | "center" | "right") => ReactNode;
+    customStats?: (
+        ctxOrAlign: CustomStatsContext | "left" | "center" | "right",
+    ) => ReactNode;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,14 +149,17 @@ function PlayerInfo({
     connected = true,
     className,
     turnTimer,
+    countBadge,
     customStats,
 }: PlayerInfoProps) {
     const layout = getLayoutConfig(seatPosition);
 
-    // When inside a GameTable, shrink the info block on compact layouts so
-    // side seats (left/right) don't overflow their narrow column.
+    // Read GameTable layout mode (compact|comfortable|spacious). When this
+    // PlayerInfo is rendered standalone we fall back to "spacious".
     const tableCtx = useGameTableOptional();
-    const isCompact = tableCtx?.layoutConfig.layoutMode === "compact";
+    const density: LayoutMode = tableCtx?.layoutConfig.layoutMode ?? "spacious";
+    const isCompact = density === "compact";
+    const isComfortable = density === "comfortable";
     const isSideSeat =
         seatPosition === "left" ||
         seatPosition === "right" ||
@@ -139,63 +171,135 @@ function PlayerInfo({
         seatPosition === "top" ||
         seatPosition === "top-left" ||
         seatPosition === "top-right";
-    // On compact side seats, collapse name + stats to keep the column narrow.
-    // The count badge next to the avatar already conveys hand size.
-    const hideTextBlock = !isLocalPlayer && isCompact && isSideSeat;
-    // On compact top seat, hide the name label to keep the stacked top region
-    // (hand + info) within its grid row. The avatar initials already identify
-    // the player; stats (bid/won, pts/tiles) remain useful and stay visible.
-    const hideTopName = !isLocalPlayer && isCompact && isTopSeat;
-    // On compact mobile the hero's own avatar adds little value (the hand is
-    // face-up) and steals vertical space from the trick pile. Hide it.
+
+    // ---- Orientation matrix --------------------------------------------
+    // Hero (bottom): unchanged — stacked column with avatar below the name.
+    // Top opponents:
+    //   compact      → horizontal (avatar | stats), name hidden (initials suffice)
+    //   comfortable  → horizontal, name truncated
+    //   spacious     → vertical (column), full name + stats
+    // Side opponents:
+    //   compact      → vertical (avatar over single-line name + stats), tight
+    //   comfortable  → vertical, name truncated
+    //   spacious     → horizontal (default), full info
+    //
+    // The bottom-side and top-side diagonal positions follow their dominant
+    // edge.
+    let flexDirection = layout.direction;
+    if (!isLocalPlayer) {
+        if (isTopSeat && (isCompact || isComfortable)) {
+            flexDirection = "row";
+        } else if (isSideSeat && (isCompact || isComfortable)) {
+            flexDirection = "column";
+        }
+    }
+
+    // Avatar size: shrink for opponents on tight layouts; further on crowded
+    // tables (7+ players) which always run in badge mode.
+    const playerCount = tableCtx?.playerCount ?? 4;
+    const isCrowded = playerCount >= 7;
+    const avatarSizeClass = isLocalPlayer
+        ? "h-10 w-10 md:h-12 md:w-12"
+        : isCompact
+          ? isCrowded
+              ? "h-6 w-6"
+              : "h-7 w-7"
+          : isComfortable
+            ? isCrowded
+                ? "h-7 w-7"
+                : "h-9 w-9"
+            : "h-8 w-8 md:h-10 md:w-10";
+
+    // Pixel size used by the timer ring and the count-badge scale.
+    const avatarPx = isLocalPlayer
+        ? 48
+        : isCompact
+          ? isCrowded
+              ? 24
+              : 28
+          : isComfortable
+            ? isCrowded
+                ? 28
+                : 36
+            : 40;
+
+    // Hero on compact: hide the avatar to give the trick pile every pixel.
     const hideHeroAvatar = isLocalPlayer && isCompact;
 
-    // Responsive avatar size
-    const avatarSize = isLocalPlayer
-        ? "h-10 w-10 md:h-12 md:w-12"
-        : "h-8 w-8 md:h-10 md:w-10";
+    // Stats text: show name on compact side seats now (single-line truncated)
+    // since count badge rides the avatar; preserve old behavior for top.
+    const hideTopName = !isLocalPlayer && isCompact && isTopSeat;
+    const hideTextBlock = false;
 
-    // Timer size based on avatar size - needs to be larger than avatar to show ring
-    // Hero: 48px avatar + ~12px for ring = 60px
-    // Other: 40px avatar + ~10px for ring = 50px
-    const timerSize = isLocalPlayer ? 60 : 50;
+    const containerGap = isCompact
+        ? "gap-1"
+        : isComfortable
+          ? "gap-1.5"
+          : "gap-2";
+
+    const customStatsCtx: CustomStatsContext = {
+        textAlign: layout.textAlign,
+        density,
+        isLocalPlayer,
+    };
+    // Backward-compat: single-arg legacy callers expect a string.
+    const renderedStats = customStats
+        ? (customStats as (a: unknown) => ReactNode)(
+              customStats.length <= 1 && !isCompact && !isComfortable
+                  ? layout.textAlign
+                  : customStatsCtx,
+          )
+        : null;
+    // Fall back to plain alignment string if anything goes wrong with the
+    // duck-typed call — ensures legacy `(textAlign) => ...` users keep working.
+    const statsNode = renderedStats ?? null;
 
     return (
         <motion.div
             className={cn(
-                "flex gap-2 items-center",
+                "flex items-center",
+                containerGap,
                 !connected && "opacity-50",
                 className,
             )}
-            style={{
-                // On compact top seat, stack avatar + stats horizontally so
-                // the whole seat fits under the OpponentTiles badge within
-                // the top grid row.
-                flexDirection:
-                    isCompact && isTopSeat && !isLocalPlayer
-                        ? "row"
-                        : layout.direction,
-            }}
+            style={{ flexDirection }}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
         >
-            {/* Avatar with turn indicator or timer (shared primitive) */}
+            {/* Avatar with optional turn timer + count badge (shared primitive) */}
             <div className={cn(hideHeroAvatar && "hidden")}>
                 <PlayerAvatar
                     playerId={playerId}
                     playerName={playerName}
-                    size={timerSize - 12}
-                    sizeClassName={avatarSize}
+                    size={avatarPx}
+                    sizeClassName={avatarSizeClass}
                     isCurrentTurn={isCurrentTurn}
                     isLocalPlayer={isLocalPlayer}
                     connected={connected}
                     teamColor={teamColor}
                     turnTimer={turnTimer}
+                    countBadge={countBadge}
                 />
             </div>
 
-            {/* Player info */}
+            {/*
+             * Standalone timer ring shown when the hero's avatar is hidden
+             * (compact-mode hero) but a turn timer is active. Without this
+             * the hero would lose all visual countdown feedback on mobile.
+             */}
+            {hideHeroAvatar && turnTimer && isCurrentTurn && (
+                <div className="flex items-center justify-center">
+                    <TurnTimer
+                        key={turnTimer.startedAt}
+                        totalMs={turnTimer.totalMs}
+                        startedAt={turnTimer.startedAt}
+                        clockOffset={turnTimer.clockOffset}
+                        isActive
+                        size={22}
+                    />
+                </div>
+            )}
             <div
                 className={cn(
                     "flex flex-col min-w-0",
@@ -207,7 +311,8 @@ function PlayerInfo({
                 {/* Name */}
                 <span
                     className={cn(
-                        "text-white font-medium truncate max-w-25 text-sm",
+                        "text-white font-medium truncate text-sm",
+                        isCompact ? "max-w-16" : "max-w-25",
                         isCurrentTurn && "text-amber-300",
                         hideTopName && "hidden",
                     )}
@@ -217,7 +322,7 @@ function PlayerInfo({
                 </span>
 
                 {/* Game-specific stats via render prop */}
-                {customStats && customStats(layout.textAlign)}
+                {statsNode}
 
                 {/* Legacy Spades-specific stats (deprecated, use customStats) */}
                 {!customStats && bid !== null && bid !== undefined && (

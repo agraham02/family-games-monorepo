@@ -200,6 +200,7 @@ export default function RummyStage(props: RummyStageProps) {
                                                 key={pid}
                                                 playerId={pid}
                                                 gameData={gameData}
+                                                seatPosition={edge}
                                                 turnTimer={turnTimer}
                                             />
                                         );

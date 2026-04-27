@@ -68,20 +68,29 @@ class GameManager {
      * Used by the API to expose settings schema to clients.
      */
     public getSettingsForGame(
-        type: string
+        type: string,
     ):
         | { definitions: SettingDefinition[]; defaults: BaseGameSettings }
         | undefined {
         const module = this.modules.get(type);
         if (!module) return undefined;
 
+        const defaults = module.metadata.defaultSettings || {
+            winTarget: 100,
+            roundLimit: null,
+            turnTimeLimit: null,
+        };
+
+        if (process.env.NODE_ENV === "development") {
+            return {
+                definitions: module.metadata.settingsDefinitions || [],
+                defaults: { ...defaults, turnTimeLimit: 5 },
+            };
+        }
+
         return {
             definitions: module.metadata.settingsDefinitions || [],
-            defaults: module.metadata.defaultSettings || {
-                winTarget: 100,
-                roundLimit: null,
-                turnTimeLimit: null,
-            },
+            defaults,
         };
     }
 
@@ -92,7 +101,7 @@ class GameManager {
     createGame(
         type: string,
         room: Room,
-        customSettings?: GameSettings
+        customSettings?: GameSettings,
     ): string {
         const module = this.modules.get(type);
         if (!module)
@@ -114,7 +123,7 @@ class GameManager {
         const module = this.modules.get(gameState.type);
         if (!module)
             throw new Error(
-                `Game module for type '${gameState.type}' not found`
+                `Game module for type '${gameState.type}' not found`,
             );
 
         return module.getState(gameState);
@@ -126,7 +135,7 @@ class GameManager {
         const module = this.modules.get(gameState.type);
         if (!module)
             throw new Error(
-                `Game module for type '${gameState.type}' not found`
+                `Game module for type '${gameState.type}' not found`,
             );
 
         return module.getPlayerState(gameState, userId);
@@ -140,7 +149,7 @@ class GameManager {
         const module = this.modules.get(gameState.type);
         if (!module)
             throw new Error(
-                `Game module for type '${gameState.type}' not found`
+                `Game module for type '${gameState.type}' not found`,
             );
         const newState = module.reducer(gameState, action);
         this.games.set(gameId, newState);
@@ -235,7 +244,7 @@ class GameManager {
         //   - isConnected === undefined: treated as connected for backwards compatibility
         // We check `!== false` to treat both `true` and `undefined` as connected
         const connectedPlayers = Object.values(gameState.players).filter(
-            (player) => player.isConnected !== false
+            (player) => player.isConnected !== false,
         );
         return connectedPlayers.length >= module.metadata.minPlayers;
     }
@@ -248,7 +257,7 @@ class GameManager {
         gameId: string | null,
         oldUserId: string,
         newUserId: string,
-        newUserName: string
+        newUserName: string,
     ): boolean {
         if (!gameId) return false;
         const gameState = this.games.get(gameId);

@@ -414,38 +414,77 @@ function SpadesGameTable({
                                             ? timerPropsCache
                                             : undefined
                                     }
-                                    customStats={() => (
-                                        <div className="flex gap-1 items-center">
-                                            {bid !== null && (
-                                                <>
+                                    countBadge={
+                                        !isLocal
+                                            ? {
+                                                  value: getCardCountToShow(
+                                                      playerId,
+                                                  ),
+                                                  tone: "card",
+                                                  ariaLabel: `${getCardCountToShow(playerId)} cards in hand`,
+                                              }
+                                            : undefined
+                                    }
+                                    customStats={(ctxOrAlign) => {
+                                        const density =
+                                            typeof ctxOrAlign === "string"
+                                                ? "spacious"
+                                                : ctxOrAlign.density;
+                                        const isCompact = density === "compact";
+                                        if (bid === null) return null;
+                                        const bidTypeBadge =
+                                            bidType === "nil" ? (
+                                                <Badge className="text-[10px] px-1.5 py-0 bg-purple-600 text-white border-purple-400">
+                                                    NIL
+                                                </Badge>
+                                            ) : bidType === "blind" ? (
+                                                <Badge className="text-[10px] px-1.5 py-0 bg-amber-600 text-white border-amber-400 flex items-center gap-0.5">
+                                                    <Zap className="w-2.5 h-2.5" />
+                                                    BLIND
+                                                </Badge>
+                                            ) : bidType === "blind-nil" ? (
+                                                <Badge className="text-[10px] px-1.5 py-0 bg-red-600 text-white border-red-400 animate-pulse flex items-center gap-0.5">
+                                                    <Ban className="w-2.5 h-2.5" />
+                                                    BLIND NIL
+                                                </Badge>
+                                            ) : null;
+
+                                        // Compact: condense Bid + Won into a
+                                        // single pill `won/bid` to save
+                                        // vertical/horizontal space.
+                                        if (isCompact) {
+                                            const made =
+                                                tricksWon !== undefined &&
+                                                tricksWon >= bid;
+                                            return (
+                                                <div className="flex gap-1 items-center">
                                                     <Badge
                                                         variant="outline"
-                                                        className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
+                                                        className={`text-[10px] px-1.5 py-0 border-white/20 ${
+                                                            made
+                                                                ? "bg-green-500/30 text-green-300"
+                                                                : "bg-black/30 text-white/80"
+                                                        }`}
                                                     >
-                                                        Bid: {bid}
+                                                        {tricksWon ?? 0}/{bid}
                                                     </Badge>
-                                                    {bidType === "nil" && (
-                                                        <Badge className="text-[10px] px-1.5 py-0 bg-purple-600 text-white border-purple-400">
-                                                            NIL
-                                                        </Badge>
-                                                    )}
-                                                    {bidType === "blind" && (
-                                                        <Badge className="text-[10px] px-1.5 py-0 bg-amber-600 text-white border-amber-400 flex items-center gap-0.5">
-                                                            <Zap className="w-2.5 h-2.5" />
-                                                            BLIND
-                                                        </Badge>
-                                                    )}
-                                                    {bidType ===
-                                                        "blind-nil" && (
-                                                        <Badge className="text-[10px] px-1.5 py-0 bg-red-600 text-white border-red-400 animate-pulse flex items-center gap-0.5">
-                                                            <Ban className="w-2.5 h-2.5" />
-                                                            BLIND NIL
-                                                        </Badge>
-                                                    )}
-                                                </>
-                                            )}
-                                            {tricksWon !== undefined &&
-                                                bid !== null && (
+                                                    {bidTypeBadge}
+                                                </div>
+                                            );
+                                        }
+
+                                        // Comfortable+: keep the two-pill
+                                        // layout for clarity.
+                                        return (
+                                            <div className="flex gap-1 items-center">
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
+                                                >
+                                                    Bid: {bid}
+                                                </Badge>
+                                                {bidTypeBadge}
+                                                {tricksWon !== undefined && (
                                                     <Badge
                                                         variant="outline"
                                                         className={`text-[10px] px-1.5 py-0 border-white/20 ${
@@ -457,8 +496,9 @@ function SpadesGameTable({
                                                         Won: {tricksWon}
                                                     </Badge>
                                                 )}
-                                        </div>
-                                    )}
+                                            </div>
+                                        );
+                                    }}
                                 />
                                 <CardHand
                                     cards={getCardsToShow(playerId, isLocal)}

@@ -261,31 +261,12 @@ export function OpponentTiles({
     const { layoutConfig } = useGameTable();
     const edgeContext = useEdgeRegion();
 
-    // In badge mode (compact layout), show a simple tile count badge
-    if (layoutConfig.useBadgeMode && tileCount > 0) {
-        return (
-            <motion.div
-                className={cn(
-                    "flex items-center gap-1.5 px-2 py-1 rounded-lg",
-                    "bg-black/30 backdrop-blur-sm border border-white/10",
-                    className,
-                )}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            >
-                {/* Mini tile icon */}
-                <div
-                    className="rounded-sm border border-[#3A7A9A]/50 bg-[#2C5F7C] overflow-hidden"
-                    style={{ width: 14, height: 24 }}
-                >
-                    <div className="h-1/2 border-b border-[#3A7A9A]/40" />
-                </div>
-                <span className="font-bold text-white/90 text-sm tabular-nums">
-                    {tileCount}
-                </span>
-            </motion.div>
-        );
+    // In badge mode (compact / 7+ player layouts), the opponent's tile count
+    // already rides on their avatar via PlayerInfo's `countBadge`. Rendering
+    // a second pill here duplicates the same information and steals scarce
+    // vertical space, so we suppress this slot entirely in badge mode.
+    if (layoutConfig.useBadgeMode) {
+        return null;
     }
 
     const sizeKey = layoutConfig.opponentCardSize;

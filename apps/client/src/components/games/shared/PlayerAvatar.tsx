@@ -44,8 +44,25 @@ export interface PlayerAvatarProps {
     teamColor?: string;
     /** Optional turn timer state — when present and isCurrentTurn, draws the ring */
     turnTimer?: PlayerAvatarTurnTimer;
+    /**
+     * Optional small pill rendered in the bottom-right corner of the avatar
+     * showing a count (tiles, cards, chips). Saves horizontal space versus a
+     * separate badge sitting next to the avatar in the player rail.
+     */
+    countBadge?: PlayerAvatarCountBadge;
     /** Extra classes applied to the outer wrapper */
     className?: string;
+}
+
+export interface PlayerAvatarCountBadge {
+    value: number | string;
+    /**
+     * Visual tone hints what the count represents. Tones use low-saturation
+     * colors so they don't compete with the amber turn-timer ring.
+     */
+    tone?: "tile" | "card" | "chip" | "neutral";
+    /** Optional aria-label override (e.g. "6 tiles remaining"). */
+    ariaLabel?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +120,7 @@ export function PlayerAvatar({
     connected = true,
     teamColor,
     turnTimer,
+    countBadge,
     className,
 }: PlayerAvatarProps) {
     const initials = getInitials(playerName);
@@ -169,6 +187,52 @@ export function PlayerAvatar({
                     <span className="text-white text-[8px] font-bold">!</span>
                 </div>
             )}
+
+            {/* Count badge (tiles/cards/chips remaining) */}
+            {countBadge != null && (
+                <CountBadge badge={countBadge} avatarSize={size} />
+            )}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Count Badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+const COUNT_BADGE_TONES: Record<
+    NonNullable<PlayerAvatarCountBadge["tone"]>,
+    string
+> = {
+    tile: "bg-stone-700/95 text-stone-100 border-stone-500/60",
+    card: "bg-slate-700/95 text-slate-100 border-slate-500/60",
+    chip: "bg-amber-700/95 text-amber-50 border-amber-500/60",
+    neutral: "bg-zinc-800/95 text-zinc-100 border-zinc-500/60",
+};
+
+function CountBadge({
+    badge,
+    avatarSize,
+}: {
+    badge: PlayerAvatarCountBadge;
+    avatarSize: number;
+}) {
+    const tone = badge.tone ?? "neutral";
+    // Scale pill to avatar so it stays balanced across sizes (h-6 → h-9 avatars).
+    const isLarge = avatarSize >= 44;
+    const pillCls = isLarge
+        ? "h-5 min-w-[1.25rem] px-1.5 text-[11px]"
+        : "h-4 min-w-[1rem] px-1 text-[10px]";
+    return (
+        <div
+            aria-label={badge.ariaLabel ?? `Count: ${badge.value}`}
+            className={cn(
+                "absolute -bottom-1 -right-1 rounded-full border flex items-center justify-center font-bold leading-none shadow-md tabular-nums pointer-events-none",
+                COUNT_BADGE_TONES[tone],
+                pillCls,
+            )}
+        >
+            {badge.value}
         </div>
     );
 }

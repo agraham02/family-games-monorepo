@@ -27,6 +27,8 @@ import { getPlayableEnds } from "./engine/rules";
 import BoardControls from "./board/BoardControls";
 import FlyingTile from "./board/FlyingTile";
 import DominoHand, { OpponentTiles } from "./ui/DominoHand";
+import RoundSummaryModal from "./ui/RoundSummaryModal";
+import GameSummaryModal from "./ui/GameSummaryModal";
 import type { ChainEnd } from "./engine/types";
 import { playTimerStartSound, initializeAudioOnInteraction } from "@/lib/audio";
 
@@ -57,9 +59,26 @@ export default function Dominoes({
     isSpectator,
     roomCode,
 }: GameComponentProps<DominoesData, DominoesPlayerData>) {
-    const { userId } = useSession();
-    const { clockOffset } = useWebSocket();
+    const { userId, roomId } = useSession();
+    const { socket, connected, clockOffset } = useWebSocket();
     const store = useDominoesStore;
+
+    // Send a non-optimistic system action (e.g. CONTINUE_AFTER_ROUND_SUMMARY).
+    const sendGameAction = useCallback(
+        (type: string, payload: unknown) => {
+            if (!socket || !connected) return;
+            socket.emit("game_action", {
+                roomId,
+                action: { type, payload, userId },
+            });
+        },
+        [socket, connected, roomId, userId],
+    );
+
+    const handleReturnToLobby = useCallback(() => {
+        if (!socket || !connected) return;
+        socket.emit("abort_game", { roomId, userId });
+    }, [socket, connected, roomId, userId]);
 
     // Track previous board tile count to detect new placements
     const prevTileCountRef = useRef(0);
@@ -336,28 +355,61 @@ export default function Dominoes({
                                             ? timerPropsCache
                                             : undefined
                                     }
-                                    customStats={() => (
-                                        <div className="flex gap-1 items-center">
-                                            <Badge
-                                                variant="outline"
-                                                className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
-                                            >
-                                                {gameData.playerScores[
-                                                    playerId
-                                                ] ?? 0}{" "}
-                                                pts
-                                            </Badge>
-                                            <Badge
-                                                variant="outline"
-                                                className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
-                                            >
-                                                {gameData.handsCounts[
-                                                    playerId
-                                                ] ?? 0}{" "}
-                                                tiles
-                                            </Badge>
-                                        </div>
-                                    )}
+                                    countBadge={
+                                        !isLocal
+                                            ? {
+                                                  value:
+                                                      gameData.handsCounts[
+                                                          playerId
+                                                      ] ?? 0,
+                                                  tone: "tile",
+                                                  ariaLabel: `${gameData.handsCounts[playerId] ?? 0} tiles in hand`,
+                                              }
+                                            : undefined
+                                    }
+                                    customStats={(ctxOrAlign) => {
+                                        const density =
+                                            typeof ctxOrAlign === "string"
+                                                ? "spacious"
+                                                : ctxOrAlign.density;
+                                        const isCompact = density === "compact";
+                                        const score =
+                                            gameData.playerScores[playerId] ??
+                                            0;
+                                        const tileCount =
+                                            gameData.handsCounts[playerId] ?? 0;
+                                        // Compact: just the score pill (count
+                                        // is on the avatar badge for opponents,
+                                        // hero sees their full hand).
+                                        if (isCompact) {
+                                            return (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
+                                                >
+                                                    {score} pts
+                                                </Badge>
+                                            );
+                                        }
+                                        return (
+                                            <div className="flex gap-1 items-center">
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
+                                                >
+                                                    {score} pts
+                                                </Badge>
+                                                {isLocal && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-[10px] px-1.5 py-0 bg-black/30 border-white/20 text-white/80"
+                                                    >
+                                                        {tileCount} tiles
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        );
+                                    }}
                                 />
                                 {isLocal && playerData?.hand && !isSpectator ? (
                                     <DominoHand
@@ -462,6 +514,18 @@ export default function Dominoes({
 
             {/* Flying tile animation overlay */}
             <FlyingTile />
+
+            {/* Round Summary Modal */}
+            <RoundSummaryModal
+                gameData={gameData}
+                sendGameAction={sendGameAction}
+            />
+
+            {/* Game Summary Modal */}
+            <GameSummaryModal
+                gameData={gameData}
+                onReturnToLobby={handleReturnToLobby}
+            />
         </div>
     );
 }

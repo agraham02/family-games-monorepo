@@ -29,7 +29,7 @@ interface UseGameSettingsSchemaResult {
 
 // LocalStorage key prefix for settings schemas
 // Increment version when schema structure changes to bust cache
-const SCHEMA_CACHE_VERSION = 3;
+const SCHEMA_CACHE_VERSION = 4;
 const STORAGE_KEY_PREFIX = `gameSettingsSchema_v${SCHEMA_CACHE_VERSION}_`;
 
 /**

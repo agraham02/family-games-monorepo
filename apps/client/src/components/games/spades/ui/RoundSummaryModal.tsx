@@ -21,10 +21,13 @@ export default function RoundSummaryModal({
 
     // Countdown timer for auto-continue
     const [countdown, setCountdown] = useState(AUTO_CONTINUE_SECONDS);
+    // Guard against firing the continue action more than once per open cycle.
+    const autoFiredRef = React.useRef(false);
 
     useEffect(() => {
         if (!isOpen || !isLeader) {
             setCountdown(AUTO_CONTINUE_SECONDS);
+            autoFiredRef.current = false;
             return;
         }
 
@@ -34,6 +37,19 @@ export default function RoundSummaryModal({
 
         return () => clearInterval(interval);
     }, [isOpen, isLeader]);
+
+    // Auto-fire continue when the countdown reaches 0 (leader only).
+    useEffect(() => {
+        if (
+            isOpen &&
+            isLeader &&
+            countdown === 0 &&
+            !autoFiredRef.current
+        ) {
+            autoFiredRef.current = true;
+            sendGameAction("CONTINUE_AFTER_ROUND_SUMMARY", {});
+        }
+    }, [isOpen, isLeader, countdown, sendGameAction]);
 
     return (
         <Dialog open={isOpen}>
