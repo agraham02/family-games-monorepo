@@ -27,12 +27,22 @@ export interface MeldBoardPlayer {
     initials?: string;
 }
 
+/**
+ * In `compact` mode, choose between:
+ *  - `scroll` (default): all sections rendered in a vertically scrollable list
+ *    so every player's melds are visible without paging through tabs.
+ *  - `tabs`: legacy per-player tabbed view.
+ */
+export type MeldBoardCompactLayout = "scroll" | "tabs";
+
 export interface MeldBoardProps {
     melds: RummyMeldView[];
     players: MeldBoardPlayer[];
     /** Local hero id — their melds get a "You" highlight. */
     heroPlayerId?: string;
     mode?: MeldBoardMode;
+    /** Layout to use when `mode === "compact"`. Defaults to `"scroll"`. */
+    compactLayout?: MeldBoardCompactLayout;
     /** Currently active layoff target id (highlights the matching strip). */
     activeMeldId?: string | null;
     /**
@@ -143,6 +153,7 @@ export function MeldBoard({
     players,
     heroPlayerId,
     mode = "spacious",
+    compactLayout = "scroll",
     activeMeldId,
     eligibleMeldIds,
     onSelectMeld,
@@ -190,8 +201,21 @@ export function MeldBoard({
     }
 
     if (mode === "compact") {
+        if (compactLayout === "tabs") {
+            return (
+                <CompactTabbed
+                    sections={sections}
+                    heroPlayerId={heroPlayerId}
+                    activeMeldId={activeMeldId}
+                    eligibleSet={eligibleSet}
+                    playerInitials={playerInitials}
+                    onSelectMeld={onSelectMeld}
+                    className={className}
+                />
+            );
+        }
         return (
-            <CompactTabbed
+            <CompactScroll
                 sections={sections}
                 heroPlayerId={heroPlayerId}
                 activeMeldId={activeMeldId}
@@ -409,6 +433,49 @@ function CompactTabbed({
                     size="xs"
                 />
             )}
+        </div>
+    );
+}
+
+/**
+ * Compact scrollable layout — every player's section stacked vertically in a
+ * single scrollable column. Each section renders its meld strips with the
+ * smallest card size. Designed to replace the legacy tabbed compact view so
+ * players never have to switch tabs to see other players' progress.
+ */
+function CompactScroll({
+    sections,
+    heroPlayerId,
+    activeMeldId,
+    eligibleSet,
+    playerInitials,
+    onSelectMeld,
+    className,
+}: {
+    sections: PlayerSection[];
+    heroPlayerId?: string;
+    activeMeldId?: string | null;
+    eligibleSet: Set<string>;
+    playerInitials: Record<string, string>;
+    onSelectMeld?: (meldId: string) => void;
+    className?: string;
+}) {
+    return (
+        <div
+            className={cn("flex flex-col gap-3 p-2 overflow-y-auto", className)}
+        >
+            {sections.map((s) => (
+                <PlayerSectionView
+                    key={s.ownerId}
+                    section={s}
+                    isHero={s.ownerId === heroPlayerId}
+                    activeMeldId={activeMeldId}
+                    eligibleSet={eligibleSet}
+                    playerInitials={playerInitials}
+                    onSelectMeld={onSelectMeld}
+                    size="xs"
+                />
+            ))}
         </div>
     );
 }

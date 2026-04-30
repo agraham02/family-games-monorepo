@@ -331,7 +331,14 @@ function CardInHand({
             <div
                 className={cn(
                     "relative rounded-lg shadow-lg bg-linear-to-br from-white to-gray-50 border border-gray-200 overflow-hidden select-none",
-                    prefersReducedMotion ? "transition-none" : "duration-300",
+                    // Smooth ring (box-shadow) changes so when a hint
+                    // annotation appears or moves on/off a persisting card
+                    // during a layoff/discard, it fades in rather than
+                    // snapping — avoids the visual illusion of a ring
+                    // "inheriting" from the just-removed neighbour.
+                    prefersReducedMotion
+                        ? "transition-none"
+                        : "transition-shadow duration-300",
                     isInteractive && !isDisabled && "cursor-pointer",
                     isInteractive &&
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",

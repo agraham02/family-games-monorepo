@@ -82,6 +82,9 @@ export interface DiscardPile {
  *    be played into a meld or lay-off before any other action.
  *  - may-meld: drew from stock, or finished discard-play. Free to meld/layoff
  *    or discard.
+ *  - rummy-window: the just-discarded card opened a Rummy! call window.
+ *    No player is actively taking a turn; opponents may CALL_RUMMY until
+ *    the window expires, after which play advances to the next player.
  *  - cardless-waiting: laid last card into a meld; will go out at start of
  *    next turn unless stock empties first.
  */
@@ -89,6 +92,7 @@ export type RummyTurnSubstate =
     | "awaiting-draw"
     | "awaiting-discard-play"
     | "may-meld"
+    | "rummy-window"
     | "cardless-waiting";
 
 export type RummyPhase =

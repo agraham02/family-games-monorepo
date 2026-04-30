@@ -162,6 +162,19 @@ describe("computeRummyHints — discardTop", () => {
         });
         expect(out.discardTop.canFormMeldWithHand).toBe(true);
     });
+
+    it("detects discard top filling the middle of a run (9♠/J♠ in hand, 10♠ on discard)", () => {
+        // Regression: the user reported the glow not firing in this case.
+        // canFormMeldWith must consider the window where the discard sits
+        // between two existing hand cards.
+        const hand = [c(Rank.Nine, Suit.Spades), c(Rank.Jack, Suit.Spades)];
+        const out = computeRummyHints({
+            hand,
+            melds: [],
+            discardTop: c(Rank.Ten, Suit.Spades),
+        });
+        expect(out.discardTop.canFormMeldWithHand).toBe(true);
+    });
 });
 
 describe("sortHandRummy", () => {

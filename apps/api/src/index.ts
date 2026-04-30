@@ -45,6 +45,8 @@ import {
     handleActionDispatched,
     initializeGameTimer,
     cleanupGameTimers,
+    acknowledgeGameReady,
+    dropPendingAck,
 } from "./services/GameTurnTimer";
 
 const IS_DEBUG_LOGGING = process.env.NODE_ENV === "development";
@@ -279,6 +281,24 @@ function startServer() {
                     if (room?.gameId) {
                         initializeGameTimer(room.gameId, room);
                     }
+                } catch (err) {
+                    handleSocketError(socket, err);
+                }
+            },
+        );
+
+        // Client signals that its game tree has mounted and is ready to
+        // receive the per-turn timer. Server gates `initializeGameTimer`
+        // on receiving this from every expected player so the countdown
+        // doesn't elapse during navigation/hydration. See
+        // `GameTurnTimer.initializeGameTimer` for the full contract.
+        socket.on(
+            "client_game_ready",
+            ({ roomId, userId }: { roomId: string; userId: string }) => {
+                try {
+                    const room = getRoom(roomId);
+                    if (!room?.gameId) return;
+                    acknowledgeGameReady(room.gameId, userId);
                 } catch (err) {
                     handleSocketError(socket, err);
                 }

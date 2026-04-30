@@ -9,6 +9,7 @@ import type {
     RummyMeldView,
     PlayingCard as PlayingCardType,
 } from "@shared/types";
+import { sortRunForDisplay } from "@shared/utils/rummy";
 
 /**
  * MeldStrip — renders one meld (set or run) as a horizontal stack of cards.
@@ -75,6 +76,15 @@ export function MeldStrip({
         return map;
     }, [meld.layoffs]);
 
+    // Runs are stored in insertion order on the server; sort them for display
+    // so e.g. picking 10♠ then dropping it after 9♠/J♠ still reads as 9-10-J.
+    // We keep an `originalIndex` mapping so layoff badges stay attached to
+    // the correct underlying card.
+    const displayOrder = useMemo<readonly number[]>(() => {
+        if (meld.kind === "run") return sortRunForDisplay(meld.cards);
+        return meld.cards.map((_, i) => i);
+    }, [meld.kind, meld.cards]);
+
     const isBook =
         forceFaceDown ||
         (flipBooks && meld.kind === "set" && meld.cards.length >= 4);
@@ -114,18 +124,20 @@ export function MeldStrip({
                           : "ring-1 ring-white/5",
                 )}
             >
-                {meld.cards.map((c, i) => {
-                    const layoffPid = layoffByIndex[i];
+                {displayOrder.map((origIdx, dispIdx) => {
+                    const c = meld.cards[origIdx];
+                    const layoffPid = layoffByIndex[origIdx];
                     const initial = layoffPid
                         ? (playerInitials?.[layoffPid] ?? "?")
                         : null;
                     return (
                         <div
-                            key={`${c.suit}-${c.rank}-${i}`}
+                            key={`${c.suit}-${c.rank}-${origIdx}`}
                             className="relative"
                             style={{
-                                marginLeft: i === 0 ? 0 : `-${overlapPx}px`,
-                                zIndex: i,
+                                marginLeft:
+                                    dispIdx === 0 ? 0 : `-${overlapPx}px`,
+                                zIndex: dispIdx,
                             }}
                         >
                             <PlayingCardComponent

@@ -351,6 +351,57 @@ export function maybeStartTimer(
     // ========================================================================
     if (state.type === "rummy") {
         const rummyState = state as unknown as RummyState;
+
+        // Special-case: an open Rummy! call window has its own deadline
+        // and parks the per-turn timer entirely. Schedule a one-shot
+        // timer that closes the window once it expires; no auto-action
+        // for any player runs during this interval.
+        if (
+            rummyState.turnSubstate === "rummy-window" &&
+            rummyState.rummyCall
+        ) {
+            const remainingMs = Math.max(
+                0,
+                rummyState.rummyCall.closesAt - Date.now(),
+            );
+            // Use the discarder as the bookkeeping player id so the timer
+            // entry is uniquely associated with this discard. The grace
+            // period inside the timer service still applies — fine for
+            // a 5–10s window.
+            turnTimerService.startTurn(
+                gameId,
+                rummyState.rummyCall.discardedById,
+                remainingMs / 1000,
+                () => {
+                    try {
+                        gameManager.dispatch(gameId, {
+                            type: "_RUMMY_WINDOW_EXPIRED",
+                            userId: "system",
+                            payload: {},
+                        });
+                    } catch (err) {
+                        console.error(
+                            "Error dispatching rummy-window expiry:",
+                            err,
+                        );
+                        return;
+                    }
+                    // Broadcast the new state and re-evaluate whether a
+                    // normal per-turn timer should now start.
+                    if (io) {
+                        io.to(room.id).emit("game_event", {
+                            event: "sync",
+                            gameState: gameManager.getGameState(gameId),
+                            timestamp: new Date().toISOString(),
+                        });
+                    }
+                    const fresh = gameManager.getGame(gameId);
+                    if (fresh) maybeStartTimer(gameId, room, fresh);
+                },
+            );
+            return;
+        }
+
         const turnTimeLimit = rummyState.settings?.turnTimeLimit;
 
         if (!turnTimeLimit || turnTimeLimit <= 0) return;
@@ -419,6 +470,11 @@ export function resumeTimer(gameId: string, room: Room): void {
  */
 export function cleanupGameTimers(gameId: string): void {
     turnTimerService.cleanupGame(gameId);
+    const pending = pendingGameInits.get(gameId);
+    if (pending) {
+        clearTimeout(pending.fallbackTimer);
+        pendingGameInits.delete(gameId);
+    }
 }
 
 /**
@@ -446,11 +502,113 @@ export function handleActionDispatched(
 
 /**
  * Initialize timer for a new game.
- * Called when a game is created.
+ *
+ * Historically this immediately started the per-turn timer for the seated
+ * player. That created a cross-game leak: in dev (turnTimeLimit ≈ 5s) the
+ * countdown would tick down — and even auto-act — before the clients had
+ * finished navigating to the game route, mounting the React tree, and
+ * hydrating from the initial state payload. Players would land on the table
+ * with the timer mostly elapsed.
+ *
+ * The new contract: register a pending init keyed by gameId. Each player's
+ * client emits `client_game_ready` once their tree is mounted; we only
+ * actually start the timer once *all* expected players have acknowledged.
+ * A safety fallback fires after a short delay so a slow client can't
+ * indefinitely stall the game (8s production / 3s dev).
  */
-export function initializeGameTimer(gameId: string, room: Room): void {
+const PENDING_INIT_FALLBACK_MS_PROD = 8000;
+const PENDING_INIT_FALLBACK_MS_DEV = 3000;
+
+interface PendingGameInit {
+    room: Room;
+    expected: Set<string>;
+    acked: Set<string>;
+    fallbackTimer: NodeJS.Timeout;
+}
+
+const pendingGameInits = new Map<string, PendingGameInit>();
+
+function fallbackMs(): number {
+    return process.env.NODE_ENV === "development"
+        ? PENDING_INIT_FALLBACK_MS_DEV
+        : PENDING_INIT_FALLBACK_MS_PROD;
+}
+
+function startPendingTimer(gameId: string): void {
+    const pending = pendingGameInits.get(gameId);
+    if (!pending) return;
+    clearTimeout(pending.fallbackTimer);
+    pendingGameInits.delete(gameId);
+
     const state = gameManager.getGame(gameId);
-    if (state) {
-        maybeStartTimer(gameId, room, state);
+    if (!state) return;
+    maybeStartTimer(gameId, pending.room, state);
+}
+
+export function initializeGameTimer(gameId: string, room: Room): void {
+    // Clear any prior pending entry for this gameId (defensive — should
+    // only happen on rapid restart).
+    const prior = pendingGameInits.get(gameId);
+    if (prior) clearTimeout(prior.fallbackTimer);
+
+    const expected = new Set(
+        room.users
+            .filter((u) => u.isConnected && !room.spectators?.includes(u.id))
+            .map((u) => u.id),
+    );
+
+    // Edge case: solo / no expected players (e.g. all spectators) — start
+    // immediately so the game isn't stuck waiting for an ack that never
+    // comes.
+    if (expected.size === 0) {
+        const state = gameManager.getGame(gameId);
+        if (state) maybeStartTimer(gameId, room, state);
+        return;
+    }
+
+    const fallbackTimer = setTimeout(() => {
+        console.warn(
+            `⏳ Game ${gameId} client-ready fallback fired (not all clients acked in time)`,
+        );
+        startPendingTimer(gameId);
+    }, fallbackMs());
+
+    pendingGameInits.set(gameId, {
+        room,
+        expected,
+        acked: new Set(),
+        fallbackTimer,
+    });
+}
+
+/**
+ * Called when a client emits `client_game_ready`. Once every expected
+ * player has acknowledged, start the per-turn timer.
+ */
+export function acknowledgeGameReady(gameId: string, userId: string): void {
+    const pending = pendingGameInits.get(gameId);
+    if (!pending) return; // already started or unknown game
+    if (!pending.expected.has(userId)) return;
+    pending.acked.add(userId);
+    if (pending.acked.size >= pending.expected.size) {
+        startPendingTimer(gameId);
+    }
+}
+
+/**
+ * Drop a player from the expected-ack set when they disconnect before
+ * acknowledging. Prevents the safety fallback being the only path forward
+ * when one client hard-fails to load.
+ */
+export function dropPendingAck(gameId: string, userId: string): void {
+    const pending = pendingGameInits.get(gameId);
+    if (!pending) return;
+    pending.expected.delete(userId);
+    pending.acked.delete(userId);
+    if (
+        pending.expected.size === 0 ||
+        pending.acked.size >= pending.expected.size
+    ) {
+        startPendingTimer(gameId);
     }
 }

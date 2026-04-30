@@ -185,7 +185,10 @@ function advanceTurn(state: InternalRummyState): void {
     state.turnSubstate = "awaiting-draw";
     state.turnStartedAt = new Date().toISOString();
     state.pendingDiscardPick = undefined;
-    state.rummyCall = undefined;
+    // NOTE: do NOT clear `state.rummyCall` here. The Rummy! window is
+    // resolved (and cleared) explicitly via handleCallRummy or
+    // handleRummyWindowExpired so it survives across turn boundaries when
+    // someone successfully calls Rummy on a discard.
 }
 
 function endRound(
@@ -342,6 +345,14 @@ function applyAction(
                     );
                 }
                 startNextRound(draft);
+                return;
+            }
+            // Server-only synthetic action dispatched by the turn-timer
+            // service when an open Rummy! call window expires without a
+            // successful CALL_RUMMY. Underscore prefix marks it as
+            // internal — clients never send this.
+            if (t === "_RUMMY_WINDOW_EXPIRED") {
+                handleRummyWindowExpired(draft);
                 return;
             }
             throw new Error(`Unknown action: ${t}`);
@@ -620,13 +631,29 @@ function handleDiscard(
         state.history.push(
             `Rummy! window opened on ${card.rank}${card.suit[0]} for ${state.settings.rummyCallWindowMs}ms`,
         );
-        // Defer turn advancement until the window expires (handled by a timer
-        // in the calling layer). For now, advance turn immediately so the
-        // game doesn't stall — call-rummy will steal back from next player
-        // if it lands. Simpler v1: advance, allow CALL_RUMMY only while
-        // window is open.
+        // Park the turn here — substate `rummy-window` blocks both the
+        // discarder and the next player. The window is resolved (and turn
+        // advanced) by either handleCallRummy or handleRummyWindowExpired.
+        state.turnSubstate = "rummy-window";
+        return;
     }
 
+    advanceTurn(state);
+}
+
+/**
+ * Internal: close an open Rummy! window without a successful call. Resumes
+ * normal play by advancing to the next player. Idempotent: a no-op if no
+ * window is open. Intended to be dispatched server-side via a setTimeout
+ * scheduled when the window opens.
+ */
+function handleRummyWindowExpired(state: InternalRummyState): void {
+    if (state.phase !== "playing") return;
+    if (!state.rummyCall) return;
+    state.history.push(
+        `Rummy! window expired on ${state.rummyCall.card.rank}${state.rummyCall.card.suit[0]}`,
+    );
+    state.rummyCall = undefined;
     advanceTurn(state);
 }
 
@@ -668,8 +695,10 @@ function handleCallRummy(
         `${callerId} called Rummy! on ${state.rummyCall.card.rank}${state.rummyCall.card.suit[0]}`,
     );
     state.rummyCall = undefined;
-    // Caller does NOT take a turn; play continues with whoever's turn it
-    // currently is (we already advanced after the discard).
+    // The original discarder's turn was parked in `rummy-window`. Whether
+    // someone calls Rummy or the window expires, play continues with the
+    // next player.
+    advanceTurn(state);
 }
 
 // ============================================================================
@@ -715,6 +744,16 @@ function buildTurnTimer(state: InternalRummyState): TurnTimerInfo | undefined {
     if (!limit || limit <= 0) return undefined;
     if (!state.turnStartedAt) return undefined;
     if (state.phase !== "playing") return undefined;
+    // Don't surface the per-turn countdown to clients during transient
+    // substates where no player is actively deciding (the Rummy! call
+    // window has its own deadline in `rummyCall.closesAt`, and a
+    // cardless-waiting player has nothing to do).
+    if (
+        state.turnSubstate === "rummy-window" ||
+        state.turnSubstate === "cardless-waiting"
+    ) {
+        return undefined;
+    }
     const startedAt = new Date(state.turnStartedAt).getTime();
     return {
         startedAt,

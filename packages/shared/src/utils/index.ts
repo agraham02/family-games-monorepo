@@ -5,3 +5,4 @@ export * from "./errors";
 export * from "./dominoesBoard";
 export * from "./player";
 export * from "./shuffle";
+export * from "./rummy";

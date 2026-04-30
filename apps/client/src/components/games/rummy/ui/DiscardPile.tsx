@@ -89,8 +89,10 @@ export default function DiscardPile({
     const visibleStart = count - visibleCount;
     const visibleCards = cards.slice(visibleStart);
     const hiddenBelow = visibleStart;
+    // Compact: offset bumped from 12→22 so each card's corner rank/suit stays
+    // legible when the fan stacks 3-4 cards. Spacious/comfortable unchanged.
     const offsetPct =
-        layoutMode === "spacious" ? 22 : layoutMode === "comfortable" ? 16 : 12;
+        layoutMode === "spacious" ? 22 : layoutMode === "comfortable" ? 16 : 22;
     const cardSize: "md" | "sm" | "xs" =
         layoutMode === "spacious"
             ? "md"

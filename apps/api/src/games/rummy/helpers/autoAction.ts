@@ -25,8 +25,16 @@ const ACTIVE_TIMER_PHASES: RummyPhase[] = ["playing"];
 
 export function shouldTimerBeActive(state: RummyState): boolean {
     if (!ACTIVE_TIMER_PHASES.includes(state.phase)) return false;
-    // Don't run timer for cardless-waiting (they have no decision to make).
-    return state.turnSubstate !== "cardless-waiting";
+    // Don't run the per-turn timer for substates where no player has an
+    // active decision: cardless-waiting (out, just waiting) or
+    // rummy-window (call window owns its own deadline).
+    if (
+        state.turnSubstate === "cardless-waiting" ||
+        state.turnSubstate === "rummy-window"
+    ) {
+        return false;
+    }
+    return true;
 }
 
 /** Suit ordering used for deterministic tiebreaks. */

@@ -56,6 +56,11 @@ export default function MeldScene({
                     discard={gameData.discard}
                     layoutMode={layoutMode}
                     interactive={false}
+                    topGlow={
+                        controller.hintSettings.discardTop &&
+                        (controller.hints.discardTop.canLayoff ||
+                            controller.hints.discardTop.canFormMeldWithHand)
+                    }
                 />
             </div>
 

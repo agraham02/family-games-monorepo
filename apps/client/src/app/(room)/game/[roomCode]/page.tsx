@@ -320,6 +320,33 @@ export default function GamePage() {
         gameData,
     ]);
 
+    // Notify server that this client has mounted and hydrated the initial
+    // game state. The server gates `initializeGameTimer` on receiving this
+    // ack from every expected player so the per-turn countdown can't tick
+    // down (or auto-act) while clients are still navigating/loading. See
+    // `apps/api/src/services/GameTurnTimer.ts`.
+    //
+    // Active players AND spectators ack: spectators don't drive the timer
+    // but the server only counts seated players in its expected set, so
+    // their acks are harmless no-ops.
+    useEffect(() => {
+        if (!connected || !roomId || !userId) return;
+        if (!gameData) return;
+        if (!playerData && !isSpectator) return;
+        emit("client_game_ready", { roomId, userId });
+        // gameData.type is stable for the life of a single game session;
+        // a new game in the same room will swap the page or null gameData
+        // first, re-arming this effect.
+    }, [
+        connected,
+        roomId,
+        userId,
+        emit,
+        gameData?.type,
+        !!playerData,
+        isSpectator,
+    ]);
+
     // Error fallback for game component crashes
     const handleGameError = useCallback(() => {
         router.push(`/lobby/${roomCode}`);
