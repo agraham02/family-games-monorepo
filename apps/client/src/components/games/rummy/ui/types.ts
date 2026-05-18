@@ -46,6 +46,8 @@ export interface RummyController {
 
     // ---- Draw phase actions ----
     onDrawStock: () => void;
+    /** Skip the draw (only legal when stock is empty). */
+    onPassDraw: () => void;
     onClickDiscardCard: (pickIndex: number) => void;
 
     // ---- Meld phase actions ----

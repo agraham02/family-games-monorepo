@@ -11,6 +11,15 @@ import type {
 } from "@shared/types";
 import { sortRunForDisplay } from "@shared/utils/rummy";
 
+/** Card width in px per size — must mirror SIZE_DIMENSIONS in PlayingCard.tsx. */
+const CARD_WIDTH_PX: Record<CardSize, number> = {
+    xs: 40,
+    sm: 52,
+    md: 70,
+    lg: 90,
+    xl: 110,
+};
+
 /**
  * MeldStrip — renders one meld (set or run) as a horizontal stack of cards.
  *
@@ -126,10 +135,6 @@ export function MeldStrip({
             >
                 {displayOrder.map((origIdx, dispIdx) => {
                     const c = meld.cards[origIdx];
-                    const layoffPid = layoffByIndex[origIdx];
-                    const initial = layoffPid
-                        ? (playerInitials?.[layoffPid] ?? "?")
-                        : null;
                     return (
                         <div
                             key={`${c.suit}-${c.rank}-${origIdx}`}
@@ -145,17 +150,38 @@ export function MeldStrip({
                                 size={size}
                                 hidden={isBook}
                             />
-                            {initial && !isBook && (
-                                <span
-                                    className="absolute -top-1 -right-1 z-10 flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold font-mono ring-1 ring-emerald-300/70 shadow-md"
-                                    title={`Laid off by ${initial}`}
-                                >
-                                    {initial}
-                                </span>
-                            )}
                         </div>
                     );
                 })}
+                {/* Layoff badges rendered as a separate overlay layer above
+                    every card — anchored inside each card's own stacking
+                    context they get covered by the right-hand neighbour
+                    (which always has a higher zIndex). Lifting them up here
+                    with z-30 keeps them visible regardless of overlap. */}
+                {!isBook &&
+                    displayOrder.map((origIdx, dispIdx) => {
+                        const layoffPid = layoffByIndex[origIdx];
+                        if (!layoffPid) return null;
+                        const initial = playerInitials?.[layoffPid] ?? "?";
+                        const cardW = CARD_WIDTH_PX[size];
+                        // Distance from the strip's left padding (p-1 = 4px)
+                        // to this card's right edge.
+                        const rightEdge =
+                            4 + (dispIdx + 1) * cardW - dispIdx * overlapPx;
+                        return (
+                            <span
+                                key={`badge-${origIdx}`}
+                                className="absolute z-30 flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold font-mono ring-1 ring-emerald-300/70 shadow-md pointer-events-none"
+                                style={{
+                                    top: 0,
+                                    left: rightEdge - 8,
+                                }}
+                                title={`Laid off by ${initial}`}
+                            >
+                                {initial}
+                            </span>
+                        );
+                    })}
                 {isBook && !forceFaceDown && (
                     <span className="absolute -top-2 right-1 z-20 px-1.5 py-0.5 rounded-md bg-amber-400 text-black text-[9px] font-bold font-mono uppercase tracking-wider shadow">
                         Book · {meld.cards.length}

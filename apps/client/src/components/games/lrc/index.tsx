@@ -331,11 +331,18 @@ export default function LRC({
         sendGameAction("PLAY_AGAIN");
     }, [isLeader, sendGameAction]);
 
-    // Handle return to lobby
+    // Handle return to lobby. Leader fully tears down the game (everyone
+    // returns to lobby); non-leaders quietly demote themselves to spectator
+    // while the game stays finished until the leader ends it or the
+    // server-side auto-cleanup elapses.
     const handleReturnToLobby = useCallback(() => {
         if (!socket || !connected) return;
-        socket.emit("return_to_lobby", { roomId });
-    }, [socket, connected, roomId]);
+        if (isLeader) {
+            socket.emit("abort_game", { roomId, userId });
+        } else {
+            socket.emit("return_to_lobby", { roomId, userId });
+        }
+    }, [socket, connected, roomId, isLeader, userId]);
 
     // Auto-select richest player for Wild targets
     useEffect(() => {

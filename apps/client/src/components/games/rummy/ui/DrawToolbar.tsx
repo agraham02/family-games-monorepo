@@ -11,14 +11,20 @@ export interface DrawToolbarProps {
     disabled?: boolean;
     onDrawStock: () => void;
     onTakeDiscard: () => void;
+    /** Skip the draw entirely (only valid when stock is empty). */
+    onPassDraw?: () => void;
     /** Compact viewport: render smaller buttons. */
     compact?: boolean;
+    /** When true, the primary action passes the draw instead of drawing. */
+    stockEmpty?: boolean;
 }
 
 /**
  * Toolbar rendered in the DRAW scene. Two actions:
  *
- *  - Draw stock (always enabled when stock > 0)
+ *  - Draw stock (always enabled when stock > 0). When the stock is empty
+ *    the button instead dispatches PASS_DRAW (house rule: no forced
+ *    discard pickup just because the deck ran out).
  *  - Take discard (enabled only after tapping a card in the pile to stage
  *    a pickIndex; commit requires a target meld via onTakeDiscard)
  */
@@ -27,7 +33,9 @@ export default function DrawToolbar({
     disabled = false,
     onDrawStock,
     onTakeDiscard,
+    onPassDraw,
     compact = false,
+    stockEmpty = false,
 }: DrawToolbarProps) {
     const btnCls = compact ? "h-7 px-2 text-xs" : "";
     return (
@@ -39,11 +47,12 @@ export default function DrawToolbar({
         >
             <Button
                 size="sm"
-                onClick={onDrawStock}
-                disabled={disabled}
+                onClick={stockEmpty ? onPassDraw : onDrawStock}
+                disabled={disabled || (stockEmpty && !onPassDraw)}
                 className={btnCls}
+                variant={stockEmpty ? "outline" : "default"}
             >
-                Draw stock
+                {stockEmpty ? "Pass draw" : "Draw stock"}
             </Button>
             <Button
                 size="sm"

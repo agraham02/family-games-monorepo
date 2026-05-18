@@ -27,6 +27,7 @@ import {
     requestToJoinRoom,
     acceptJoinRequest,
     rejectJoinRequest,
+    scheduleGameFinishedCleanup,
 } from "./services/RoomService";
 import { GameAction, gameManager } from "./services/GameManager";
 import { spadesModule } from "./games/spades";
@@ -325,6 +326,15 @@ function startServer() {
                     // Handle turn timer after action
                     if (gameId) {
                         handleActionDispatched(gameId, room, newState, action);
+                    }
+
+                    // Arm auto-cleanup if the game just reached its terminal
+                    // phase. Idempotent: ignored if already scheduled.
+                    if (
+                        gameId &&
+                        (newState as { phase?: string }).phase === "finished"
+                    ) {
+                        scheduleGameFinishedCleanup(roomId);
                     }
 
                     emitGameEvent(room, "sync");

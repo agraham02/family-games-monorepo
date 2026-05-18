@@ -47,30 +47,39 @@ export default function MeldScene({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
         >
-            {/* ── Row 1: Discard fan strip ── */}
+            {/* ── Row 1: Discard fan strip. When the pile is empty we render
+                a slim text chip instead of the bulky DiscardPile placeholder
+                so the meld board below gets the vertical space. ── */}
             <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-white/10 bg-black/20 overflow-x-auto">
                 <span className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-white/40">
                     Discard · {gameData.discard.cards.length}
                 </span>
-                <DiscardPile
-                    discard={gameData.discard}
-                    layoutMode={layoutMode}
-                    interactive={false}
-                    topGlow={
-                        controller.hintSettings.discardTop &&
-                        (controller.hints.discardTop.canLayoff ||
-                            controller.hints.discardTop.canFormMeldWithHand)
-                    }
-                />
+                {gameData.discard.cards.length === 0 ? (
+                    <span className="shrink-0 text-[10px] italic text-white/30">
+                        empty
+                    </span>
+                ) : (
+                    <DiscardPile
+                        discard={gameData.discard}
+                        layoutMode={layoutMode}
+                        interactive={false}
+                        topGlow={
+                            controller.hintSettings.discardTop &&
+                            (controller.hints.discardTop.canLayoff ||
+                                controller.hints.discardTop.canFormMeldWithHand)
+                        }
+                    />
+                )}
             </div>
 
             {/* ── Row 2: MeldBoard (flex-1, scrollable) ── */}
-            <div className="flex-1 min-h-0 relative overflow-y-auto px-2 md:px-4 py-2">
+            <div className="flex-1 min-h-0 relative overflow-hidden px-2 md:px-4 py-2">
                 <MeldBoard
                     melds={gameData.melds}
                     players={players}
                     heroPlayerId={heroId}
                     mode={layoutMode}
+                    compactLayout="horizontal"
                     activeMeldId={controller.activeMeldId}
                     eligibleMeldIds={controller.eligibleLayoffMeldIds}
                     onSelectMeld={controller.onSelectMeld}

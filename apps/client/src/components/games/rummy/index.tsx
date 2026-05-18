@@ -115,8 +115,17 @@ export default function Rummy({
 
     const handleReturnToLobby = useCallback(() => {
         if (!socket || !connected) return;
-        socket.emit("abort_game", { roomId, userId });
-    }, [socket, connected, roomId, userId]);
+        // Leader fully tears down the game (everyone returns to lobby);
+        // non-leaders quietly demote themselves to spectator while the game
+        // stays "finished" until the leader ends it or the server-side
+        // auto-cleanup elapses.
+        const isLeader = userId === gameData.leaderId;
+        if (isLeader) {
+            socket.emit("abort_game", { roomId, userId });
+        } else {
+            socket.emit("return_to_lobby", { roomId, userId });
+        }
+    }, [socket, connected, roomId, userId, gameData.leaderId]);
 
     // ---- Local UI state --------------------------------------------------------
     const [selectedHandIndices, setSelectedHandIndices] = useState<number[]>(
@@ -143,17 +152,48 @@ export default function Rummy({
             round: m.round,
             cards: m.cards.map(toServerCard),
         }));
-        const top = gameData.discard.cards.length
-            ? toServerCard(
-                  gameData.discard.cards[gameData.discard.cards.length - 1],
-              )
+        const discardCards = gameData.discard.cards.map(toServerCard);
+        const top = discardCards.length
+            ? discardCards[discardCards.length - 1]
             : null;
+        // The "fits with picked" hint needs a picked card. Two sources:
+        //   1. Server-confirmed `pendingDiscardPick` (mid-turn take-discard
+        //      that hasn't been played yet — rare path).
+        //   2. The staged client `discardPickIndex` while the take-discard
+        //      MeldComposer is open. The action hasn't been dispatched yet
+        //      so the server doesn't know, but the player needs to see
+        //      which hand cards fit *right now* to decide what to compose.
+        const pending = playerData.pendingDiscardPick;
+        let pickedCard: ReturnType<typeof toServerCard> | null = null;
+        let pickedBonus: ReturnType<typeof toServerCard>[] | undefined;
+        if (pending) {
+            pickedCard = toServerCard(pending.pickedCard);
+            pickedBonus = pending.tail.map(toServerCard);
+        } else if (
+            meldComposerOpen &&
+            discardPickIndex != null &&
+            discardPickIndex >= 0 &&
+            discardPickIndex < discardCards.length
+        ) {
+            pickedCard = discardCards[discardPickIndex];
+            pickedBonus = discardCards.slice(discardPickIndex + 1);
+        }
         return computeRummyHints({
             hand: handCards,
             melds: meldsCards,
             discardTop: top,
+            discard: discardCards,
+            pickedCard,
+            pickedBonus,
         });
-    }, [playerData.hand, gameData.melds, gameData.discard.cards]);
+    }, [
+        playerData.hand,
+        gameData.melds,
+        gameData.discard.cards,
+        playerData.pendingDiscardPick,
+        meldComposerOpen,
+        discardPickIndex,
+    ]);
 
     const displayOrder = useMemo<readonly number[]>(() => {
         const handCards = playerData.hand.map(toServerCard);
@@ -307,6 +347,20 @@ export default function Rummy({
         sendAction("DRAW_STOCK", { playerId: heroId });
         setIsSubmitting(false);
     }, [isMyTurn, gameData.turnSubstate, sendAction, heroId]);
+
+    const handlePassDraw = useCallback(() => {
+        if (!isMyTurn || gameData.turnSubstate !== "awaiting-draw") return;
+        if (gameData.stockCount > 0) return;
+        setIsSubmitting(true);
+        sendAction("PASS_DRAW", { playerId: heroId });
+        setIsSubmitting(false);
+    }, [
+        isMyTurn,
+        gameData.turnSubstate,
+        gameData.stockCount,
+        sendAction,
+        heroId,
+    ]);
 
     const handleClickDiscardCard = useCallback(
         (pickIndex: number) => {
@@ -477,6 +531,7 @@ export default function Rummy({
             onSelectHandCard: handleSelectHandCard,
             onClearSelection: () => setSelectedHandIndices([]),
             onDrawStock: handleDrawStock,
+            onPassDraw: handlePassDraw,
             onClickDiscardCard: handleClickDiscardCard,
             onSelectMeld: handleSelectMeld,
             onOpenMeldComposer: () => {
@@ -505,6 +560,7 @@ export default function Rummy({
             handAnnotations,
             handleSelectHandCard,
             handleDrawStock,
+            handlePassDraw,
             handleClickDiscardCard,
             handleSelectMeld,
             handleConfirmMeld,
@@ -516,7 +572,10 @@ export default function Rummy({
     return (
         <div className="relative w-full h-[100dvh] flex flex-col overflow-hidden bg-linear-to-br from-emerald-950 via-emerald-900 to-stone-900">
             <div className="absolute top-2 left-2 z-40">
-                <GameMenu roomCode={roomCode ?? ""}>
+                <GameMenu
+                    roomCode={roomCode ?? ""}
+                    isLeader={userId === gameData.leaderId}
+                >
                     {/* Master hint toggle. Disabling hides every visual hint
                         (rings, badges, deadwood, discard glow, meld pulse). */}
                     <GameSettingToggle

@@ -12,43 +12,12 @@ import {
 } from "@/components/games/shared";
 import { SpadesData, SpadesPlayerData, PlayingCard } from "@shared/types";
 import PlaceBidModal from "./ui/PlaceBidModal";
-import BlindBidModal from "./ui/BlindBidModal";
+import BlindBidWindowModal from "./ui/BlindBidWindowModal";
 import RoundSummaryModal from "./ui/RoundSummaryModal";
 import GameSummaryModal from "./ui/GameSummaryModal";
 import { Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 import { useWebSocketError } from "@/hooks";
-
-// Wrapper component for BlindBidModal to properly use hooks
-function BlindBidModalWrapper({
-    blindBidModalOpen,
-    onClose,
-    canBlindNil,
-    canBlindBid,
-    teamScoreDeficit,
-    onChooseBlindNil,
-    onChooseBlindBid,
-}: {
-    blindBidModalOpen: boolean;
-    onClose: () => void;
-    canBlindNil: boolean;
-    canBlindBid: boolean;
-    teamScoreDeficit: number;
-    onChooseBlindNil: () => void;
-    onChooseBlindBid: (amount: number) => void;
-}) {
-    return (
-        <BlindBidModal
-            isOpen={blindBidModalOpen}
-            onClose={onClose}
-            canBlindNil={canBlindNil}
-            canBlindBid={canBlindBid}
-            teamScoreDeficit={teamScoreDeficit}
-            onChooseBlindNil={onChooseBlindNil}
-            onChooseBlindBid={onChooseBlindBid}
-        />
-    );
-}
 
 export default function Spades({
     gameData,
@@ -103,6 +72,7 @@ export default function Spades({
 
     // Assume gameData has phase, players, currentIndex, and bids fields
     const isBiddingPhase = gameData.phase === "bidding";
+    const isBlindWindowPhase = gameData.phase === "blind-bid-window";
     const isMyTurn =
         gameData.playOrder[gameData.currentTurnIndex] ===
         playerData.localOrdering[0];
@@ -110,101 +80,139 @@ export default function Spades({
     const showHints = useGameSetting("spades.showHints", false);
     const [bid, setBid] = useState<number>(1);
     const [bidModalOpen, setBidModalOpen] = useState(false);
-    const [blindBidModalOpen, setBlindBidModalOpen] = useState(false);
-    const [hasSeenCards, setHasSeenCards] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Calculate blind bid eligibility
-    const blindBidEligibility = useMemo(() => {
-        if (!gameData.teams) {
-            return {
-                isEligible: false,
-                canBlindNil: false,
-                canBlindBid: false,
-                teamScoreDeficit: 0,
-            };
-        }
-        let playerTeamId: number | undefined;
-        Object.entries(gameData.teams).forEach(([teamId, team]) => {
-            if (team.players.includes(userId)) {
-                playerTeamId = Number(teamId);
-            }
-        });
+    // Resolve the local player's team id once.
+    const myTeamId = useMemo<number | undefined>(() => {
+        if (!gameData.teams) return undefined;
+        const entry = Object.entries(gameData.teams).find(([, team]) =>
+            team.players.includes(userId),
+        );
+        return entry ? Number(entry[0]) : undefined;
+    }, [gameData.teams, userId]);
 
-        const isEligible =
-            playerTeamId !== undefined &&
-            (gameData.teamEligibleForBlind?.[playerTeamId] || false);
+    // Blind-bid-window state for the local player's team (if any).
+    const myTeamBlindState = useMemo(() => {
+        if (!gameData.blindWindow || myTeamId === undefined) return undefined;
+        return gameData.blindWindow.teams[myTeamId];
+    }, [gameData.blindWindow, myTeamId]);
 
+    // Partner info (for team-blind-window context display).
+    const partnerInfo = useMemo(() => {
+        if (myTeamId === undefined || !gameData.teams) return null;
+        const partnerId = gameData.teams[myTeamId].players.find(
+            (pid) => pid !== userId,
+        );
+        if (!partnerId) return null;
+        return {
+            id: partnerId,
+            name: gameData.players?.[partnerId]?.name || partnerId,
+        };
+    }, [myTeamId, gameData.teams, gameData.players, userId]);
+
+    // Team score deficit (max team score minus ours).
+    const teamScoreDeficit = useMemo(() => {
+        if (myTeamId === undefined || !gameData.teams) return 0;
         const maxScore = Math.max(
             ...Object.values(gameData.teams).map((t) => t.score),
             0,
         );
-        const teamScoreDeficit =
-            playerTeamId !== undefined
-                ? maxScore - gameData.teams[playerTeamId].score
-                : 0;
+        return maxScore - gameData.teams[myTeamId].score;
+    }, [myTeamId, gameData.teams]);
 
+    const canBlindBid =
+        !!myTeamBlindState?.eligible && gameData.settings.blindBidEnabled;
+    const canBlindNil =
+        !!myTeamBlindState?.eligible &&
+        gameData.settings.allowNil &&
+        gameData.settings.blindNilEnabled;
+
+    // Show the blind window modal whenever we are in the window phase AND
+    // the local player's team has not yet decided. (`pending` status)
+    const showBlindWindowModal =
+        isBlindWindowPhase && myTeamBlindState?.status === "pending";
+
+    // Compute team-minimum-bid constraint for the local player.
+    // If our partner(s) have already bid this round, our bid must bring the
+    // team total to at least settings.teamMinBid.
+    const teamMinBidInfo = useMemo(() => {
+        const teamMinBid = gameData.settings.teamMinBid ?? 0;
+        if (teamMinBid <= 0 || !gameData.teams) {
+            return {
+                minBid: 1,
+                disableNil: false,
+                hint: undefined as string | undefined,
+            };
+        }
+        const team = Object.values(gameData.teams).find((t) =>
+            t.players.includes(userId),
+        );
+        if (!team) {
+            return { minBid: 1, disableNil: false, hint: undefined };
+        }
+        const teammates = team.players.filter((pid) => pid !== userId);
+        const partnerBids = teammates
+            .map((pid) => gameData.bids?.[pid])
+            .filter(
+                (b): b is { amount: number; type: string; isBlind: boolean } =>
+                    Boolean(b),
+            );
+        // Only enforce once all teammates have bid (so we're the last on the team).
+        if (teammates.length === 0 || partnerBids.length < teammates.length) {
+            return { minBid: 1, disableNil: false, hint: undefined };
+        }
+        const partnerTotal = partnerBids.reduce((sum, b) => sum + b.amount, 0);
+        const required = teamMinBid - partnerTotal;
+        if (required <= 0) {
+            return { minBid: 1, disableNil: false, hint: undefined };
+        }
+        const minBid = Math.max(1, Math.min(13, required));
         return {
-            isEligible,
-            canBlindNil:
-                isEligible &&
-                gameData.settings.allowNil &&
-                gameData.settings.blindNilEnabled,
-            canBlindBid: isEligible && gameData.settings.blindBidEnabled,
-            teamScoreDeficit,
+            minBid,
+            disableNil: true,
+            hint: `Team minimum is ${teamMinBid}. Your partner bid ${partnerTotal}, so you must bid at least ${minBid}.`,
         };
-    }, [
-        gameData.teams,
-        gameData.teamEligibleForBlind,
-        gameData.settings,
-        userId,
-    ]);
+    }, [gameData.settings.teamMinBid, gameData.teams, gameData.bids, userId]);
 
-    const canShowBlindBid =
-        blindBidEligibility.isEligible &&
-        (blindBidEligibility.canBlindNil || blindBidEligibility.canBlindBid);
-
-    // Reset hasSeenCards at start of each bidding phase
-    useEffect(() => {
-        if (isBiddingPhase) {
-            setHasSeenCards(false);
-        }
-    }, [isBiddingPhase, gameData.round]);
-
-    // Auto-show appropriate modal when it's my turn
-    useEffect(() => {
-        if (isMyTurn && isBiddingPhase && !hasSeenCards) {
-            if (canShowBlindBid) {
-                setBlindBidModalOpen(true);
-            } else {
-                // Not eligible for blind bid, skip directly to regular bidding
-                setHasSeenCards(true);
-            }
-        }
-    }, [isMyTurn, isBiddingPhase, hasSeenCards, canShowBlindBid]);
-
-    // Close blind bid modal when it's no longer the player's turn or phase changes
-    // This handles the case when timer expires and auto-bid is placed
-    useEffect(() => {
-        if (blindBidModalOpen && (!isMyTurn || !isBiddingPhase)) {
-            setBlindBidModalOpen(false);
-            // Also mark as seen since the turn has passed
-            if (!isBiddingPhase) {
-                setHasSeenCards(false); // Reset for next round
-            }
-        }
-    }, [blindBidModalOpen, isMyTurn, isBiddingPhase]);
-
-    // Also close the regular bid modal when turn changes
+    // Close the bid modal when turn changes or we leave bidding phase.
     useEffect(() => {
         if (bidModalOpen && (!isMyTurn || !isBiddingPhase)) {
             setBidModalOpen(false);
         }
     }, [bidModalOpen, isMyTurn, isBiddingPhase]);
 
+    // Keep the staged bid at or above the team-minimum requirement.
+    useEffect(() => {
+        setBid((prev) =>
+            prev < teamMinBidInfo.minBid ? teamMinBidInfo.minBid : prev,
+        );
+    }, [teamMinBidInfo.minBid]);
+
+    // Push the un-submitted bid amount to the server (debounced) so that if the
+    // turn timer expires before the player confirms, the server's auto-bid uses
+    // the value they had landed on instead of the bare minimum.
+    useEffect(() => {
+        if (!isMyTurn || !isBiddingPhase) return;
+        // If this player has already placed a bid, nothing to stage.
+        if (gameData.bids?.[userId]) return;
+        const handle = setTimeout(() => {
+            sendSystemAction("STAGE_BID", { amount: bid });
+        }, 250);
+        return () => clearTimeout(handle);
+    }, [
+        bid,
+        isMyTurn,
+        isBiddingPhase,
+        gameData.bids,
+        userId,
+        sendSystemAction,
+    ]);
+
     function handleBidChange(delta: number) {
-        // Minimum bid is 1 (0 requires Nil bid)
-        setBid((prev: number) => Math.max(1, Math.min(13, prev + delta)));
+        // Minimum bid is teamMinBidInfo.minBid (default 1 — 0 requires Nil bid)
+        setBid((prev: number) =>
+            Math.max(teamMinBidInfo.minBid, Math.min(13, prev + delta)),
+        );
     }
 
     function handleSubmitBid(isNil: boolean) {
@@ -227,40 +235,39 @@ export default function Spades({
         setTimeout(() => setIsSubmitting(false), 500);
     }
 
-    function handleBlindNil() {
+    function handleCommitTeamBlind(amount: number) {
         if (isSubmitting) return;
-
         setIsSubmitting(true);
-        sendGameAction("PLACE_BID", {
-            bid: { amount: 0, type: "blind-nil", isBlind: true },
-        });
-        setBlindBidModalOpen(false);
-        setHasSeenCards(true);
-
+        sendGameAction("COMMIT_TEAM_BLIND_BID", { amount });
         setTimeout(() => setIsSubmitting(false), 500);
     }
 
-    function handleBlindBid(amount: number) {
+    function handleCommitBlindNil() {
         if (isSubmitting) return;
-
         setIsSubmitting(true);
-        sendGameAction("PLACE_BID", {
-            bid: { amount, type: "blind", isBlind: true },
-        });
-        setBlindBidModalOpen(false);
-        setHasSeenCards(true);
-
+        sendGameAction("COMMIT_BLIND_NIL", {});
         setTimeout(() => setIsSubmitting(false), 500);
     }
 
-    function handleDeclineBlind() {
-        setBlindBidModalOpen(false);
-        setHasSeenCards(true);
+    function handleRevealHands() {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        sendGameAction("REVEAL_TEAM_HANDS", {});
+        setTimeout(() => setIsSubmitting(false), 500);
     }
 
     function handleReturnToLobby() {
         if (!socket || !connected) return;
-        socket.emit("abort_game", { roomId, userId });
+        // Leader fully tears down the game (everyone returns to lobby);
+        // non-leaders quietly demote themselves to spectator while the game
+        // stays "finished" until the leader ends it or the server-side
+        // auto-cleanup elapses.
+        const isLeader = userId === gameData.leaderId;
+        if (isLeader) {
+            socket.emit("abort_game", { roomId, userId });
+        } else {
+            socket.emit("return_to_lobby", { roomId, userId });
+        }
     }
 
     const handleCardPlay = useCallback(
@@ -373,25 +380,32 @@ export default function Spades({
                 Place Bid
             </Button>
 
-            {/* Blind Bid Modal - shown first if eligible */}
-            <BlindBidModalWrapper
-                blindBidModalOpen={blindBidModalOpen}
-                onClose={handleDeclineBlind}
-                canBlindNil={blindBidEligibility.canBlindNil}
-                canBlindBid={blindBidEligibility.canBlindBid}
-                teamScoreDeficit={blindBidEligibility.teamScoreDeficit}
-                onChooseBlindNil={handleBlindNil}
-                onChooseBlindBid={handleBlindBid}
+            {/* Team Blind-Bid Window Modal */}
+            <BlindBidWindowModal
+                isOpen={showBlindWindowModal}
+                teamState={myTeamBlindState}
+                deadlineMs={gameData.blindWindow?.deadline ?? Date.now()}
+                teamScoreDeficit={teamScoreDeficit}
+                canBlindBid={canBlindBid}
+                canBlindNil={canBlindNil}
+                partner={partnerInfo}
+                selfId={userId}
+                onCommitTeamBlind={handleCommitTeamBlind}
+                onCommitBlindNil={handleCommitBlindNil}
+                onRevealHands={handleRevealHands}
             />
 
             <PlaceBidModal
                 bid={bid}
-                bidModalOpen={bidModalOpen && hasSeenCards}
+                bidModalOpen={bidModalOpen}
                 setBidModalOpen={setBidModalOpen}
                 handleBidChange={handleBidChange}
                 handleSubmitBid={handleSubmitBid}
                 allowNil={gameData.settings.allowNil}
                 isSubmitting={isSubmitting}
+                minBid={teamMinBidInfo.minBid}
+                disableNil={teamMinBidInfo.disableNil}
+                teamMinBidHint={teamMinBidInfo.hint}
             />
 
             {/* Round Summary Modal */}

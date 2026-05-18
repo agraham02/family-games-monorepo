@@ -24,6 +24,7 @@ export default function BoardControls() {
                 damping: 20,
                 delay: 0.1,
             }}
+            data-board-overlay
             className="absolute bottom-2 right-2 flex flex-col gap-1.5 z-30"
         >
             <motion.button

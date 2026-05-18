@@ -170,6 +170,12 @@ export function applyRummyDebugAction(
             return;
         }
 
+        case "PASS_DRAW": {
+            if (rummy.stockCount > 0) return;
+            rummy.turnSubstate = "may-meld";
+            return;
+        }
+
         case "DISCARD": {
             const card = cardToDisplay(payload.card);
             if (!card) return;

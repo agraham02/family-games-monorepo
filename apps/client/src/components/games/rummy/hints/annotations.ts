@@ -36,14 +36,17 @@ const GROUP_RING_CLASSES: readonly string[] = [
 
 const LAYOFF_RING_CLASS = "ring-amber-400";
 const NEAR_MELD_RING_CLASS = "ring-white/40";
+const PICKED_MELD_RING_CLASS = "ring-cyan-300";
 
 /**
  * Build per-card annotations for the hero's hand.
  *
  * Priority when a card matches multiple categories:
  *   1. Layoff candidate — amber pulse (always wins, most actionable hint).
- *   2. Complete meld group — solid colored ring (run = solid, set = solid+badge).
- *   3. Near-meld — faint dotted/dashed ring.
+ *   2. Composes with just-picked card — cyan pulse (contextual: only set
+ *      when the player has a `pendingDiscardPick` they must meld).
+ *   3. Complete meld group — solid colored ring (run = solid, set = solid+badge).
+ *   4. Near-meld — faint dotted/dashed ring.
  */
 export function buildHandAnnotations(
     hints: RummyHints,
@@ -77,6 +80,23 @@ export function buildHandAnnotations(
                     ringStyleClass: "ring-1",
                 };
             }
+        }
+    }
+
+    // Contextual: only present while the player has a pending discard pick.
+    // Gated on master-only (no separate sub-toggle): this hint is transient
+    // and high-signal, and the user has already opted in by enabling hints.
+    // Overrides complete/near meld groups so the "what fits with what I just
+    // picked" answer is unambiguous, but still defers to layoff (below).
+    if (hints.meldWithPickedIndices.size > 0) {
+        for (const idx of hints.meldWithPickedIndices) {
+            out[idx] = {
+                ringClass: PICKED_MELD_RING_CLASS,
+                ringStyleClass: "ring-2",
+                pulse: true,
+                badge: "fits",
+                badgeColorClass: "bg-cyan-600",
+            };
         }
     }
 

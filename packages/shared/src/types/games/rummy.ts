@@ -11,7 +11,8 @@
 //   - "Rummy!" call: short window after each discard; first valid call wins.
 //   - Going out: discard last card OR play last card into meld
 //     (cardless-waiting until next turn).
-//   - Stock-exhaustion: round ends immediately.
+//   - Stock-exhaustion: round does NOT end. Players may PASS_DRAW or
+//     take from the discard pile until someone goes out.
 //   - Scoring: meldedPoints − deadwoodPoints (+ goingOutBonus on going out).
 
 import { BaseGameData, BasePlayerData, GameState, TurnTimerInfo } from "./base";
@@ -112,6 +113,17 @@ export interface DrawStockAction {
 }
 
 /**
+ * Skip the draw step entirely. Legal only when the stock pile is empty
+ * (house rule: a player should not be forced to take an unwanted discard
+ * simply because the stock ran out). Transitions the turn to the meld
+ * substate with no card added to the hand.
+ */
+export interface PassDrawAction {
+    type: "PASS_DRAW";
+    playerId: string;
+}
+
+/**
  * Take the discard pile starting from `pickIndex` (0-based). The picked card
  * (cards[pickIndex]) MUST be immediately played, atomically:
  *   - via `intoMeldId` (lay-off onto an existing meld), OR
@@ -177,6 +189,7 @@ export interface ChooseDealSizeAction {
 
 export type RummyAction =
     | DrawStockAction
+    | PassDrawAction
     | TakeDiscardAction
     | LayMeldAction
     | LayOffAction

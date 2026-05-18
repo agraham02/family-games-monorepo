@@ -4,6 +4,7 @@ import React from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import {
+    CardHand,
     PlayerAvatar,
     type PlayerAvatarTurnTimer,
     useGameTable,
@@ -54,56 +55,77 @@ export default function RummyOpponentTile({
     const hideName = isCompact && isVertical;
     const avatarPx = isCompact ? 28 : 36;
 
+    // On larger screens (badge mode off) we render face-down card backs
+    // for the opponent — mirroring Spades / Dominoes — so the opponent's
+    // hand is visible at a glance instead of just a numeric badge.
+    const showCardBacks = !layoutConfig.useBadgeMode && handCount > 0;
+
     return (
         <motion.div
             layout
             layoutId={`rummy-opponent-${playerId}`}
             className={cn(
-                "flex items-center rounded-full border backdrop-blur-sm transition-colors",
-                isVertical
-                    ? "flex-col gap-1 px-1.5 py-1"
-                    : "flex-row gap-2 px-2 py-1.5",
-                isTurn
-                    ? "bg-amber-500/25 border-amber-400/70 shadow-[0_0_14px_rgba(251,191,36,0.35)]"
-                    : "bg-black/40 border-white/10",
+                "flex items-center",
+                isVertical ? "flex-col gap-1" : "flex-row gap-2",
             )}
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
         >
-            <PlayerAvatar
-                playerId={playerId}
-                playerName={name}
-                size={avatarPx}
-                isCurrentTurn={isTurn}
-                connected={connected}
-                turnTimer={isTurn ? turnTimer : undefined}
-                countBadge={{
-                    value: handCount,
-                    tone: handCount === 0 ? "neutral" : "card",
-                    ariaLabel: `${name} has ${handCount} cards`,
-                }}
-            />
-            {!hideName && (
-                <div
-                    className={cn(
-                        "flex flex-col min-w-0",
-                        isVertical ? "items-center" : "items-start",
-                    )}
-                >
-                    <span
+            <div
+                className={cn(
+                    "flex items-center rounded-full border backdrop-blur-sm transition-colors",
+                    isVertical
+                        ? "flex-col gap-1 px-1.5 py-1"
+                        : "flex-row gap-2 px-2 py-1.5",
+                    isTurn
+                        ? "bg-amber-500/25 border-amber-400/70 shadow-[0_0_14px_rgba(251,191,36,0.35)]"
+                        : "bg-black/40 border-white/10",
+                )}
+            >
+                <PlayerAvatar
+                    playerId={playerId}
+                    playerName={name}
+                    size={avatarPx}
+                    isCurrentTurn={isTurn}
+                    connected={connected}
+                    turnTimer={isTurn ? turnTimer : undefined}
+                    countBadge={{
+                        value: handCount,
+                        tone: handCount === 0 ? "neutral" : "card",
+                        ariaLabel: `${name} has ${handCount} cards`,
+                    }}
+                />
+                {!hideName && (
+                    <div
                         className={cn(
-                            "text-xs font-medium truncate",
-                            isCompact ? "max-w-16" : "max-w-28",
-                            isTurn ? "text-amber-100" : "text-white/90",
+                            "flex flex-col min-w-0",
+                            isVertical ? "items-center" : "items-start",
                         )}
                     >
-                        {name}
-                    </span>
-                    {!isCompact && (
-                        <span className="text-[10px] font-mono text-white/60 leading-tight">
-                            {score} pts
+                        <span
+                            className={cn(
+                                "text-xs font-medium truncate",
+                                isCompact ? "max-w-16" : "max-w-28",
+                                isTurn ? "text-amber-100" : "text-white/90",
+                            )}
+                        >
+                            {name}
                         </span>
-                    )}
-                </div>
+                        {!isCompact && (
+                            <span className="text-[10px] font-mono text-white/60 leading-tight">
+                                {score} pts
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+            {showCardBacks && (
+                <CardHand
+                    cards={[]}
+                    cardCount={handCount}
+                    isLocalPlayer={false}
+                    interactive={false}
+                    playerId={playerId}
+                />
             )}
         </motion.div>
     );

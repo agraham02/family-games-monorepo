@@ -38,6 +38,12 @@ export interface SpadesSettings extends BaseGameSettings {
     bagsPenalty: number; // Points deducted per 10 bags
     jokersEnabled: boolean; // Include Big/Little Joker in deck
     deuceOfSpadesHigh: boolean; // 2♠ ranks above A♠
+    /**
+     * Minimum combined bid amount per team (sum of both partners' amounts).
+     * Enforced when the second teammate places their bid. 0 disables the rule.
+     * Nil and blind-nil contribute 0 toward the team total.
+     */
+    teamMinBid: number;
 }
 
 export const DEFAULT_SPADES_SETTINGS: SpadesSettings = {
@@ -50,6 +56,7 @@ export const DEFAULT_SPADES_SETTINGS: SpadesSettings = {
     bagsPenalty: -100,
     jokersEnabled: true,
     deuceOfSpadesHigh: true,
+    teamMinBid: 4,
 };
 
 // ============================================================================
@@ -244,6 +251,19 @@ export const SPADES_SETTINGS_DEFINITIONS: SettingDefinition[] = [
         type: "boolean",
         default: true,
         category: "rules",
+    },
+    {
+        key: "teamMinBid",
+        label: "Team Minimum Bid",
+        description:
+            "Each team's combined bid must total at least this many tricks. Enforced when the second partner bids. Set to 0 to disable.",
+        type: "number",
+        default: 4,
+        category: "rules",
+        min: 0,
+        max: 13,
+        step: 1,
+        suffix: "tricks",
     },
     // Advanced category
     {

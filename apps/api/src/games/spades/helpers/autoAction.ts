@@ -16,14 +16,58 @@ import { canPlayCard } from "./player";
  * @param playerId - The player who timed out
  * @returns The bid to place
  */
-export function getAutoBid(state: SpadesState, _playerId: string): Bid {
-    // If nil is allowed, bid 0 (nil)
-    // Otherwise bid 1 (minimum non-nil bid)
+export function getAutoBid(state: SpadesState, playerId: string): Bid {
+    // Prefer the player's most recent un-submitted draft bid if we have one —
+    // it represents their last intent before the timer expired. Otherwise fall
+    // back to nil (if allowed) or 1.
+    const draft = state.draftBids?.[playerId];
     const nilAllowed = state.settings.allowNil;
+    let amount: number;
+    let type: Bid["type"];
+    if (typeof draft === "number" && draft > 0) {
+        amount = Math.max(1, Math.min(13, Math.floor(draft)));
+        type = "normal";
+    } else if (typeof draft === "number" && draft === 0 && nilAllowed) {
+        amount = 0;
+        type = "nil";
+    } else {
+        amount = nilAllowed ? 0 : 1;
+        type = nilAllowed ? "nil" : "normal";
+    }
+
+    // Honor the team minimum-bid rule: if this is the last bidder on the team
+    // and partner(s) already bid below the team minimum, bump our auto-bid up
+    // to satisfy the constraint.
+    const teamMinBid = state.settings.teamMinBid ?? 0;
+    if (teamMinBid > 0) {
+        const team = Object.values(state.teams).find((t) =>
+            t.players.includes(playerId)
+        );
+        if (team) {
+            const teammates = team.players.filter((pid) => pid !== playerId);
+            const partnerBids = teammates
+                .map((pid) => state.bids[pid])
+                .filter((b): b is Bid => Boolean(b));
+            if (
+                teammates.length > 0 &&
+                partnerBids.length === teammates.length
+            ) {
+                const partnerTotal = partnerBids.reduce(
+                    (sum, b) => sum + b.amount,
+                    0
+                );
+                const required = Math.max(1, teamMinBid - partnerTotal);
+                if (amount < required) {
+                    amount = Math.min(13, required);
+                    type = "normal";
+                }
+            }
+        }
+    }
 
     return {
-        amount: nilAllowed ? 0 : 1,
-        type: nilAllowed ? "nil" : "normal",
+        amount,
+        type,
         isBlind: false,
     };
 }

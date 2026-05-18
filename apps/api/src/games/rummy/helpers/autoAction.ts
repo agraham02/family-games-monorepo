@@ -68,6 +68,12 @@ export function getAutoAction(
 
     switch (state.turnSubstate) {
         case "awaiting-draw":
+            // If the stock is empty the timer auto-passes the draw rather
+            // than forcing the player into a discard pickup (which may not
+            // even be legal). The round continues until someone goes out.
+            if (state.stock.length === 0) {
+                return { type: "PASS_DRAW", playerId };
+            }
             return { type: "DRAW_STOCK", playerId };
         case "awaiting-discard-play": {
             // Edge case: player has a pending pick they must play. We can't

@@ -77,8 +77,17 @@ export default function Dominoes({
 
     const handleReturnToLobby = useCallback(() => {
         if (!socket || !connected) return;
-        socket.emit("abort_game", { roomId, userId });
-    }, [socket, connected, roomId, userId]);
+        // Leader fully tears down the game (everyone returns to lobby);
+        // non-leaders quietly demote themselves to spectator while the game
+        // stays "finished" until the leader ends it or the server-side
+        // auto-cleanup elapses.
+        const isLeader = userId === gameData.leaderId;
+        if (isLeader) {
+            socket.emit("abort_game", { roomId, userId });
+        } else {
+            socket.emit("return_to_lobby", { roomId, userId });
+        }
+    }, [socket, connected, roomId, userId, gameData.leaderId]);
 
     // Track previous board tile count to detect new placements
     const prevTileCountRef = useRef(0);

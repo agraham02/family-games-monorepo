@@ -12,6 +12,7 @@ import {
     DominoesGameMode,
 } from "@family-games/shared";
 import { GameModule, GameState, GameAction } from "../../services/GameManager";
+import { turnTimerService } from "../../services/TurnTimerService";
 import { v4 as uuidv4 } from "uuid";
 import {
     buildDominoSet,
@@ -112,9 +113,11 @@ function init(
     customSettings?: Partial<DominoesSettings>,
 ): DominoesState {
     const gameId = uuidv4();
-    // Turn players into an object map for easier access
+    // Turn players into an object map for easier access.
+    // Clone each user so that downstream freezing of game state cannot freeze the
+    // User objects that are still referenced by room.users in RoomService.
     const players: Record<string, User> = Object.fromEntries(
-        room.users.map((user) => [user.id, user]),
+        room.users.map((user) => [user.id, { ...user }]),
     );
 
     const settings: DominoesSettings = {
@@ -310,20 +313,20 @@ function getState(state: DominoesState): Partial<DominoesState> & {
     );
     publicState.boneyardCount = state.boneyard.length;
 
-    // Add turn timer info if active (same format as Spades for consistency)
+    // Surface the per-turn countdown to clients only when the timer
+    // service has actually started one. The service waits for every
+    // seated player to ack `client_game_ready`, so this prevents the UI
+    // from ticking down while the player is still loading the game.
     const turnTimeLimit = state.settings?.turnTimeLimit;
-    if (
-        turnTimeLimit &&
-        turnTimeLimit > 0 &&
-        state.turnStartedAt &&
-        state.phase === "playing"
-    ) {
-        const startTime = new Date(state.turnStartedAt).getTime();
-        publicState.turnTimer = {
-            startedAt: startTime,
-            duration: turnTimeLimit * 1000,
-            serverTime: Date.now(),
-        };
+    if (turnTimeLimit && turnTimeLimit > 0 && state.phase === "playing") {
+        const timerState = turnTimerService.getTimerState(state.id);
+        if (timerState && timerState.startedAt) {
+            publicState.turnTimer = {
+                startedAt: timerState.startedAt,
+                duration: turnTimeLimit * 1000,
+                serverTime: Date.now(),
+            };
+        }
     }
 
     return publicState;

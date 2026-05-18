@@ -130,27 +130,95 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
     );
 
     // ── Auto-fit: compute target scale/position to show all tiles ──
-    // Padding scales with the smaller container dimension so small screens
-    // (phones) don't waste a fixed 80px on each side.
-    const getAutoFitPadding = (containerW: number, containerH: number) => {
-        const minDim = Math.min(containerW, containerH);
-        return Math.max(16, Math.min(48, Math.round(minDim * 0.05)));
-    };
+    // We use *per-side insets* rather than uniform padding so the autofit
+    // can reserve space for overlay UI that lives inside the board container
+    // (notably BoardControls in the bottom-right corner). Without this, the
+    // chain ends up clipping under the zoom buttons once the snake grows
+    // large. We measure overlay elements live (any descendant flagged with
+    // `data-board-overlay`) instead of hard-coding sizes, so the reservation
+    // stays correct if controls move or resize.
+    const getAutoFitInsets = useCallback(
+        (containerW: number, containerH: number) => {
+            const minDim = Math.min(containerW, containerH);
+            // Bumped from 6%/56 cap to 10%/96 cap so the chain never sits
+            // flush against the edge. The visual `getTilePixelBounds` is the
+            // tile body — but tiles have rounded corners + a subtle drop
+            // shadow that visually extends a few px beyond the bbox. Generous
+            // padding also leaves room for the ghost-placement preview at
+            // either chain end without re-fitting jarringly.
+            const base = Math.max(32, Math.min(96, Math.round(minDim * 0.1)));
+            let top = base,
+                right = base,
+                bottom = base,
+                left = base;
+
+            const container = containerRef.current;
+            if (container) {
+                const cRect = container.getBoundingClientRect();
+                const overlays = container.querySelectorAll<HTMLElement>(
+                    "[data-board-overlay]",
+                );
+                const SAFETY = 16; // px of breathing room around overlays
+                for (const el of overlays) {
+                    const r = el.getBoundingClientRect();
+                    if (r.width === 0 || r.height === 0) continue;
+                    const fromTop = r.top - cRect.top;
+                    const fromLeft = r.left - cRect.left;
+                    const fromRight = cRect.right - r.right;
+                    const fromBottom = cRect.bottom - r.bottom;
+                    // Pick the *single* container edge the overlay is closest
+                    // to and inflate only that inset. Reserving multiple
+                    // sides for a corner overlay (e.g. BoardControls
+                    // bottom-right) would over-shrink the chain.
+                    const min = Math.min(
+                        fromTop,
+                        fromRight,
+                        fromBottom,
+                        fromLeft,
+                    );
+                    if (min === fromRight) {
+                        right = Math.max(right, r.width + fromRight + SAFETY);
+                    } else if (min === fromLeft) {
+                        left = Math.max(left, r.width + fromLeft + SAFETY);
+                    } else if (min === fromBottom) {
+                        bottom = Math.max(
+                            bottom,
+                            r.height + fromBottom + SAFETY,
+                        );
+                    } else {
+                        top = Math.max(top, r.height + fromTop + SAFETY);
+                    }
+                }
+            }
+
+            return { top, right, bottom, left };
+        },
+        [],
+    );
 
     // Cap auto-fit zoom. Allowing >1 lets small chains fill the available
     // space instead of leaving large empty margins. 1.75 keeps tiles
-    // readable without rendering at >2x source resolution.
+    // readable without rendering at >2x source resolution. The lower bound
+    // is kept very small so a near-full board (chain spanning most of the
+    // grid + ghost previews extending past it) can always fit without
+    // clipping — readability degrades gracefully but no tile is hidden.
     const AUTOFIT_MAX_SCALE = 1.75;
-    const AUTOFIT_MIN_SCALE = 0.3;
+    const AUTOFIT_MIN_SCALE = 0.1;
 
     const getAutoFitTarget = useCallback(
         (containerW: number, containerH: number) => {
             const state = useDominoesStore.getState();
             const segments = state.chain.segments;
             const ghosts = state.ghostPlacements;
-            const padding = getAutoFitPadding(containerW, containerH);
-            const availW = Math.max(1, containerW - padding * 2);
-            const availH = Math.max(1, containerH - padding * 2);
+            const insets = getAutoFitInsets(containerW, containerH);
+            const availW = Math.max(1, containerW - insets.left - insets.right);
+            const availH = Math.max(1, containerH - insets.top - insets.bottom);
+
+            // Visual center of the available area (offset by the insets so
+            // the chain centers in the *visible* region, not the raw
+            // container midpoint).
+            const viewCx = insets.left + availW / 2;
+            const viewCy = insets.top + availH / 2;
 
             if (segments.length === 0 && ghosts.length === 0) {
                 // No tiles yet — center on focal point at a calm scale so
@@ -158,8 +226,8 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
                 const initialScale = Math.min(AUTOFIT_MAX_SCALE, 1.1);
                 return {
                     scale: initialScale,
-                    x: containerW / 2 - focalX * initialScale,
-                    y: containerH / 2 - focalY * initialScale,
+                    x: viewCx - focalX * initialScale,
+                    y: viewCy - focalY * initialScale,
                 };
             }
 
@@ -198,8 +266,8 @@ export default function GameBoard({ onPlaceAtEnd }: GameBoardProps) {
 
             return {
                 scale,
-                x: containerW / 2 - chainCx * scale,
-                y: containerH / 2 - chainCy * scale,
+                x: viewCx - chainCx * scale,
+                y: viewCy - chainCy * scale,
             };
         },
         [focalX, focalY],

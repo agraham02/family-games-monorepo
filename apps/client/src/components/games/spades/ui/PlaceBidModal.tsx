@@ -17,6 +17,9 @@ export default function PlaceBidModal({
     handleSubmitBid,
     allowNil,
     isSubmitting,
+    minBid = 1,
+    disableNil = false,
+    teamMinBidHint,
 }: {
     bid: number;
     bidModalOpen: boolean;
@@ -25,8 +28,15 @@ export default function PlaceBidModal({
     handleSubmitBid: (isNil: boolean) => void;
     allowNil: boolean;
     isSubmitting?: boolean;
+    /** Minimum allowed non-nil bid (defaults to 1). */
+    minBid?: number;
+    /** Disable nil bid (e.g. when team minimum would not be met). */
+    disableNil?: boolean;
+    /** Optional helper text explaining the team minimum rule. */
+    teamMinBidHint?: string;
 }) {
     const [isNilBid, setIsNilBid] = useState(false);
+    const nilAllowed = allowNil && !disableNil;
     return (
         <Dialog open={bidModalOpen} onOpenChange={setBidModalOpen}>
             <DialogContent className="flex flex-col items-center gap-3 sm:gap-6 max-w-[95vw] sm:max-w-sm max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-slate-900 border-white/10 text-white p-3 sm:p-6">
@@ -39,8 +49,14 @@ export default function PlaceBidModal({
                     How many tricks do you think you can win?
                 </DialogDescription>
 
+                {teamMinBidHint && (
+                    <div className="w-full rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-center text-xs sm:text-sm text-amber-200">
+                        {teamMinBidHint}
+                    </div>
+                )}
+
                 {/* Nil Bid Toggle */}
-                {allowNil && (
+                {nilAllowed && (
                     <Button
                         variant={isNilBid ? "default" : "outline"}
                         onClick={() => {
@@ -71,7 +87,7 @@ export default function PlaceBidModal({
                         size="icon"
                         variant="outline"
                         onClick={() => handleBidChange(-1)}
-                        disabled={bid <= 1}
+                        disabled={bid <= minBid}
                         aria-label="Decrease bid by 1"
                         className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-white/20 bg-slate-800 hover:bg-slate-700 text-white text-xl sm:text-2xl disabled:opacity-30"
                     >
@@ -118,7 +134,7 @@ export default function PlaceBidModal({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleBidChange(quickBid - bid)}
-                                disabled={isNilBid}
+                                disabled={isNilBid || quickBid < minBid}
                                 aria-pressed={bid === quickBid && !isNilBid}
                                 aria-label={`Bid ${quickBid} tricks`}
                                 className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full text-xs sm:text-sm ${

@@ -33,6 +33,7 @@ import {
     PartialGameSettings,
 } from "@family-games/shared";
 import { GameModule, GameAction, GameState } from "../../services/GameManager";
+import { turnTimerService } from "../../services/TurnTimerService";
 import {
     handlePlayerReconnect,
     handlePlayerDisconnect,
@@ -102,8 +103,10 @@ function init(room: Room, customSettings?: PartialGameSettings): RummyState {
         ...(customSettings as Partial<RummySettings>),
     };
 
+    // Clone each user so that immer's deep-freeze of RummyState players does not
+    // freeze the User objects still referenced by room.users in RoomService.
     const players: Record<string, User> = Object.fromEntries(
-        room.users.map((u) => [u.id, u]),
+        room.users.map((u) => [u.id, { ...u }]),
     );
     const playOrder = room.users.map((u) => u.id);
 
@@ -288,23 +291,26 @@ function checkGoingOut(
 
 function reducer(state: GameState, action: GameAction): GameState {
     const s = state as unknown as InternalRummyState;
+    // NOTE: do NOT wrap applyAction in a try/catch that swallows errors.
+    // Swallowing errors here causes `gameManager.dispatch` to succeed, which
+    // sends `action_ack { success: true }` to the client even though the
+    // state never transitioned — the client never sees feedback and the UI
+    // appears frozen (e.g. CHOOSE_DEAL_SIZE modal that won't close).
+    // Let exceptions propagate so the socket handler can return
+    // `action_ack { success: false, error }` and the optimistic queue can
+    // roll back + toast the user.
     return produce(s, (draft) => {
-        try {
-            // Actions arrive as { type, payload, userId }. The rummy action
-            // shape (RummyAction) holds the action-specific fields directly,
-            // so flatten payload onto the action before dispatching.
-            const payload =
-                (action as { payload?: Record<string, unknown> }).payload ?? {};
-            const flat = {
-                ...payload,
-                type: action.type,
-                userId: (action as { userId?: string }).userId,
-            } as unknown as RummyAction & { userId?: string };
-            applyAction(draft, flat);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            draft.history.push(`[ERROR] ${msg}`);
-        }
+        // Actions arrive as { type, payload, userId }. The rummy action
+        // shape (RummyAction) holds the action-specific fields directly,
+        // so flatten payload onto the action before dispatching.
+        const payload =
+            (action as { payload?: Record<string, unknown> }).payload ?? {};
+        const flat = {
+            ...payload,
+            type: action.type,
+            userId: (action as { userId?: string }).userId,
+        } as unknown as RummyAction & { userId?: string };
+        applyAction(draft, flat);
     }) as InternalRummyState;
 }
 
@@ -319,6 +325,8 @@ function applyAction(
             return handleChooseDealSize(draft, actorId, action.handSize);
         case "DRAW_STOCK":
             return handleDrawStock(draft, actorId);
+        case "PASS_DRAW":
+            return handlePassDraw(draft, actorId);
         case "TAKE_DISCARD":
             return handleTakeDiscard(
                 draft,
@@ -413,9 +421,13 @@ function handleDrawStock(state: InternalRummyState, playerId: string): void {
     }
 
     if (state.stock.length === 0) {
-        // Stock exhausted → round ends immediately.
-        endRound(state, null);
-        return;
+        // Stock exhausted — the round does not end here. The player may
+        // either take from the discard pile or PASS_DRAW (house rule) to
+        // proceed straight to the meld/discard phase. The round only ends
+        // when someone goes out by discarding their last card, or by
+        // playing their last card into a meld/layoff and returning here
+        // cardless on a subsequent turn (handled above).
+        throw new Error("Stock is empty — take from discard or pass the draw");
     }
 
     const top = state.stock[0];
@@ -428,6 +440,27 @@ function handleDrawStock(state: InternalRummyState, playerId: string): void {
         // Drawing the last card still allows the rest of the turn,
         // but next player can't draw → they'll trigger end on next draw.
     }
+}
+
+function handlePassDraw(state: InternalRummyState, playerId: string): void {
+    assertCurrentPlayer(state, playerId);
+    if (state.phase !== "playing") throw new Error("Game not in playing phase");
+    if (state.turnSubstate === "cardless-waiting") {
+        // Cardless player at the start of their turn → they go out now.
+        state._wentOutPlayerId = playerId;
+        endRound(state, playerId);
+        return;
+    }
+    if (state.turnSubstate !== "awaiting-draw") {
+        throw new Error(`Cannot pass draw in substate: ${state.turnSubstate}`);
+    }
+    if (state.stock.length > 0) {
+        // Passing the draw is only allowed when the stock is empty; otherwise
+        // the player must either DRAW_STOCK or TAKE_DISCARD.
+        throw new Error("Cannot pass draw while stock has cards");
+    }
+    state.turnSubstate = "may-meld";
+    state.history.push(`${playerId} passed the draw (stock empty)`);
 }
 
 function handleTakeDiscard(
@@ -489,9 +522,27 @@ function handleTakeDiscard(
         if (!isValidMeld(newMeld)) {
             throw new Error("newMeld is not a valid set or run");
         }
-        // All other cards must come from the player's hand.
+        // Other cards may come from the player's hand OR from the tail
+        // (cards above the picked card in the discard pile, which the
+        // player is required to take into their hand on this action).
+        // We treat the pickup + new-meld as one atomic motion: any tail
+        // card not used in the meld still lands in hand.
         const otherCards = newMeld.filter((c) => !cardsEqual(c, picked));
-        const handAfter = removeCards(state.hands[playerId], otherCards);
+        const tailRemaining = [...tail];
+        const handCardsToConsume: Card[] = [];
+        for (const c of otherCards) {
+            // Prefer tail first (free pool), then hand.
+            const ti = tailRemaining.findIndex((t) => cardsEqual(t, c));
+            if (ti >= 0) {
+                tailRemaining.splice(ti, 1);
+                continue;
+            }
+            handCardsToConsume.push(c);
+        }
+        const handAfter = removeCards(
+            state.hands[playerId],
+            handCardsToConsume,
+        );
         if (!handAfter)
             throw new Error("newMeld references cards not in your hand");
 
@@ -504,8 +555,8 @@ function handleTakeDiscard(
             round: state.round,
         };
         state.melds.push(meld);
-        // Player gains tail, loses any used hand cards.
-        state.hands[playerId] = [...handAfter, ...tail];
+        // Player gains any unused tail cards, loses used hand cards.
+        state.hands[playerId] = [...handAfter, ...tailRemaining];
         attributeMeldedCards(state, playerId, newMeld);
         state.history.push(
             `${playerId} took ${picked.rank}${picked.suit[0]} (+${tail.length} tail) → new ${meld.kind} ${meld.id}`,
@@ -742,7 +793,6 @@ function toClientSettings(s: RummySettings): RummyClientSettings {
 function buildTurnTimer(state: InternalRummyState): TurnTimerInfo | undefined {
     const limit = state.settings.turnTimeLimit;
     if (!limit || limit <= 0) return undefined;
-    if (!state.turnStartedAt) return undefined;
     if (state.phase !== "playing") return undefined;
     // Don't surface the per-turn countdown to clients during transient
     // substates where no player is actively deciding (the Rummy! call
@@ -754,9 +804,15 @@ function buildTurnTimer(state: InternalRummyState): TurnTimerInfo | undefined {
     ) {
         return undefined;
     }
-    const startedAt = new Date(state.turnStartedAt).getTime();
+    // Only surface a ticking countdown once the timer service has actually
+    // started one. The service waits for every seated player to ack
+    // `client_game_ready` before calling startTurn, so this prevents the
+    // UI from showing a timer that's already counting down while the
+    // player is still loading the game.
+    const timerState = turnTimerService.getTimerState(state.id);
+    if (!timerState || !timerState.startedAt) return undefined;
     return {
-        startedAt,
+        startedAt: timerState.startedAt,
         duration: limit * 1000,
         serverTime: Date.now(),
     };

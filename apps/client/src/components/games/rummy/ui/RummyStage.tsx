@@ -20,6 +20,7 @@ import MeldScene from "./scenes/MeldScene";
 import MeldToolbar from "./MeldToolbar";
 import HandPeek from "./HandPeek";
 import RummyOpponentTile from "./RummyOpponentTile";
+import TurnIndicator from "./TurnIndicator";
 import type { RummySceneCommonProps } from "./types";
 
 export interface RummyStageProps extends RummySceneCommonProps {
@@ -157,8 +158,7 @@ export default function RummyStage(props: RummyStageProps) {
                 playerCount={playerCount}
                 feltGradient="from-emerald-950 via-emerald-900 to-stone-900"
                 bentoMode={bentoMode}
-            >
-                {/* ── Opponent edge regions — hidden in bento mode ── */}
+            >                {/* ── Opponent edge regions — hidden in bento mode ── */}
                 {!bentoMode &&
                     (["top", "left", "right"] as const).map((edge) => {
                         const slots = byEdge[edge];
@@ -370,6 +370,20 @@ export default function RummyStage(props: RummyStageProps) {
                             "inset 0 0 0 2px rgba(16,185,129,0.45), inset 0 0 40px rgba(16,185,129,0.25)",
                     }}
                 />
+            )}
+
+            {/* Top-center turn + countdown pill. Always present during the
+                playing phase so the per-turn timer is visible regardless
+                of substate (DRAW vs MELD) — the avatar ring can be hard
+                to spot in bento layouts. */}
+            {gameData.phase === "playing" && (
+                <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 z-30">
+                    <TurnIndicator
+                        gameData={gameData}
+                        heroId={heroId}
+                        isMyTurn={isMyTurn}
+                    />
+                </div>
             )}
         </div>
     );

@@ -234,37 +234,32 @@ export default function GameSummaryModal({
                                 </div>
                             </motion.div>
 
-                            {/* Return to Lobby Button (Leader only) */}
-                            {isLeader && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.8 }}
-                                    className="w-full"
+                            {/* Action button: leader fully ends the game,
+                                non-leader just demotes themselves to spectator.
+                                The parent decides which event to emit based on
+                                isLeader, so the click handler is shared. */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.8 }}
+                                className="w-full flex flex-col items-center gap-2"
+                            >
+                                <Button
+                                    onClick={onReturnToLobby}
+                                    size="lg"
+                                    className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
                                 >
-                                    <Button
-                                        onClick={onReturnToLobby}
-                                        size="lg"
-                                        className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
-                                    >
-                                        <Home className="w-5 h-5 mr-2" />
-                                        Return to Lobby
-                                    </Button>
-                                </motion.div>
-                            )}
-
-                            {/* Waiting message for non-leaders */}
-                            {!isLeader && (
-                                <motion.p
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.8 }}
-                                    className="text-white/60 text-sm"
-                                >
-                                    Waiting for room leader to return to
-                                    lobby...
-                                </motion.p>
-                            )}
+                                    <Home className="w-5 h-5 mr-2" />
+                                    {isLeader ? "End Game" : "Leave to Lobby"}
+                                </Button>
+                                {!isLeader && (
+                                    <p className="text-white/60 text-xs">
+                                        The leader can end the game for
+                                        everyone, or it will close
+                                        automatically.
+                                    </p>
+                                )}
+                            </motion.div>
                         </>
                     )}
                 </AnimatePresence>

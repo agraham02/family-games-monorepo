@@ -529,6 +529,9 @@ function SpadesGameTable({
                                             ? setIsHeroHandSpread
                                             : undefined
                                     }
+                                    expansionMode={
+                                        isLocal ? "hover-zoom" : undefined
+                                    }
                                 />
                             </EdgeRegion>
                         );

@@ -290,33 +290,28 @@ export default function DominoesGameSummaryModal({
                                 </div>
                             </motion.div>
 
-                            {isLeader ? (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.8 }}
-                                    className="w-full"
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.8 }}
+                                className="w-full flex flex-col items-center gap-2"
+                            >
+                                <Button
+                                    onClick={onReturnToLobby}
+                                    size="lg"
+                                    className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
                                 >
-                                    <Button
-                                        onClick={onReturnToLobby}
-                                        size="lg"
-                                        className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold"
-                                    >
-                                        <Home className="w-5 h-5 mr-2" />
-                                        Return to Lobby
-                                    </Button>
-                                </motion.div>
-                            ) : (
-                                <motion.p
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.8 }}
-                                    className="text-white/60 text-sm"
-                                >
-                                    Waiting for room leader to return to
-                                    lobby...
-                                </motion.p>
-                            )}
+                                    <Home className="w-5 h-5 mr-2" />
+                                    {isLeader ? "End Game" : "Leave to Lobby"}
+                                </Button>
+                                {!isLeader && (
+                                    <p className="text-white/60 text-xs">
+                                        The leader can end the game for
+                                        everyone, or it will close
+                                        automatically.
+                                    </p>
+                                )}
+                            </motion.div>
                         </>
                     )}
                 </AnimatePresence>

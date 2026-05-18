@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createRoom, joinRoom, PrivateRoomError } from "@/services/lobby";
@@ -15,17 +15,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useSession } from "@/contexts/SessionContext";
 import {
-    PlusCircleIcon,
-    UsersIcon,
     SparklesIcon,
     DicesIcon,
     ArrowRightIcon,
     Loader2Icon,
     AlertCircleIcon,
+    PlusCircleIcon,
+    UsersIcon,
 } from "lucide-react";
 import {
     validatePlayerName,
@@ -36,332 +35,11 @@ import {
     parseRoomCode,
 } from "@shared/validation";
 
-interface CreateRoomCardProps {
-    name: string;
-    onNameChange: (v: string) => void;
-    roomName: string;
-    onRoomNameChange: (v: string) => void;
-    onCreate: (name: string, roomName: string) => Promise<void>;
-    loading: boolean;
-    nameError: string | null;
-    roomNameError: string | null;
-}
-
-function CreateRoomCard({
-    name,
-    onNameChange,
-    roomName,
-    onRoomNameChange,
-    onCreate,
-    loading,
-    nameError,
-    roomNameError,
-}: CreateRoomCardProps) {
-    const isFormValid = !nameError && name.trim().length > 0 && !roomNameError;
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="w-full"
-        >
-            <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                        <PlusCircleIcon className="w-7 h-7 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold">
-                        Create a Room
-                    </CardTitle>
-                    <CardDescription className="text-zinc-500 dark:text-zinc-400">
-                        Start a new game session
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4 pt-4">
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="create-name"
-                            className="text-sm font-medium"
-                        >
-                            Your Name
-                        </Label>
-                        <Input
-                            id="create-name"
-                            placeholder="Enter your name"
-                            value={name}
-                            onChange={(e) => onNameChange(e.target.value)}
-                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                                nameError
-                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
-                                    : ""
-                            }`}
-                            aria-label="Your Name"
-                            maxLength={50}
-                        />
-                        {nameError && (
-                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
-                                <span>{nameError}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="room-name"
-                            className="text-sm font-medium"
-                        >
-                            Room Name{" "}
-                            <span className="text-zinc-400 font-normal">
-                                (optional)
-                            </span>
-                        </Label>
-                        <Input
-                            id="room-name"
-                            placeholder="My Game Room"
-                            value={roomName}
-                            onChange={(e) => onRoomNameChange(e.target.value)}
-                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                                roomNameError
-                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
-                                    : ""
-                            }`}
-                            aria-label="Room Name"
-                            maxLength={100}
-                        />
-                        {roomNameError && (
-                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
-                                <span>{roomNameError}</span>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-                <CardFooter className="pt-2">
-                    <Button
-                        className="w-full h-11 bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-300"
-                        type="button"
-                        disabled={!isFormValid || loading}
-                        onClick={() =>
-                            onCreate(
-                                parsePlayerName(name) ?? name.trim(),
-                                parseRoomName(roomName) ?? roomName.trim()
-                            )
-                        }
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2Icon className="w-4 h-4 animate-spin" />
-                                Creating...
-                            </>
-                        ) : (
-                            <>
-                                Create Room
-                                <ArrowRightIcon className="w-4 h-4" />
-                            </>
-                        )}
-                    </Button>
-                </CardFooter>
-            </Card>
-        </motion.div>
-    );
-}
-
-interface JoinRoomCardProps {
-    name: string;
-    onNameChange: (v: string) => void;
-    roomCode: string;
-    onRoomCodeChange: (v: string) => void;
-    onJoin: (name: string, roomCode: string) => Promise<void>;
-    loading: boolean;
-    waitingForApproval: boolean;
-    approvalTimeRemaining: number | null;
-    onCancelRequest: () => void;
-    nameError: string | null;
-    roomCodeError: string | null;
-}
-
-function JoinRoomCard({
-    name,
-    onNameChange,
-    roomCode,
-    onRoomCodeChange,
-    onJoin,
-    loading,
-    waitingForApproval,
-    approvalTimeRemaining,
-    onCancelRequest,
-    nameError,
-    roomCodeError,
-}: JoinRoomCardProps) {
-    const isFormValid =
-        !nameError &&
-        name.trim().length > 0 &&
-        !roomCodeError &&
-        roomCode.length === 6;
-
-    // Show waiting for approval UI
-    if (waitingForApproval) {
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
-                className="w-full"
-            >
-                <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl">
-                    <CardHeader className="text-center pb-2">
-                        <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
-                            <Loader2Icon className="w-7 h-7 text-white animate-spin" />
-                        </div>
-                        <CardTitle className="text-xl font-bold">
-                            Waiting for Approval
-                        </CardTitle>
-                        <CardDescription className="text-zinc-500 dark:text-zinc-400">
-                            Your request has been sent to the room leader
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center gap-4 pt-4 pb-6">
-                        <p className="text-sm text-center text-zinc-600 dark:text-zinc-400">
-                            The room{" "}
-                            <span className="font-mono font-semibold">
-                                {roomCode}
-                            </span>{" "}
-                            is private. Please wait for the leader to accept
-                            your request.
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                            <span>
-                                {approvalTimeRemaining !== null
-                                    ? `Request pending... (${approvalTimeRemaining}s)`
-                                    : "Request pending..."}
-                            </span>
-                        </div>
-                        <Button
-                            variant="outline"
-                            onClick={onCancelRequest}
-                            className="mt-2"
-                        >
-                            Cancel Request
-                        </Button>
-                    </CardContent>
-                </Card>
-            </motion.div>
-        );
-    }
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
-            className="w-full"
-        >
-            <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                        <UsersIcon className="w-7 h-7 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold">
-                        Join a Room
-                    </CardTitle>
-                    <CardDescription className="text-zinc-500 dark:text-zinc-400">
-                        Enter an existing game
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4 pt-4">
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="join-name"
-                            className="text-sm font-medium"
-                        >
-                            Your Name
-                        </Label>
-                        <Input
-                            id="join-name"
-                            placeholder="Enter your name"
-                            value={name}
-                            onChange={(e) => onNameChange(e.target.value)}
-                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${
-                                nameError
-                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
-                                    : ""
-                            }`}
-                            aria-label="Your Name"
-                            maxLength={50}
-                        />
-                        {nameError && (
-                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
-                                <span>{nameError}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="room-code"
-                            className="text-sm font-medium"
-                        >
-                            Room Code
-                        </Label>
-                        <Input
-                            id="room-code"
-                            placeholder="ABC123"
-                            value={roomCode}
-                            onChange={(e) => onRoomCodeChange(e.target.value)}
-                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 uppercase tracking-widest font-mono ${
-                                roomCodeError
-                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
-                                    : ""
-                            }`}
-                            aria-label="Room Code"
-                            maxLength={6}
-                        />
-                        {roomCodeError && (
-                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
-                                <span>{roomCodeError}</span>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-                <CardFooter className="pt-2">
-                    <Button
-                        className="w-full h-11 bg-linear-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
-                        type="button"
-                        disabled={!isFormValid || loading}
-                        onClick={() =>
-                            onJoin(
-                                parsePlayerName(name) ?? name.trim(),
-                                parseRoomCode(roomCode) ??
-                                    roomCode.trim().toUpperCase()
-                            )
-                        }
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2Icon className="w-4 h-4 animate-spin" />
-                                Joining...
-                            </>
-                        ) : (
-                            <>
-                                Join Room
-                                <ArrowRightIcon className="w-4 h-4" />
-                            </>
-                        )}
-                    </Button>
-                </CardFooter>
-            </Card>
-        </motion.div>
-    );
-}
-
 export default function Home() {
     const [name, setName] = useState("");
     const [roomName, setRoomName] = useState("");
     const [roomCode, setRoomCode] = useState("");
-    const [loadingCreate, setLoadingCreate] = useState(false);
-    const [loadingJoin, setLoadingJoin] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [waitingForApproval, setWaitingForApproval] = useState(false);
     const [approvalTimeRemaining, setApprovalTimeRemaining] = useState<
         number | null
@@ -370,13 +48,25 @@ export default function Home() {
     const [roomNameError, setRoomNameError] = useState<string | null>(null);
     const [roomCodeError, setRoomCodeError] = useState<string | null>(null);
     const router = useRouter();
-    const { setSessionData } = useSession();
+    const { setSessionData, userName: storedUserName } = useSession();
+
+    // Mode is implicit: empty code => create, non-empty => join.
+    const mode: "create" | "join" = roomCode.trim() === "" ? "create" : "join";
+
+    // Auto-populate the name field from the session's saved userName once the
+    // session context finishes hydrating from localStorage. Only fills while
+    // the input is still empty so we don't clobber an in-progress edit.
+    useEffect(() => {
+        if (!storedUserName) return;
+        setName((current) =>
+            current.trim() === "" ? storedUserName : current,
+        );
+    }, [storedUserName]);
 
     // Memoized callback for join request acceptance
     const handleJoinRequestAccepted = useCallback(
         (roomCodeResponse: string, roomId: string) => {
             setWaitingForApproval(false);
-            // Set session data and navigate
             const storedUserId = localStorage.getItem("userId") || "";
             setSessionData({
                 userName: name,
@@ -385,33 +75,26 @@ export default function Home() {
             });
             router.push(`/lobby/${roomCodeResponse}`);
         },
-        [name, router, setSessionData]
+        [name, router, setSessionData],
     );
 
-    // Memoized callback for join request rejection
     const handleJoinRequestRejected = useCallback(() => {
         setWaitingForApproval(false);
     }, []);
 
-    // Handle join request response (when request is accepted/rejected)
-    // Pass waitingForApproval so the hook knows when to connect to socket
     useJoinRequestResponse(
         handleJoinRequestAccepted,
         handleJoinRequestRejected,
-        waitingForApproval
+        waitingForApproval,
     );
 
-    // Handle join request timeout (1 minute)
+    // Approval countdown (1 minute)
     useEffect(() => {
         if (!waitingForApproval) {
             setApprovalTimeRemaining(null);
             return;
         }
-
-        // Set initial countdown time (1 minute = 60 seconds)
         setApprovalTimeRemaining(60);
-
-        // Update countdown every second
         const countdownInterval = setInterval(() => {
             setApprovalTimeRemaining((prev) => {
                 if (prev === null || prev <= 1) {
@@ -421,23 +104,19 @@ export default function Home() {
                 return prev - 1;
             });
         }, 1000);
-
-        // Timeout after 1 minute
         const timeoutTimer = setTimeout(() => {
             setWaitingForApproval(false);
             setApprovalTimeRemaining(null);
             toast.error(
-                "Join request timed out. The room leader did not respond."
+                "Join request timed out. The room leader did not respond.",
             );
-        }, 60 * 1000); // 1 minute
-
+        }, 60 * 1000);
         return () => {
             clearInterval(countdownInterval);
             clearTimeout(timeoutTimer);
         };
     }, [waitingForApproval]);
 
-    // Real-time validation handlers
     function handleNameChange(value: string) {
         setName(value);
         if (value.trim()) {
@@ -471,35 +150,30 @@ export default function Home() {
 
     const handleSuccess = (
         res: { userId: string; roomId: string; roomCode: string },
-        userName: string
+        userName: string,
     ) => {
-        // Batch all state updates to prevent multiple WebSocket reconnections
         setSessionData({
             userName,
             userId: res.userId,
             roomId: res.roomId,
         });
-        // Navigate after state is set
         router.push(`/lobby/${res.roomCode}`);
     };
 
-    async function handleCreateRoom(name: string, roomName: string) {
-        // Validate inputs
-        const nameValidationError = validatePlayerName(name);
-        const roomNameValidationError = validateRoomName(roomName);
-
+    async function handleCreateRoom() {
+        const cleanName = parsePlayerName(name) ?? name.trim();
+        const cleanRoomName = parseRoomName(roomName) ?? roomName.trim();
+        const nameValidationError = validatePlayerName(cleanName);
+        const roomNameValidationError = validateRoomName(cleanRoomName);
         setNameError(nameValidationError?.message || null);
         setRoomNameError(roomNameValidationError?.message || null);
+        if (nameValidationError || roomNameValidationError) return;
 
-        if (nameValidationError || roomNameValidationError) {
-            return;
-        }
-
-        setLoadingCreate(true);
-        await toast.promise(createRoom(name, roomName), {
+        setLoading(true);
+        await toast.promise(createRoom(cleanName, cleanRoomName), {
             loading: "Creating room...",
             success: (res) => {
-                handleSuccess(res, name);
+                handleSuccess(res, cleanName);
                 return "Room created successfully!";
             },
             error: (err) => {
@@ -508,50 +182,42 @@ export default function Home() {
                 return `Error Creating Room: ${message}`;
             },
         });
-        setLoadingCreate(false);
+        setLoading(false);
     }
 
-    async function handleJoinRoom(name: string, roomCode: string) {
-        // Validate inputs
-        const nameValidationError = validatePlayerName(name);
-        const roomCodeValidationError = validateRoomCode(roomCode);
-
+    async function handleJoinRoom() {
+        const cleanName = parsePlayerName(name) ?? name.trim();
+        const cleanCode =
+            parseRoomCode(roomCode) ?? roomCode.trim().toUpperCase();
+        const nameValidationError = validatePlayerName(cleanName);
+        const roomCodeValidationError = validateRoomCode(cleanCode);
         setNameError(nameValidationError?.message || null);
         setRoomCodeError(roomCodeValidationError?.message || null);
+        if (nameValidationError || roomCodeValidationError) return;
 
-        if (nameValidationError || roomCodeValidationError) {
-            return;
-        }
-
-        setLoadingJoin(true);
-        // Pass existing userId from localStorage to maintain identity (important for kick enforcement)
+        setLoading(true);
         const existingUserId = localStorage.getItem("userId") || undefined;
 
         try {
-            const res = await joinRoom(name, roomCode, existingUserId);
-            handleSuccess(res, name);
+            const res = await joinRoom(cleanName, cleanCode, existingUserId);
+            handleSuccess(res, cleanName);
             toast.success("Joined room successfully!");
         } catch (err) {
             if (err instanceof PrivateRoomError) {
-                // Room is private - send a join request
                 const requesterId = existingUserId || crypto.randomUUID();
-                // Store the userId for when the request is accepted
                 if (!existingUserId) {
                     localStorage.setItem("userId", requesterId);
                 }
-
                 const result = await sendJoinRequest(
-                    roomCode,
+                    cleanCode,
                     requesterId,
-                    name
+                    cleanName,
                 );
                 if (result.success) {
                     setWaitingForApproval(true);
                     toast.info(
                         "This room is private. Your request has been sent to the room leader.",
-                        {
-                            duration: 10000,
-                        }
+                        { duration: 10000 },
                     );
                 } else {
                     toast.error(result.error || "Failed to send join request");
@@ -562,15 +228,59 @@ export default function Home() {
                 toast.error(`Error Joining Room: ${message}`);
             }
         } finally {
-            setLoadingJoin(false);
+            setLoading(false);
         }
     }
+
+    const isFormValid = useMemo(() => {
+        if (!name.trim() || nameError) return false;
+        if (mode === "join") {
+            return !roomCodeError && roomCode.length === 6;
+        }
+        return !roomNameError;
+    }, [name, nameError, mode, roomCode, roomCodeError, roomNameError]);
+
+    const onSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (loading || !isFormValid) return;
+        if (mode === "join") {
+            handleJoinRoom();
+        } else {
+            handleCreateRoom();
+        }
+    };
+
+    // Tailwind classes vary by mode so the visual cue (color) reflects what
+    // the primary action will do.
+    const accent =
+        mode === "join"
+            ? {
+                  iconBg: "from-violet-500 to-purple-600",
+                  iconShadow: "shadow-violet-500/25",
+                  Icon: UsersIcon,
+                  title: "Join a Room",
+                  description: "Enter an existing game",
+                  button:
+                      "from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-violet-500/25 hover:shadow-violet-500/40",
+                  buttonLabel: "Join Room",
+                  ring: "focus:ring-violet-500/20 focus:border-violet-500",
+              }
+            : {
+                  iconBg: "from-emerald-500 to-teal-600",
+                  iconShadow: "shadow-emerald-500/25",
+                  Icon: PlusCircleIcon,
+                  title: "Create a Room",
+                  description: "Start a new game session",
+                  button:
+                      "from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/25 hover:shadow-emerald-500/40",
+                  buttonLabel: "Create Room",
+                  ring: "focus:ring-emerald-500/20 focus:border-emerald-500",
+              };
 
     return (
         <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-linear-to-b from-zinc-50 via-zinc-100 to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 transition-colors">
             {/* Animated background elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {/* Gradient orbs */}
                 <motion.div
                     className="absolute -top-40 -right-40 w-96 h-96 bg-linear-to-br from-emerald-400/30 to-teal-500/20 rounded-full blur-3xl"
                     animate={{
@@ -599,20 +309,16 @@ export default function Home() {
                 />
                 <motion.div
                     className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-150 bg-linear-to-r from-amber-400/10 via-pink-400/10 to-violet-400/10 rounded-full blur-3xl"
-                    animate={{
-                        rotate: [0, 360],
-                    }}
+                    animate={{ rotate: [0, 360] }}
                     transition={{
                         duration: 60,
                         repeat: Infinity,
                         ease: "linear",
                     }}
                 />
-                {/* Grid pattern */}
                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-size-[4rem_4rem] mask-[radial-gradient(ellipse_80%_50%_at_50%_50%,black_40%,transparent_100%)]" />
             </div>
 
-            {/* Content */}
             <div className="relative z-10 flex w-full flex-col items-center px-4 py-12 md:py-16">
                 {/* Hero Section */}
                 <motion.div
@@ -621,7 +327,6 @@ export default function Home() {
                     transition={{ duration: 0.6 }}
                     className="text-center mb-10 md:mb-14"
                 >
-                    {/* Logo/Icon */}
                     <motion.div
                         initial={{ scale: 0, rotate: -180 }}
                         animate={{ scale: 1, rotate: 0 }}
@@ -634,11 +339,9 @@ export default function Home() {
                     >
                         <DicesIcon className="w-10 h-10 md:w-12 md:h-12 text-white" />
                     </motion.div>
-
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-linear-to-r from-zinc-900 via-zinc-700 to-zinc-900 dark:from-white dark:via-zinc-200 dark:to-white bg-clip-text text-transparent tracking-tight">
                         Family Game Room
                     </h1>
-
                     <motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -654,61 +357,230 @@ export default function Home() {
                     </motion.p>
                 </motion.div>
 
-                {/* Cards Container */}
-                <div className="flex flex-col md:flex-row gap-6 w-full max-w-5xl px-2">
-                    <div className="flex-1 min-w-0">
-                        <CreateRoomCard
-                            name={name}
-                            onNameChange={handleNameChange}
-                            roomName={roomName}
-                            onRoomNameChange={handleRoomNameChange}
-                            onCreate={handleCreateRoom}
-                            loading={loadingCreate}
-                            nameError={nameError}
-                            roomNameError={roomNameError}
-                        />
-                    </div>
+                {/* Single Form Card */}
+                <motion.div
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="w-full max-w-md"
+                >
+                    {waitingForApproval ? (
+                        <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl">
+                            <CardHeader className="text-center pb-2">
+                                <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                                    <Loader2Icon className="w-7 h-7 text-white animate-spin" />
+                                </div>
+                                <CardTitle className="text-xl font-bold">
+                                    Waiting for Approval
+                                </CardTitle>
+                                <CardDescription className="text-zinc-500 dark:text-zinc-400">
+                                    Your request has been sent to the room
+                                    leader
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col items-center gap-4 pt-4 pb-6">
+                                <p className="text-sm text-center text-zinc-600 dark:text-zinc-400">
+                                    The room{" "}
+                                    <span className="font-mono font-semibold">
+                                        {roomCode}
+                                    </span>{" "}
+                                    is private. Please wait for the leader to
+                                    accept your request.
+                                </p>
+                                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                                    <span>
+                                        {approvalTimeRemaining !== null
+                                            ? `Request pending... (${approvalTimeRemaining}s)`
+                                            : "Request pending..."}
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setWaitingForApproval(false);
+                                        setApprovalTimeRemaining(null);
+                                        toast.info("Join request cancelled");
+                                    }}
+                                    className="mt-2"
+                                >
+                                    Cancel Request
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <form onSubmit={onSubmit}>
+                            <Card className="w-full backdrop-blur-sm bg-white/90 dark:bg-zinc-900/90 border-zinc-200/50 dark:border-zinc-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
+                                <CardHeader className="text-center pb-2">
+                                    <motion.div
+                                        key={mode}
+                                        initial={{ scale: 0.85, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ duration: 0.25 }}
+                                        className={`mx-auto mb-3 w-14 h-14 rounded-2xl bg-linear-to-br ${accent.iconBg} flex items-center justify-center shadow-lg ${accent.iconShadow}`}
+                                    >
+                                        <accent.Icon className="w-7 h-7 text-white" />
+                                    </motion.div>
+                                    <CardTitle className="text-xl font-bold">
+                                        {accent.title}
+                                    </CardTitle>
+                                    <CardDescription className="text-zinc-500 dark:text-zinc-400">
+                                        {accent.description}
+                                    </CardDescription>
+                                </CardHeader>
 
-                    {/* Divider with "or" */}
-                    <div className="hidden md:flex items-center gap-3 w-20 mb-0">
-                        <Separator className="flex-1 bg-zinc-300 dark:bg-zinc-700" />
-                        <span className="text-sm font-medium text-zinc-400 dark:text-zinc-500">
-                            or
-                        </span>
-                        <Separator className="flex-1 bg-zinc-300 dark:bg-zinc-700" />
-                    </div>
+                                <CardContent className="flex flex-col gap-4 pt-4">
+                                    <div className="space-y-2">
+                                        <Label
+                                            htmlFor="name"
+                                            className="text-sm font-medium"
+                                        >
+                                            Your Name
+                                        </Label>
+                                        <Input
+                                            id="name"
+                                            placeholder="Enter your name"
+                                            value={name}
+                                            onChange={(e) =>
+                                                handleNameChange(e.target.value)
+                                            }
+                                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 ${accent.ring} ${
+                                                nameError
+                                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
+                                                    : ""
+                                            }`}
+                                            aria-label="Your Name"
+                                            maxLength={50}
+                                            autoComplete="off"
+                                        />
+                                        {nameError && (
+                                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
+                                                <span>{nameError}</span>
+                                            </div>
+                                        )}
+                                    </div>
 
-                    {/* Mobile divider */}
-                    <div className="flex md:hidden items-center gap-4">
-                        <Separator className="flex-1 bg-zinc-300 dark:bg-zinc-700" />
-                        <span className="text-sm font-medium text-zinc-400 dark:text-zinc-500">
-                            or
-                        </span>
-                        <Separator className="flex-1 bg-zinc-300 dark:bg-zinc-700" />
-                    </div>
+                                    <div className="space-y-2">
+                                        <Label
+                                            htmlFor="room-code"
+                                            className="text-sm font-medium"
+                                        >
+                                            Room Code{" "}
+                                            <span className="text-zinc-400 font-normal">
+                                                (leave blank to create a new
+                                                room)
+                                            </span>
+                                        </Label>
+                                        <Input
+                                            id="room-code"
+                                            placeholder="ABC123"
+                                            value={roomCode}
+                                            onChange={(e) =>
+                                                handleRoomCodeChange(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 uppercase tracking-widest font-mono ${accent.ring} ${
+                                                roomCodeError
+                                                    ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
+                                                    : ""
+                                            }`}
+                                            aria-label="Room Code"
+                                            maxLength={6}
+                                            autoComplete="off"
+                                        />
+                                        {roomCodeError && (
+                                            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                                                <AlertCircleIcon className="w-4 h-4 shrink-0" />
+                                                <span>{roomCodeError}</span>
+                                            </div>
+                                        )}
+                                    </div>
 
-                    <div className="flex-1 min-w-0">
-                        <JoinRoomCard
-                            name={name}
-                            onNameChange={handleNameChange}
-                            roomCode={roomCode}
-                            onRoomCodeChange={handleRoomCodeChange}
-                            onJoin={handleJoinRoom}
-                            loading={loadingJoin}
-                            waitingForApproval={waitingForApproval}
-                            approvalTimeRemaining={approvalTimeRemaining}
-                            onCancelRequest={() => {
-                                setWaitingForApproval(false);
-                                setApprovalTimeRemaining(null);
-                                toast.info("Join request cancelled");
-                            }}
-                            nameError={nameError}
-                            roomCodeError={roomCodeError}
-                        />
-                    </div>
-                </div>
+                                    {/* Room Name appears only in create mode */}
+                                    <AnimatePresence initial={false}>
+                                        {mode === "create" && (
+                                            <motion.div
+                                                key="room-name"
+                                                initial={{
+                                                    opacity: 0,
+                                                    height: 0,
+                                                }}
+                                                animate={{
+                                                    opacity: 1,
+                                                    height: "auto",
+                                                }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                transition={{ duration: 0.2 }}
+                                                className="space-y-2 overflow-hidden"
+                                            >
+                                                <Label
+                                                    htmlFor="room-name"
+                                                    className="text-sm font-medium"
+                                                >
+                                                    Room Name{" "}
+                                                    <span className="text-zinc-400 font-normal">
+                                                        (optional)
+                                                    </span>
+                                                </Label>
+                                                <Input
+                                                    id="room-name"
+                                                    placeholder="My Game Room"
+                                                    value={roomName}
+                                                    onChange={(e) =>
+                                                        handleRoomNameChange(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className={`h-11 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-2 ${accent.ring} ${
+                                                        roomNameError
+                                                            ? "border-red-500 dark:border-red-400 focus:ring-red-500/20 focus:border-red-500"
+                                                            : ""
+                                                    }`}
+                                                    aria-label="Room Name"
+                                                    maxLength={100}
+                                                    autoComplete="off"
+                                                />
+                                                {roomNameError && (
+                                                    <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                                                        <AlertCircleIcon className="w-4 h-4 shrink-0" />
+                                                        <span>
+                                                            {roomNameError}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </CardContent>
 
-                {/* Footer note */}
+                                <CardFooter className="pt-2">
+                                    <Button
+                                        type="submit"
+                                        className={`w-full h-11 bg-linear-to-r ${accent.button} text-white font-semibold shadow-lg transition-all duration-300`}
+                                        disabled={!isFormValid || loading}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader2Icon className="w-4 h-4 animate-spin" />
+                                                {mode === "join"
+                                                    ? "Joining..."
+                                                    : "Creating..."}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {accent.buttonLabel}
+                                                <ArrowRightIcon className="w-4 h-4" />
+                                            </>
+                                        )}
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </form>
+                    )}
+                </motion.div>
+
                 <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}

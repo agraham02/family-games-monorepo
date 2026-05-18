@@ -55,6 +55,24 @@ export interface RummyDiscardTopHint {
     readonly canFormMeldWithHand: boolean;
 }
 
+/**
+ * Hint for picking up a specific card from the discard pile. In Rummy,
+ * picking a non-top discard card requires also taking every card above it
+ * into the hand; the *picked* card must then be used in a meld immediately.
+ * `bonusCards` reflects those mandatory extra cards (empty for the top of
+ * the pile).
+ */
+export interface RummyDiscardPickHint {
+    /** True if the picked card alone can be laid off onto an existing meld. */
+    readonly canLayoff: boolean;
+    /**
+     * True if the picked card can form a 3+ set or run when combined with
+     * the hero's hand plus any mandatory bonus cards (cards above it in the
+     * pile that come along on pickup).
+     */
+    readonly canFormMeldWithHand: boolean;
+}
+
 export interface RummyHints {
     /** For each hand index, ids of melds it can be laid off onto. */
     readonly layoffsByHandIndex: ReadonlyMap<number, readonly string[]>;
@@ -66,6 +84,18 @@ export interface RummyHints {
     readonly deadwoodPoints: number;
     /** Hint about the top of the discard pile. */
     readonly discardTop: RummyDiscardTopHint;
+    /**
+     * Per-index hints for every card in the discard pile (parallel to the
+     * input `discard` array; empty when `discard` is not provided).
+     * Index 0 is the bottom of the pile, last index is the top.
+     */
+    readonly discardPicks: readonly RummyDiscardPickHint[]; /**
+     * Hand indices that, together with the just-picked card (and any
+     * mandatory bonus/tail cards), participate in at least one valid 3+
+     * set or run. Empty when no `pickedCard` was supplied. Used to glow
+     * the hero's contributing hand cards while the meld composer is open.
+     */
+    readonly meldWithPickedIndices: ReadonlySet<number>;
 }
 
 export interface ComputeHintsInput {
@@ -73,6 +103,26 @@ export interface ComputeHintsInput {
     readonly melds: readonly Meld[];
     /** Top of discard, if any (last element of discard pile). */
     readonly discardTop?: Card | null;
+    /**
+     * Full discard pile, bottom → top. When provided, per-index pickup
+     * hints are computed (`discardPicks`). When omitted, only `discardTop`
+     * is considered.
+     */
+    readonly discard?: readonly Card[];
+    /**
+     * The card the hero has just picked from the discard pile (server
+     * `pendingDiscardPick.pickedCard`). When supplied, the engine returns
+     * `meldWithPickedIndices` — hand indices that can combine with this
+     * card (and any `pickedBonus` tail cards) into a valid 3+ meld.
+     */
+    readonly pickedCard?: Card | null;
+    /**
+     * Tail cards that came along with `pickedCard` (server
+     * `pendingDiscardPick.tail`). These join the augmented hand but live
+     * outside the hero's own hand index space, so they never appear in
+     * `meldWithPickedIndices`.
+     */
+    readonly pickedBonus?: readonly Card[];
 }
 
 // ============================================================================
@@ -92,7 +142,14 @@ export interface ComputeHintsInput {
  * "obvious" big melds first, then small ones, then potential builds.
  */
 export function computeRummyHints(input: ComputeHintsInput): RummyHints {
-    const { hand, melds, discardTop = null } = input;
+    const {
+        hand,
+        melds,
+        discardTop = null,
+        discard,
+        pickedCard = null,
+        pickedBonus,
+    } = input;
 
     const layoffsByHandIndex = computeLayoffs(hand, melds);
     const { meldGroups, usedIndices } = detectMeldGroups(hand);
@@ -111,12 +168,39 @@ export function computeRummyHints(input: ComputeHintsInput): RummyHints {
           }
         : { canLayoff: false, canFormMeldWithHand: false };
 
+    // Per-index discard pickup hints. For each card at index i, picking it
+    // up means also taking every card above it (i+1..end) into the hand.
+    // The picked card must be used in a meld; the bonus cards just join
+    // the hand. So for `canFormMeldWithHand` we test the picked card
+    // against `hand ∪ bonus`.
+    const discardPicks: RummyDiscardPickHint[] = [];
+    if (discard && discard.length > 0) {
+        for (let i = 0; i < discard.length; i++) {
+            const target = discard[i];
+            const bonus = discard.slice(i + 1);
+            const augmentedHand =
+                bonus.length === 0 ? hand : [...hand, ...bonus];
+            discardPicks.push({
+                canLayoff: melds.some((m) => canLayOffCard(target, m)),
+                canFormMeldWithHand: canFormMeldWith(target, augmentedHand),
+            });
+        }
+    }
+
     return {
         layoffsByHandIndex,
         meldGroups,
         nearMeldGroups,
         deadwoodPoints,
         discardTop: discardTopHint,
+        discardPicks,
+        meldWithPickedIndices: pickedCard
+            ? findHandIndicesUsableInMeldWith(
+                  pickedCard,
+                  hand,
+                  pickedBonus ?? [],
+              )
+            : new Set<number>(),
     };
 }
 
@@ -385,8 +469,80 @@ function canFormMeldWith(card: Card, hand: readonly Card[]): boolean {
         }
         if (ok) return true;
     }
-
     return false;
+}
+
+/**
+ * Returns the set of hand indices that contribute to at least one valid 3+
+ * set or run with `picked` (and any mandatory `bonus` tail cards that come
+ * along when picking deeper into the discard pile).
+ *
+ * Greedy/maximal: highlights every hand card that participates in *any*
+ * such meld, so the player can see at a glance which of their cards line
+ * up with the just-picked card.
+ */
+function findHandIndicesUsableInMeldWith(
+    picked: Card,
+    hand: readonly Card[],
+    bonus: readonly Card[],
+): Set<number> {
+    const out = new Set<number>();
+    if (RANK_ORDER[picked.rank] == null) return out;
+
+    // ---------- Set detection ----------
+    // Suits already nailed down by picked + bonus same-rank cards.
+    const fixedSuits = new Set<Suit>([picked.suit]);
+    for (const b of bonus) {
+        if (b.rank === picked.rank) fixedSuits.add(b.suit);
+    }
+    const candidateHandSameRank: number[] = [];
+    const claimedSuits = new Set<Suit>(fixedSuits);
+    for (let i = 0; i < hand.length; i++) {
+        const h = hand[i];
+        if (h.rank !== picked.rank) continue;
+        if (claimedSuits.has(h.suit)) continue;
+        claimedSuits.add(h.suit);
+        candidateHandSameRank.push(i);
+    }
+    if (fixedSuits.size + candidateHandSameRank.length >= 3) {
+        for (const i of candidateHandSameRank) out.add(i);
+    }
+
+    // ---------- Run detection ----------
+    const ord = RANK_ORDER[picked.rank]!;
+    // Same-suit ordinals contributed by bonus tail (no hand index).
+    const bonusOrds = new Set<number>();
+    for (const b of bonus) {
+        if (b.suit !== picked.suit) continue;
+        const o = RANK_ORDER[b.rank];
+        if (o != null && o !== ord) bonusOrds.add(o);
+    }
+    // Same-suit ordinals contributed by hand (with first-seen hand index).
+    const handByOrd = new Map<number, number>();
+    for (let i = 0; i < hand.length; i++) {
+        const h = hand[i];
+        if (h.suit !== picked.suit) continue;
+        const o = RANK_ORDER[h.rank];
+        if (o == null || o === ord) continue;
+        if (!handByOrd.has(o)) handByOrd.set(o, i);
+    }
+    const hasOrd = (o: number): boolean =>
+        o === ord || bonusOrds.has(o) || handByOrd.has(o);
+
+    // Walk down and up from picked's ordinal to find the maximal contiguous
+    // run passing through it.
+    let lo = ord;
+    while (lo > 1 && hasOrd(lo - 1)) lo--;
+    let hi = ord;
+    while (hi < 13 && hasOrd(hi + 1)) hi++;
+    if (hi - lo + 1 >= 3) {
+        for (let v = lo; v <= hi; v++) {
+            const idx = handByOrd.get(v);
+            if (idx != null) out.add(idx);
+        }
+    }
+
+    return out;
 }
 
 // ============================================================================

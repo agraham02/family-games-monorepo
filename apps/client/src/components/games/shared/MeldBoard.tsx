@@ -3,11 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MeldStrip } from "./MeldStrip";
-import PlayingCardComponent from "@/components/games/shared/PlayingCard";
-import type {
-    RummyMeldView,
-    PlayingCard as PlayingCardType,
-} from "@shared/types";
+import type { RummyMeldView } from "@shared/types";
 
 /**
  * Visual presentation mode for the MeldBoard. Driven by parent layoutMode but
@@ -31,9 +27,12 @@ export interface MeldBoardPlayer {
  * In `compact` mode, choose between:
  *  - `scroll` (default): all sections rendered in a vertically scrollable list
  *    so every player's melds are visible without paging through tabs.
+ *    Best for narrow side columns.
+ *  - `horizontal`: sections rendered side-by-side and scrolled horizontally.
+ *    Best for wide rows where vertical space is tight.
  *  - `tabs`: legacy per-player tabbed view.
  */
-export type MeldBoardCompactLayout = "scroll" | "tabs";
+export type MeldBoardCompactLayout = "scroll" | "horizontal" | "tabs";
 
 export interface MeldBoardProps {
     melds: RummyMeldView[];
@@ -58,28 +57,14 @@ export interface MeldBoardProps {
 interface OwnerOwnedMeld {
     /** The original meld (for ids, ownership, book detection). */
     original: RummyMeldView;
-    /** Synthetic meld with layoff cards filtered out (those moved to layers). */
-    display: RummyMeldView;
     /** True iff the original meld is a 4+ same-rank book (face-down). */
     isBook: boolean;
-}
-
-interface OwnerLayoffContribution {
-    /** Stable key for React. */
-    key: string;
-    /** The card that was laid off. */
-    card: PlayingCardType;
-    /** Id of the meld it was laid on (for tap-to-jump in the future). */
-    targetMeldId: string;
-    /** True iff the target meld is a book (render face-down). */
-    faceDown: boolean;
 }
 
 interface PlayerSection {
     ownerId: string;
     ownerName: string;
     owned: OwnerOwnedMeld[];
-    layoffs: OwnerLayoffContribution[];
 }
 
 function buildPlayerSections(
@@ -96,55 +81,24 @@ function buildPlayerSections(
                 ownerId: pid,
                 ownerName: nameOf[pid] ?? "Unknown",
                 owned: [],
-                layoffs: [],
             };
         }
         return sections[pid];
     };
 
+    // Layoffs render inline on the original meld strip (each card carries
+    // its layer's initials via MeldStrip's badge layer), so we no longer
+    // relocate them into a separate "LAY-OFFS" row per player. This keeps
+    // the full set/run visually intact — important for hint affordances
+    // like "your card lays off here" highlighting the actual attach point.
     for (const m of melds) {
         const isBook = m.kind === "set" && m.cards.length >= 4;
-        const layoffByIndex = new Map<number, string>();
-        for (const l of m.layoffs ?? []) layoffByIndex.set(l.index, l.playerId);
-
-        // Owner's display meld: drop cards laid off by other players. (A
-        // layoff by the meld's owner would be unusual but treat as kept.)
-        const displayCards: PlayingCardType[] = [];
-        m.cards.forEach((c, i) => {
-            const layerId = layoffByIndex.get(i);
-            if (!layerId || layerId === m.ownerId) {
-                displayCards.push(c as PlayingCardType);
-            }
-        });
-        const display: RummyMeldView = {
-            ...m,
-            cards: displayCards,
-            layoffs: [],
-        };
-        ensure(m.ownerId).owned.push({ original: m, display, isBook });
-
-        // Per-layoff contributions go to the laying player's section.
-        (m.layoffs ?? []).forEach((l, idx) => {
-            if (l.playerId === m.ownerId) return;
-            const card = m.cards[l.index];
-            if (!card) return;
-            ensure(l.playerId).layoffs.push({
-                key: `${m.id}-${l.index}-${idx}`,
-                card: card as PlayingCardType,
-                targetMeldId: m.id,
-                faceDown: isBook,
-            });
-        });
+        ensure(m.ownerId).owned.push({ original: m, isBook });
     }
 
     // Preserve player order; only include sections that have content.
     return players
-        .filter(
-            (p) =>
-                sections[p.id] &&
-                (sections[p.id].owned.length > 0 ||
-                    sections[p.id].layoffs.length > 0),
-        )
+        .filter((p) => sections[p.id] && sections[p.id].owned.length > 0)
         .map((p) => sections[p.id]);
 }
 
@@ -204,6 +158,19 @@ export function MeldBoard({
         if (compactLayout === "tabs") {
             return (
                 <CompactTabbed
+                    sections={sections}
+                    heroPlayerId={heroPlayerId}
+                    activeMeldId={activeMeldId}
+                    eligibleSet={eligibleSet}
+                    playerInitials={playerInitials}
+                    onSelectMeld={onSelectMeld}
+                    className={className}
+                />
+            );
+        }
+        if (compactLayout === "horizontal") {
+            return (
+                <CompactHorizontal
                     sections={sections}
                     heroPlayerId={heroPlayerId}
                     activeMeldId={activeMeldId}
@@ -305,7 +272,7 @@ function PlayerSectionView({
                     {section.owned.map((o) => (
                         <MeldStrip
                             key={o.original.id}
-                            meld={o.display}
+                            meld={o.original}
                             size={size}
                             highlighted={o.original.id === activeMeldId}
                             eligible={eligibleSet.has(o.original.id)}
@@ -320,51 +287,6 @@ function PlayerSectionView({
                     ))}
                 </div>
             )}
-            {section.layoffs.length > 0 && (
-                <LayoffStrip
-                    contributions={section.layoffs}
-                    size={size}
-                    label="Lay-offs"
-                />
-            )}
-        </div>
-    );
-}
-
-function LayoffStrip({
-    contributions,
-    size,
-    label,
-}: {
-    contributions: OwnerLayoffContribution[];
-    size: "xs" | "sm" | "md";
-    label: string;
-}) {
-    const overlapPx = size === "xs" ? 24 : 18;
-    return (
-        <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-white/50 font-mono">
-                {label}
-            </span>
-            <div className="flex items-center rounded-md ring-1 ring-white/5 p-1">
-                {contributions.map((c, i) => (
-                    <div
-                        key={c.key}
-                        className="relative"
-                        style={{
-                            marginLeft: i === 0 ? 0 : `-${overlapPx}px`,
-                            zIndex: i,
-                        }}
-                        title={c.faceDown ? "Laid on a book" : "Lay-off"}
-                    >
-                        <PlayingCardComponent
-                            card={c.card}
-                            size={size}
-                            hidden={c.faceDown}
-                        />
-                    </div>
-                ))}
-            </div>
         </div>
     );
 }
@@ -404,7 +326,7 @@ function CompactTabbed({
         <div className={cn("flex flex-col gap-2 p-2", className)}>
             <div className="flex gap-1 overflow-x-auto pb-1">
                 {sections.map((s) => {
-                    const count = s.owned.length + s.layoffs.length;
+                    const count = s.owned.length;
                     return (
                         <button
                             key={s.ownerId}
@@ -443,6 +365,47 @@ function CompactTabbed({
  * smallest card size. Designed to replace the legacy tabbed compact view so
  * players never have to switch tabs to see other players' progress.
  */
+function CompactHorizontal({
+    sections,
+    heroPlayerId,
+    activeMeldId,
+    eligibleSet,
+    playerInitials,
+    onSelectMeld,
+    className,
+}: {
+    sections: PlayerSection[];
+    heroPlayerId?: string;
+    activeMeldId?: string | null;
+    eligibleSet: Set<string>;
+    playerInitials: Record<string, string>;
+    onSelectMeld?: (meldId: string) => void;
+    className?: string;
+}) {
+    return (
+        <div
+            className={cn(
+                "flex flex-row gap-4 p-2 overflow-x-auto overflow-y-hidden items-start",
+                className,
+            )}
+        >
+            {sections.map((s) => (
+                <div key={s.ownerId} className="shrink-0">
+                    <PlayerSectionView
+                        section={s}
+                        isHero={s.ownerId === heroPlayerId}
+                        activeMeldId={activeMeldId}
+                        eligibleSet={eligibleSet}
+                        playerInitials={playerInitials}
+                        onSelectMeld={onSelectMeld}
+                        size="xs"
+                    />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function CompactScroll({
     sections,
     heroPlayerId,

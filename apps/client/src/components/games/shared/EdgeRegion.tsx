@@ -130,7 +130,7 @@ function EdgeRegion({
         ? { edge: "4px", cross: "6px" }
         : isComfortable
           ? { edge: "0.375rem", cross: "0.25rem" }
-          : { edge: "0.5rem", cross: "0.5rem" };
+          : { edge: "1.5rem", cross: "0.5rem" };
 
     const paddingStyles: Record<EdgePosition, React.CSSProperties> = {
         bottom: {

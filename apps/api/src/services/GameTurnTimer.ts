@@ -130,6 +130,12 @@ function handleSpadesTimeout(
             // Dispatch the auto-action
             const newState = gameManager.dispatch(gameId, action);
 
+            // Arm the next player's timer FIRST so the sync emitted by
+            // emitTurnTimeout includes the freshly-started turnTimer.
+            // Otherwise clients receive a sync with turnTimer=undefined
+            // (timer was just cancelled) and never see the next ring.
+            maybeStartTimer(gameId, room, newState as SpadesState);
+
             // Emit timeout event to clients
             emitTurnTimeout(
                 room.id,
@@ -141,9 +147,6 @@ function handleSpadesTimeout(
                 },
                 newState,
             );
-
-            // Check if we need to start a new timer for the next player
-            maybeStartTimer(gameId, room, newState as SpadesState);
         } catch (err) {
             console.error("Error dispatching auto-action:", err);
         }
@@ -197,6 +200,10 @@ function handleDominoesTimeout(
         // Dispatch the auto-action
         const newState = gameManager.dispatch(gameId, action);
 
+        // Arm the next player's timer BEFORE emitting sync (see Spades
+        // handler above for the full explanation).
+        maybeStartTimer(gameId, room, newState);
+
         // Emit timeout event to clients
         emitTurnTimeout(
             room.id,
@@ -208,9 +215,6 @@ function handleDominoesTimeout(
             },
             newState,
         );
-
-        // Check if we need to start a new timer for the next player
-        maybeStartTimer(gameId, room, newState);
     } catch (err) {
         console.error("Error dispatching Dominoes auto-action:", err);
     }
@@ -247,6 +251,9 @@ function handleRummyTimeout(
 
     try {
         const newState = gameManager.dispatch(gameId, action);
+        // Arm the next player's timer BEFORE emitting sync (see Spades
+        // handler above for the full explanation).
+        maybeStartTimer(gameId, room, newState);
         emitTurnTimeout(
             room.id,
             {
@@ -257,7 +264,6 @@ function handleRummyTimeout(
             },
             newState,
         );
-        maybeStartTimer(gameId, room, newState);
     } catch (err) {
         console.error("Error dispatching Rummy auto-action:", err);
     }
@@ -279,6 +285,50 @@ export function maybeStartTimer(
         const spadesState = state as SpadesState;
         const turnTimeLimit = spadesState.settings?.turnTimeLimit;
 
+        // The blind-bid-window has its own deadline that runs even when the
+        // per-turn timer is disabled (turnTimeLimit unset). Schedule a one-shot
+        // expiry that auto-reveals any still-pending teams and lets the game
+        // advance into the normal bidding phase.
+        if (
+            spadesState.phase === "blind-bid-window" &&
+            spadesState.blindWindow
+        ) {
+            const remainingMs = Math.max(
+                0,
+                spadesState.blindWindow.deadline - Date.now(),
+            );
+            turnTimerService.startTurn(
+                gameId,
+                "system-blind-window",
+                remainingMs / 1000,
+                () => {
+                    try {
+                        gameManager.dispatch(gameId, {
+                            type: "_BLIND_WINDOW_EXPIRED",
+                            userId: "system",
+                            payload: {},
+                        });
+                    } catch (err) {
+                        console.error(
+                            "Error dispatching blind-window expiry:",
+                            err,
+                        );
+                        return;
+                    }
+                    if (io) {
+                        io.to(room.id).emit("game_event", {
+                            event: "sync",
+                            gameState: gameManager.getGameState(gameId),
+                            timestamp: new Date().toISOString(),
+                        });
+                    }
+                    const fresh = gameManager.getGame(gameId);
+                    if (fresh) maybeStartTimer(gameId, room, fresh);
+                },
+            );
+            return;
+        }
+
         if (!turnTimeLimit || turnTimeLimit <= 0) {
             return;
         }
@@ -290,6 +340,15 @@ export function maybeStartTimer(
 
         const currentPlayerId =
             spadesState.playOrder[spadesState.currentTurnIndex];
+
+        // Don't tick down the per-turn timer for a player whose client
+        // hasn't yet acked readiness (initial load, refresh, or reconnect).
+        // The next `client_game_ready` from them re-triggers this function.
+        if (!isPlayerReady(gameId, currentPlayerId)) {
+            turnTimerService.cancelTurn(gameId);
+            deferTimerStart(gameId, room);
+            return;
+        }
 
         turnTimerService.startTurn(
             gameId,
@@ -327,6 +386,12 @@ export function maybeStartTimer(
 
         const currentPlayerId =
             dominoesState.playOrder[dominoesState.currentTurnIndex];
+
+        if (!isPlayerReady(gameId, currentPlayerId)) {
+            turnTimerService.cancelTurn(gameId);
+            deferTimerStart(gameId, room);
+            return;
+        }
 
         turnTimerService.startTurn(
             gameId,
@@ -413,6 +478,12 @@ export function maybeStartTimer(
         const currentPlayerId =
             rummyState.playOrder[rummyState.currentTurnIndex];
 
+        if (!isPlayerReady(gameId, currentPlayerId)) {
+            turnTimerService.cancelTurn(gameId);
+            deferTimerStart(gameId, room);
+            return;
+        }
+
         turnTimerService.startTurn(
             gameId,
             currentPlayerId,
@@ -475,6 +546,8 @@ export function cleanupGameTimers(gameId: string): void {
         clearTimeout(pending.fallbackTimer);
         pendingGameInits.delete(gameId);
     }
+    readyPlayers.delete(gameId);
+    deferredTimerRooms.delete(gameId);
 }
 
 /**
@@ -493,6 +566,13 @@ export function handleActionDispatched(
     newState: GameState,
     _action: GameAction,
 ): void {
+    // Non-turn-advancing actions (e.g. recording a player's in-progress bid
+    // intent) must not reset the turn timer, otherwise the countdown would
+    // restart every time the player adjusts their staged bid.
+    if (_action.type === "STAGE_BID") {
+        return;
+    }
+
     // Cancel any existing timer (action was received in time)
     cancelTimer(gameId);
 
@@ -528,6 +608,59 @@ interface PendingGameInit {
 
 const pendingGameInits = new Map<string, PendingGameInit>();
 
+// ---------------------------------------------------------------------------
+// Per-player readiness gate
+// ---------------------------------------------------------------------------
+// `client_game_ready` was originally only used to delay the very first
+// `initializeGameTimer` call. But `maybeStartTimer` runs many other times
+// (after every action, on round transitions, on reconnect/resume). Without
+// a per-player gate, the timer could still tick down for a player who
+// hadn't yet hydrated — most visibly on slow initial loads (dev fallback
+// 3s) and on browser refresh mid-game.
+//
+// We now track a per-game set of acknowledged player IDs. Whenever the
+// timer would start for a specific seated player who is NOT in that set,
+// we stash the room and bail out; their next `client_game_ready` ack will
+// re-trigger the start with the latest state.
+const readyPlayers = new Map<string, Set<string>>();
+const deferredTimerRooms = new Map<string, Room>();
+
+function markPlayerReady(gameId: string, userId: string): void {
+    let set = readyPlayers.get(gameId);
+    if (!set) {
+        set = new Set();
+        readyPlayers.set(gameId, set);
+    }
+    set.add(userId);
+}
+
+function isPlayerReady(gameId: string, userId: string): boolean {
+    return readyPlayers.get(gameId)?.has(userId) ?? false;
+}
+
+/**
+ * Forget a player's readiness ack. Called when they disconnect so a
+ * subsequent reconnect must wait for the new client mount to re-ack
+ * before the timer resumes.
+ */
+export function clearPlayerReady(gameId: string, userId: string): void {
+    readyPlayers.get(gameId)?.delete(userId);
+}
+
+/**
+ * Defer a turn-timer start until a specific player acks ready.
+ * Idempotent — only the latest room reference is kept.
+ */
+function deferTimerStart(gameId: string, room: Room): void {
+    deferredTimerRooms.set(gameId, room);
+}
+
+function consumeDeferredStart(gameId: string): Room | undefined {
+    const room = deferredTimerRooms.get(gameId);
+    if (room) deferredTimerRooms.delete(gameId);
+    return room;
+}
+
 function fallbackMs(): number {
     return process.env.NODE_ENV === "development"
         ? PENDING_INIT_FALLBACK_MS_DEV
@@ -543,6 +676,16 @@ function startPendingTimer(gameId: string): void {
     const state = gameManager.getGame(gameId);
     if (!state) return;
     maybeStartTimer(gameId, pending.room, state);
+    // Broadcast the freshly-started timer's startedAt so the UI countdown
+    // reflects the post-handshake start time rather than whatever stale
+    // `turnStartedAt` the reducer set at round-deal time.
+    if (io) {
+        io.to(pending.room.id).emit("game_event", {
+            event: "sync",
+            gameState: gameManager.getGameState(gameId),
+            timestamp: new Date().toISOString(),
+        });
+    }
 }
 
 export function initializeGameTimer(gameId: string, room: Room): void {
@@ -586,12 +729,42 @@ export function initializeGameTimer(gameId: string, room: Room): void {
  * player has acknowledged, start the per-turn timer.
  */
 export function acknowledgeGameReady(gameId: string, userId: string): void {
+    // Mark the player ready first so that any timer the server tries to
+    // start for them (now or in the future) is no longer deferred.
+    markPlayerReady(gameId, userId);
+
     const pending = pendingGameInits.get(gameId);
-    if (!pending) return; // already started or unknown game
-    if (!pending.expected.has(userId)) return;
-    pending.acked.add(userId);
-    if (pending.acked.size >= pending.expected.size) {
-        startPendingTimer(gameId);
+    if (pending) {
+        if (pending.expected.has(userId)) {
+            pending.acked.add(userId);
+            if (pending.acked.size >= pending.expected.size) {
+                startPendingTimer(gameId);
+                return;
+            }
+        }
+        // Still waiting on other players for the initial start — no need
+        // to re-trigger maybeStartTimer; startPendingTimer will run it.
+        return;
+    }
+
+    // Game is past initial start. If a previous maybeStartTimer call was
+    // deferred waiting on this player (e.g. mid-game refresh / reconnect,
+    // or it was their turn when they joined), re-run it now.
+    const deferredRoom = consumeDeferredStart(gameId);
+    if (deferredRoom) {
+        const state = gameManager.getGame(gameId);
+        if (state) {
+            maybeStartTimer(gameId, deferredRoom, state);
+            // Broadcast the freshly-started timer so all clients update
+            // their `turnTimer.startedAt` to reflect this player's ack.
+            if (io) {
+                io.to(deferredRoom.id).emit("game_event", {
+                    event: "sync",
+                    gameState: gameManager.getGameState(gameId),
+                    timestamp: new Date().toISOString(),
+                });
+            }
+        }
     }
 }
 

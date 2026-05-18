@@ -1,8 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { motion } from "motion/react";
 import {
     PlayCircleIcon,
@@ -28,6 +39,7 @@ export default function GameInProgressBanner({
     const { socket, connected } = useWebSocket();
     const { userId, userName } = useSession();
     const router = useRouter();
+    const [endGameDialogOpen, setEndGameDialogOpen] = useState(false);
 
     // Check if this user is the leader
     const isLeader = lobbyData.leaderId === userId;
@@ -85,18 +97,33 @@ export default function GameInProgressBanner({
 
     function handleEndGame() {
         if (!isLeader) return;
+        setEndGameDialogOpen(true);
+    }
 
-        const confirmed = confirm(
-            "Are you sure you want to end the game and return all players to the lobby?"
-        );
+    function confirmEndGame() {
+        setEndGameDialogOpen(false);
+        if (!isLeader) return;
 
-        if (confirmed) {
-            socket?.emit("abort_game", {
-                roomId: lobbyData.roomId,
-                userId,
-            });
-            toast.info("Ending game...");
+        if (!userId) {
+            toast.error("Missing session. Please refresh the page.");
+            return;
         }
+        if (!socket || !connected) {
+            toast.error(
+                "Not connected to server. Please wait and try again."
+            );
+            return;
+        }
+
+        console.log("[GameInProgressBanner] Emitting abort_game", {
+            roomId: lobbyData.roomId,
+            userId,
+        });
+        socket.emit("abort_game", {
+            roomId: lobbyData.roomId,
+            userId,
+        });
+        toast.info("Ending game...");
     }
 
     // Don't show if not in-game
@@ -211,6 +238,35 @@ export default function GameInProgressBanner({
                     </div>
                 </CardContent>
             </Card>
+
+            {/* End Game confirmation dialog (replaces native confirm so it
+                works reliably across browsers and matches in-game UX). */}
+            <AlertDialog
+                open={endGameDialogOpen}
+                onOpenChange={setEndGameDialogOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Return Everyone to Lobby?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will end the current game for all players and
+                            return everyone to the lobby. This cannot be
+                            undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmEndGame}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            End Game
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </motion.div>
     );
 }

@@ -18,6 +18,7 @@ import {
     TurnTimerInfo,
 } from "@family-games/shared";
 import { GameModule, GameAction } from "../../services/GameManager";
+import { turnTimerService } from "../../services/TurnTimerService";
 import { v4 as uuidv4 } from "uuid";
 import { produce } from "immer";
 import { shuffle } from "../shared";
@@ -59,8 +60,10 @@ const LRC_METADATA = {
  * Initialize a new LRC game.
  */
 function init(room: Room, customSettings?: Partial<LRCSettings>): LRCState {
+    // Clone each user so that immer's deep-freeze of LRCState players does not
+    // freeze the User objects still referenced by room.users in RoomService.
     const players: Record<string, User> = Object.fromEntries(
-        room.users.map((user) => [user.id, user]),
+        room.users.map((user) => [user.id, { ...user }]),
     );
 
     const settings: LRCSettings = {
@@ -605,14 +608,18 @@ function reducer(state: LRCState, action: GameAction): LRCState {
 function getState(state: LRCState): LRCData {
     const now = Date.now();
 
-    // Build turn timer info
+    // Build turn timer info — sourced from the live timer service so the
+    // UI only starts ticking once the player has acked `client_game_ready`.
     let turnTimer: TurnTimerInfo | undefined;
-    if (state.turnStartedAt && state.settings.turnTimeLimit) {
-        turnTimer = {
-            startedAt: new Date(state.turnStartedAt).getTime(),
-            duration: state.settings.turnTimeLimit * 1000,
-            serverTime: now,
-        };
+    if (state.settings.turnTimeLimit) {
+        const timerState = turnTimerService.getTimerState(state.id);
+        if (timerState && timerState.startedAt) {
+            turnTimer = {
+                startedAt: timerState.startedAt,
+                duration: state.settings.turnTimeLimit * 1000,
+                serverTime: now,
+            };
+        }
     }
 
     // Build auto-confirm timer info

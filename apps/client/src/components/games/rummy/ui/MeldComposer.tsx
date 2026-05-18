@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { PlayingCard, Suit, Rank } from "@shared/types";
 import { isValidSet, isValidRun } from "@shared/validation/rummy";
@@ -25,6 +25,16 @@ export interface MeldComposerProps {
      * selections.
      */
     seedCard?: PlayingCard | null;
+    /**
+     * Optional bonus cards that come along with `seedCard` (e.g. the cards
+     * above a deep discard pickup that the player is forced to take into
+     * hand). They are tappable: included by default in the proposed meld
+     * but can be toggled out if they don't fit (excluded bonus cards still
+     * end up in the player's hand on confirm — the server treats unused
+     * tail cards as a free pool sourced from the discard tail). Only the
+     * `seedCard` is truly mandatory in the meld.
+     */
+    bonusCards?: PlayingCard[];
     /** Optional help text shown instead of the default empty-state hint. */
     helpText?: string;
 }
@@ -78,6 +88,7 @@ export default function MeldComposer({
     onCancel,
     disabled,
     seedCard = null,
+    bonusCards,
     helpText,
 }: MeldComposerProps) {
     const selectedCards = useMemo(
@@ -85,11 +96,38 @@ export default function MeldComposer({
         [selectedIndices, hand],
     );
 
-    /** Cards used for validation — seed card (if any) is always first. */
-    const validationCards = useMemo(
-        () => (seedCard ? [seedCard, ...selectedCards] : selectedCards),
-        [seedCard, selectedCards],
+    // Bonus cards are toggleable. Default: include all (most pickups want
+    // every tail card in the meld). Tap to exclude one that doesn't fit
+    // — it still ends up in hand on confirm.
+    const [excludedBonusKeys, setExcludedBonusKeys] = useState<Set<string>>(
+        () => new Set(),
     );
+    // Reset exclusions when the bonus pile identity changes (new pickup).
+    const bonusKey = useMemo(
+        () => (bonusCards ?? []).map((c) => `${c.rank}${c.suit}`).join("|"),
+        [bonusCards],
+    );
+    useEffect(() => {
+        setExcludedBonusKeys(new Set());
+    }, [bonusKey]);
+
+    const includedBonusCards = useMemo(
+        () =>
+            (bonusCards ?? []).filter(
+                (c, i) => !excludedBonusKeys.has(`${i}-${c.rank}${c.suit}`),
+            ),
+        [bonusCards, excludedBonusKeys],
+    );
+
+    /** Cards used for validation — seed + included bonus come first. */
+    const validationCards = useMemo(() => {
+        const forced: PlayingCard[] = [];
+        if (seedCard) forced.push(seedCard);
+        if (includedBonusCards.length > 0) forced.push(...includedBonusCards);
+        return forced.length > 0
+            ? [...forced, ...selectedCards]
+            : selectedCards;
+    }, [seedCard, includedBonusCards, selectedCards]);
 
     const validation = useMemo(() => {
         if (validationCards.length < 3) {
@@ -170,6 +208,35 @@ export default function MeldComposer({
                         </Badge>
                     </div>
                 )}
+                {bonusCards?.map((c, i) => {
+                    const key = `${i}-${c.rank}${c.suit}`;
+                    const excluded = excludedBonusKeys.has(key);
+                    return (
+                        <button
+                            key={`bonus-${key}`}
+                            type="button"
+                            onClick={() =>
+                                setExcludedBonusKeys((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                })
+                            }
+                            disabled={disabled}
+                            className={`relative shrink-0 cursor-pointer transition-opacity ${excluded ? "opacity-40" : ""}`}
+                            aria-label={`${excluded ? "Add back" : "Exclude"} bonus card ${c.rank} of ${c.suit}`}
+                            aria-pressed={!excluded}
+                        >
+                            <PlayingCardView card={c} size="sm" />
+                            <Badge
+                                className={`absolute -top-2 -right-2 text-[9px] ${excluded ? "bg-white/30 text-white border-white/40" : "bg-sky-500 text-white border-sky-300"}`}
+                            >
+                                {excluded ? "to hand" : "bonus"}
+                            </Badge>
+                        </button>
+                    );
+                })}
                 {selectedCards.length === 0 && !seedCard ? (
                     <span className="text-white/40 text-xs italic">
                         {helpText ?? "Tap cards in your hand to add them."}

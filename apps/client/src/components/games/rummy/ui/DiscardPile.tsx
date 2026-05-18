@@ -36,6 +36,23 @@ export interface DiscardPileProps {
      * the caller (settings + master toggle).
      */
     topGlow?: boolean;
+    /**
+     * Optional per-card glow flags (parallel to `discard.cards`). When
+     * `cardGlow[i]` is true, that card pulses with a green ring to hint
+     * that picking it up would yield a meld or layoff (deep pickups
+     * include the bonus cards above the picked card). Hint-gated by
+     * the caller. When provided, this supersedes `topGlow` for the top
+     * card position.
+     */
+    cardGlow?: readonly boolean[];
+    /**
+     * Override the card size that would otherwise be derived from
+     * `layoutMode`. Useful when a parent gives the pile more space than
+     * its layoutMode default would suggest (e.g. compact DRAW scene's
+     * left/right split where the action pane has plenty of horizontal
+     * room despite the global compact mode).
+     */
+    cardSizeOverride?: "md" | "sm" | "xs";
     className?: string;
 }
 
@@ -54,6 +71,8 @@ export default function DiscardPile({
     onCardClick,
     maxFanCards,
     topGlow = false,
+    cardGlow,
+    cardSizeOverride,
     className,
 }: DiscardPileProps) {
     const cards = discard.cards;
@@ -94,11 +113,12 @@ export default function DiscardPile({
     const offsetPct =
         layoutMode === "spacious" ? 22 : layoutMode === "comfortable" ? 16 : 22;
     const cardSize: "md" | "sm" | "xs" =
-        layoutMode === "spacious"
+        cardSizeOverride ??
+        (layoutMode === "spacious"
             ? "md"
             : layoutMode === "comfortable"
               ? "sm"
-              : "xs";
+              : "xs");
     const cardWidth = cardSize === "md" ? 70 : cardSize === "sm" ? 52 : 40;
     const cardHeight = cardSize === "md" ? 98 : cardSize === "sm" ? 73 : 56;
 
@@ -148,6 +168,9 @@ export default function DiscardPile({
                             const isPreview =
                                 previewLocalIdx != null &&
                                 localIdx >= previewLocalIdx;
+                            const glowThis =
+                                cardGlow?.[pileIndex] ??
+                                (isTop ? topGlow : false);
                             return (
                                 <motion.button
                                     key={`${pileIndex}-${card.rank}-${card.suit}`}
@@ -169,9 +192,8 @@ export default function DiscardPile({
                                         interactive && "cursor-pointer",
                                         isPreview &&
                                             "ring-2 ring-amber-400 rounded-md z-20",
-                                        isTop &&
-                                            !isPreview &&
-                                            topGlow &&
+                                        !isPreview &&
+                                            glowThis &&
                                             "ring-2 ring-emerald-400 rounded-md animate-pulse",
                                     )}
                                     style={{

@@ -11,7 +11,11 @@ import {
     tooManyRequests,
     badRequest,
 } from "@family-games/shared";
-import { pauseTimer, resumeTimer as resumeTurnTimer } from "./GameTurnTimer";
+import {
+    pauseTimer,
+    resumeTimer as resumeTurnTimer,
+    clearPlayerReady as clearTurnReady,
+} from "./GameTurnTimer";
 
 const rooms: Map<string, Room> = new Map();
 const roomCodeToId: Map<string, string> = new Map();
@@ -30,6 +34,14 @@ const reconnectTimeoutTimers: Map<string, NodeJS.Timeout> = new Map();
 // Configurable timeout in minutes before aborting a paused game
 const RECONNECT_TIMEOUT_MINUTES: number = Number(
     process.env.RECONNECT_TIMEOUT_MINUTES ?? 2,
+);
+// Track auto-cleanup timers for finished games (game-over modal)
+const gameFinishedTimers: Map<string, NodeJS.Timeout> = new Map();
+// Seconds the server waits after a game reaches the finished phase before
+// auto-tearing down the game (returning everyone to the lobby) if the leader
+// hasn't ended it manually.
+const GAME_FINISHED_AUTO_CLEANUP_SECONDS: number = Number(
+    process.env.GAME_FINISHED_AUTO_CLEANUP_SECONDS ?? 60,
 );
 
 // ============================================================================
@@ -387,6 +399,74 @@ function cancelReconnectTimeout(roomId: string): void {
 }
 
 /**
+ * Schedule auto-cleanup of a finished game.
+ *
+ * Called when the game enters its terminal `finished` phase. If the leader
+ * doesn't explicitly end the game (via `abort_game`) within
+ * GAME_FINISHED_AUTO_CLEANUP_SECONDS, the server tears the game down on
+ * everyone's behalf and returns players to the lobby.
+ *
+ * Idempotent: subsequent calls while a timer is already armed are no-ops.
+ */
+export function scheduleGameFinishedCleanup(roomId: string): void {
+    if (gameFinishedTimers.has(roomId)) return;
+    const ms = GAME_FINISHED_AUTO_CLEANUP_SECONDS * 1000;
+    const timeout = setTimeout(() => {
+        gameFinishedTimers.delete(roomId);
+        finishGameDueToTimeout(roomId);
+    }, ms);
+    gameFinishedTimers.set(roomId, timeout);
+    console.log(
+        `Game-finished auto-cleanup armed for room ${roomId} (${GAME_FINISHED_AUTO_CLEANUP_SECONDS}s)`,
+    );
+}
+
+/**
+ * Cancel a pending finished-game auto-cleanup timer (e.g. when the leader
+ * ends the game manually or the room shuts down).
+ */
+function cancelGameFinishedCleanup(roomId: string): void {
+    const timeout = gameFinishedTimers.get(roomId);
+    if (timeout) {
+        clearTimeout(timeout);
+        gameFinishedTimers.delete(roomId);
+        console.log(`Game-finished auto-cleanup canceled for room ${roomId}`);
+    }
+}
+
+/**
+ * Tear down a finished game when the auto-cleanup timeout elapses.
+ * Mirrors abortGame's cleanup so any remaining players land back in the lobby.
+ */
+function finishGameDueToTimeout(roomId: string): void {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (!isActiveGame(room)) return;
+
+    if (room.gameId) {
+        gameManager.removeGame(room.gameId);
+    }
+
+    room.state = "lobby";
+    room.gameId = null;
+    room.isPaused = false;
+    room.pausedAt = undefined;
+    room.timeoutAt = undefined;
+
+    room.users.forEach((user) => {
+        room.readyStates[user.id] = process.env.NODE_ENV === "development";
+    });
+
+    emitRoomEvent<{ reason: string }>(room, "game_aborted", {
+        reason: "finished_auto_cleanup",
+    });
+
+    console.log(
+        `Finished-game auto-cleanup elapsed for room ${roomId} - game torn down`,
+    );
+}
+
+/**
  * Abort a game due to reconnection timeout expiry.
  * Sets room state to ended and notifies all clients.
  */
@@ -399,6 +479,9 @@ function abortGameDueToTimeout(roomId: string): void {
         reconnectTimeoutTimers.delete(roomId);
         return;
     }
+
+    // Cancel any pending finished-game cleanup since we're tearing down now
+    cancelGameFinishedCleanup(roomId);
 
     // Clean up game state
     if (room.gameId) {
@@ -756,6 +839,12 @@ export function handleUserDisconnect(socketId: string): void {
 
         // Notify GameManager about disconnection
         gameManager.handlePlayerDisconnect(room.gameId, userId);
+
+        // Forget this player's per-turn readiness ack so the timer waits
+        // for their fresh `client_game_ready` after they reload/reconnect.
+        if (room.gameId) {
+            clearTurnReady(room.gameId, userId);
+        }
 
         // Check if game should be paused
         const hasMinPlayers = gameManager.checkMinimumPlayers(room.gameId);
@@ -1364,6 +1453,8 @@ export function abortGame(roomId: string, userId: string): void {
 
     // Cancel any reconnect timeout
     cancelReconnectTimeout(room.id);
+    // Cancel any pending finished-game auto-cleanup (leader is ending it now)
+    cancelGameFinishedCleanup(room.id);
 
     // Clean up game state
     if (room.gameId) {

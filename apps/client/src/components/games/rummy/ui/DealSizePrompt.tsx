@@ -51,7 +51,7 @@ export default function DealSizePrompt({
     const [value, setValue] = useState<number>(initial);
     const [secondsLeft, setSecondsLeft] = useState<number>(autoConfirmSeconds);
     const valueRef = useRef(value);
-    const confirmedRef = useRef(false);
+    const autoConfirmedRef = useRef(false);
 
     // Keep latest value available to the timer callback.
     useEffect(() => {
@@ -63,7 +63,7 @@ export default function DealSizePrompt({
         if (isOpen) {
             setValue(clampOdd(initial, minSize, maxSize));
             setSecondsLeft(autoConfirmSeconds);
-            confirmedRef.current = false;
+            autoConfirmedRef.current = false;
         }
     }, [isOpen, initial, minSize, maxSize, autoConfirmSeconds]);
 
@@ -76,18 +76,23 @@ export default function DealSizePrompt({
         return () => clearInterval(interval);
     }, [isOpen, isDealer]);
 
-    // Fire auto-confirm when countdown hits zero.
+    // Fire auto-confirm when countdown hits zero. We allow the manual
+    // button to re-fire independently (see handleConfirm) so a user can
+    // recover from a transient failure. The auto-confirm itself is one-shot
+    // per open cycle to avoid spamming the server while the modal is up.
     useEffect(() => {
         if (!isOpen || !isDealer) return;
         if (secondsLeft > 0) return;
-        if (confirmedRef.current) return;
-        confirmedRef.current = true;
+        if (autoConfirmedRef.current) return;
+        autoConfirmedRef.current = true;
         onConfirm(clampOdd(valueRef.current, minSize, maxSize));
     }, [isOpen, isDealer, secondsLeft, onConfirm, minSize, maxSize]);
 
     const handleConfirm = () => {
-        if (confirmedRef.current) return;
-        confirmedRef.current = true;
+        // Intentionally NOT guarded by a ref: the parent dedupes via the
+        // optimistic-action queue, and if a previous attempt silently failed
+        // (server rejected, network blip, etc.) the user must be able to
+        // click again. The modal will close on its own once `isOpen` flips.
         onConfirm(value);
     };
 
